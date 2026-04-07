@@ -1,0 +1,38 @@
+# --- 1. Python 编译文件 & 缓存 (垃圾文件) ---
+# 这些是 Python 运行时自动生成的，不需要上传
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- 2. 虚拟环境 (体积很大，绝对不要上传) ---
+# 每个人本地的路径可能不同，且体积巨大
+venv/
+.venv/
+env/
+ENV/
+
+# --- 3. 环境变量 & 敏感信息 (安全隐患) ---
+# 包含 API Key 或数据库密码，严禁上传
+.env
+.env.local
+
+# --- 4. 包分发与构建 (自动生成) ---
+# 如果你打包发布库，这些文件夹会自动生成
+dist/
+build/
+*.egg-info/
+
+# --- 5. 编辑器 & IDE 配置 (个人偏好) ---
+# 你的编辑器配置不应该影响队友
+.idea/
+.vscode/
+*.swp
+
+# --- 6. 其他常用 ---
+# Jupyter Notebook 的缓存
+.ipynb_checkpoints
+# 测试覆盖率报告
+.coverage
+htmlcov/
+# Pytest 缓存
+.pytest_cache/
