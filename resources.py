@@ -2,6 +2,7 @@
 
 import logging
 import os
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
@@ -11,6 +12,8 @@ import constants
 from errors import ErrorHandler
 
 logger = logging.getLogger(__name__)
+BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
 
 # Set by app after load_vocab_data() so vocab module can use them.
 VOCAB_DICT: Dict[str, int] = {}
@@ -69,16 +72,26 @@ def get_genanki() -> Tuple[Any, Any]:
 @st.cache_data
 def load_vocab_data() -> Tuple[Dict[str, int], Optional[pd.DataFrame]]:
     """Load vocabulary data from pickle or CSV files."""
-    if os.path.exists("vocab.pkl"):
+    pickle_candidates = [BASE_DIR / "vocab.pkl", DATA_DIR / "vocab.pkl"]
+    for pickle_path in pickle_candidates:
+        if not pickle_path.exists():
+            continue
         try:
-            df = pd.read_pickle("vocab.pkl")
+            df = pd.read_pickle(pickle_path)
             vocab_dict = pd.Series(df['rank'].values, index=df['word']).to_dict()
             return vocab_dict, df
         except (FileNotFoundError, pd.errors.PickleError, KeyError) as e:
             logger.warning(f"Could not load pickle file: {e}")
 
-    possible_files = ["coca_cleaned.csv", "data.csv", "vocab.csv"]
-    file_path = next((f for f in possible_files if os.path.exists(f)), None)
+    possible_files = [
+        BASE_DIR / "coca_cleaned.csv",
+        BASE_DIR / "data.csv",
+        BASE_DIR / "vocab.csv",
+        DATA_DIR / "coca_cleaned.csv",
+        DATA_DIR / "data.csv",
+        DATA_DIR / "vocab.csv",
+    ]
+    file_path = next((path for path in possible_files if path.exists()), None)
 
     if file_path:
         try:

@@ -149,25 +149,31 @@ You are an expert English Lexicographer.
 2. **Layout**: One entry per line.
 3. **Separator**: Use `|||` as the delimiter.
 4. **Target Structure**:
-   `Word/Phrase` ||| `Chinese Definition` ||| `Short Example Sentence` ||| `Etymology (Chinese)`
+   `Word/Phrase` ||| `Chinese Definition` ||| `Short English Example Sentence` ||| `Chinese Translation of the Example` ||| `Etymology (Chinese)`
 
 # Field Constraints
 1. Field 1: Phrase - Output the target word OR a very short high-frequency collocation (1-3 words max).
 2. Field 2: Definition - **Simplified Chinese Only**. Concise meaning corresponding to the phrase.
-3. Field 3: Example - Short authentic sentence.
-4. Field 4: Etymology - **Simplified Chinese Only**. Format: `root (CN meaning) + affix (CN meaning)`.
+3. Field 3: Example - Short authentic English sentence.
+4. Field 4: Example Translation - **Simplified Chinese Only**. Must be a faithful translation of Field 3.
+5. Field 5: Etymology - **Simplified Chinese Only**. Format: `root (CN meaning) + affix (CN meaning)`.
 
 # Valid Example
 Input: hectic
 Output:
-hectic schedule ||| 忙乱的日程/非常忙碌 ||| She has a hectic schedule with meetings all day. ||| hect- (持续/习惯 - 希腊语) + -ic (形容词后缀)
+hectic schedule ||| 忙乱的日程/非常忙碌 ||| She has a hectic schedule with meetings all day. ||| 她的日程很忙，一整天都排满了会议。 ||| hect- (持续/习惯 - 希腊语) + -ic (形容词后缀)
 
 Input: altruism
 Output:
-altruism ||| 利他主义/无私 ||| Motivated by altruism, he donated anonymously. ||| alter (其他) + -ism (主义/行为)
+altruism ||| 利他主义/无私 ||| Motivated by altruism, he donated anonymously. ||| 出于利他精神，他匿名捐了款。 ||| alter (其他) + -ism (主义/行为)
 
 # Task
-Process the input list strictly."""
+Process the input list strictly.
+
+# Final Checks
+- Every line must contain exactly 5 fields separated by `|||`.
+- Field 4 must translate Field 3, not the isolated word.
+- Do not omit any input item."""
 
         for attempt in range(constants.MAX_RETRIES):
             try:
@@ -177,7 +183,7 @@ Process the input list strictly."""
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    temperature=0.7
+                    temperature=0.4
                 )
                 content = response.choices[0].message.content
                 full_results.append(content)

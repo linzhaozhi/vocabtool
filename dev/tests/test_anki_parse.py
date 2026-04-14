@@ -17,6 +17,7 @@ def test_parse_anki_data_single_line():
     assert result[0]["w"] == "hello"
     assert result[0]["m"] == "你好"
     assert result[0]["e"] == "Hello world."
+    assert result[0]["ec"] == ""
     assert result[0]["r"] == "词源"
 
 
@@ -27,6 +28,7 @@ def test_parse_anki_data_two_fields():
     assert result[0]["w"] == "word"
     assert result[0]["m"] == "meaning only"
     assert result[0]["e"] == ""
+    assert result[0]["ec"] == ""
     assert result[0]["r"] == ""
 
 
@@ -67,8 +69,26 @@ def test_parse_anki_data_card_shape():
     result = parse_anki_data(raw)
     assert len(result) == 1
     card = result[0]
-    assert set(card.keys()) == {"w", "m", "e", "r"}
+    assert set(card.keys()) == {"w", "m", "e", "ec", "r"}
     assert card["w"] == "phrase"
     assert card["m"] == "def"
     assert card["e"] == "example"
+    assert card["ec"] == ""
     assert card["r"] == "etymology"
+
+
+def test_parse_anki_data_five_fields_with_translation():
+    raw = "phrase ||| 定义 ||| This is an example. ||| 这是一个例句。 ||| 词源"
+    result = parse_anki_data(raw)
+    assert len(result) == 1
+    assert result[0]["e"] == "This is an example."
+    assert result[0]["ec"] == "这是一个例句。"
+    assert result[0]["r"] == "词源"
+
+
+def test_parse_anki_data_extracts_inline_example_translation():
+    raw = "phrase ||| 定义 ||| This is an example. (这是一个例句。) ||| 词源"
+    result = parse_anki_data(raw)
+    assert len(result) == 1
+    assert result[0]["e"] == "This is an example."
+    assert result[0]["ec"] == "这是一个例句。"

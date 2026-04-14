@@ -67,6 +67,13 @@ def generate_anki_package(
         margin-bottom: 15px;
     }
     .nightMode .example { background: #383838; color: #ccc; border-left-color: #66b0ff; }
+    .example-translation {
+        margin-top: 10px;
+        font-size: 18px;
+        color: #1f2937;
+        font-style: normal;
+    }
+    .nightMode .example-translation { color: #e5e7eb; }
     .etymology { display: block; font-size: 16px; color: #555; background-color: #fffdf5; padding: 10px; border-radius: 6px; margin-bottom: 5px; border: 1px solid #fef3c7; }
     .nightMode .etymology { background-color: #333; color: #aaa; border-color: #444; }
     """
@@ -78,7 +85,7 @@ def generate_anki_package(
         'VocabFlow Unified Model',
         fields=[
             {'name': 'Phrase'}, {'name': 'Meaning'},
-            {'name': 'Example'}, {'name': 'Etymology'},
+            {'name': 'Example'}, {'name': 'Example_Translation'}, {'name': 'Etymology'},
             {'name': 'Audio_Phrase'}, {'name': 'Audio_Example'}
         ],
         templates=[{
@@ -91,7 +98,12 @@ def generate_anki_package(
             {{FrontSide}}
             <hr>
             <div class="meaning">{{Meaning}}</div>
-            <div class="example">🗣️ {{Example}}</div>
+            <div class="example">
+                <div>🗣️ {{Example}}</div>
+                {{#Example_Translation}}
+                <div class="example-translation">译：{{Example_Translation}}</div>
+                {{/Example_Translation}}
+            </div>
             <div>{{Audio_Example}}</div>
             {{#Etymology}}
             <div class="etymology">🌱 词源: {{Etymology}}</div>
@@ -110,6 +122,7 @@ def generate_anki_package(
             phrase = safe_str_clean(card.get('w', ''))
             meaning = safe_str_clean(card.get('m', ''))
             example = safe_str_clean(card.get('e', ''))
+            example_translation = safe_str_clean(card.get('ec', ''))
             etymology = safe_str_clean(card.get('r', ''))
             note_id = card.get('id')
 
@@ -144,13 +157,13 @@ def generate_anki_package(
             if note_id:
                 note = genanki.Note(
                     model=model,
-                    fields=[phrase, meaning, example, etymology, audio_phrase_field, audio_example_field],
+                    fields=[phrase, meaning, example, example_translation, etymology, audio_phrase_field, audio_example_field],
                     guid=note_id
                 )
             else:
                 note = genanki.Note(
                     model=model,
-                    fields=[phrase, meaning, example, etymology, audio_phrase_field, audio_example_field]
+                    fields=[phrase, meaning, example, example_translation, etymology, audio_phrase_field, audio_example_field]
                 )
             notes_buffer.append(note)
 

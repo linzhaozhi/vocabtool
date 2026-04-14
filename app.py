@@ -361,7 +361,7 @@ if hasattr(st, "fragment"):
 render_quick_lookup()
 
 if not VOCAB_DICT:
-    st.error("⚠️ 缺失 `coca_cleaned.csv` 或 `vocab.pkl` 文件，请检查目录。")
+    st.error("⚠️ 缺失词频数据文件，请检查根目录或 `data/` 目录中的 `coca_cleaned.csv` / `vocab.pkl`。")
 
 with st.expander("📖 使用指南 & 支持格式", expanded=False):
     st.markdown("""
@@ -713,7 +713,7 @@ Make sure to process everything in one go, without missing anything.
 2. **Layout**: One entry per line.
 3. **Separator**: Use `|||` as the delimiter.
 4. **Target Structure**:
-   `Natural Phrase/Collocation` ||| `Concise Definition of the Phrase` ||| `Short Example Sentence` ||| `Etymology breakdown (Simplified Chinese)`
+   `Natural Phrase/Collocation` ||| `Chinese Definition` ||| `Short English Example Sentence` ||| `Chinese Translation of the Example` ||| `Etymology breakdown (Simplified Chinese)`
 
 # Field Constraints (Strict)
 1. **Field 1: Phrase (CRITICAL)**
@@ -721,13 +721,16 @@ Make sure to process everything in one go, without missing anything.
    - You MUST generate a high-frequency **collocation** or **short phrase** containing the target word.
    - Example: If input is "rain", output "heavy rain" or "torrential rain".
    
-2. **Field 2: Definition (English)**
-   - Define the *phrase*, not just the isolated word. Keep it concise (B2-C1 level English).
+2. **Field 2: Definition (Simplified Chinese)**
+   - Define the *phrase*, not just the isolated word. Keep it concise and natural.
 
 3. **Field 3: Example**
-   - A short, authentic sentence containing the phrase.
+   - A short, authentic English sentence containing the phrase.
 
-4. **Field 4: Roots/Etymology (Simplified Chinese)**
+4. **Field 4: Example Translation**
+   - Provide a faithful Simplified Chinese translation of Field 3.
+
+5. **Field 5: Roots/Etymology (Simplified Chinese)**
    - Format: `prefix- (meaning) + root (meaning) + -suffix (meaning)`.
    - If no classical roots exist, explain the origin briefly in Chinese.
    - Use Simplified Chinese for meanings.
@@ -735,14 +738,19 @@ Make sure to process everything in one go, without missing anything.
 # Valid Example (Follow this logic strictly)
 Input: altruism
 Output:
-motivated by altruism ||| acting out of selfless concern for the well-being of others ||| His donation was motivated by altruism, not a desire for fame. ||| alter (其他) + -ism (主义/行为)
+motivated by altruism ||| 出于利他主义的动机 ||| His donation was motivated by altruism, not a desire for fame. ||| 他的捐赠是出于利他精神，而不是为了出名。 ||| alter (其他) + -ism (主义/行为)
 
 Input: hectic
 Output:
-a hectic schedule ||| a timeline full of frantic activity and very busy ||| She has a hectic schedule with meetings all day. ||| hect- (持续的/习惯性的 - 来自希腊语hektikos) + -ic (形容词后缀)
+a hectic schedule ||| 非常忙乱的日程安排 ||| She has a hectic schedule with meetings all day. ||| 她的日程非常紧张，一整天都排满了会议。 ||| hect- (持续的/习惯性的 - 来自希腊语hektikos) + -ic (形容词后缀)
 
 # Task
-Process the provided input list strictly adhering to the format above."""
+Process the provided input list strictly adhering to the format above.
+
+# Final Checks
+- Each line must contain exactly 5 fields separated by `|||`.
+- Field 4 must translate Field 3 faithfully.
+- Do not skip any input item."""
             st.code(strict_prompt_template, language="text")
 
 # ==========================================
@@ -775,7 +783,7 @@ with tab_anki:
         "粘贴 AI 返回内容",
         height=300,
         key="anki_input_text",
-        placeholder='hectic ||| 忙乱的 ||| She has a hectic schedule today.'
+        placeholder='hectic ||| 忙乱的 ||| She has a hectic schedule today. ||| 她今天的日程安排很紧。 ||| hect- + -ic'
     )
 
     manual_voice_label = st.radio(
@@ -837,12 +845,16 @@ with tab_anki:
         cards = st.session_state['anki_cards_cache']
         with st.expander(f"👀 预览卡片 (前 {constants.MAX_PREVIEW_CARDS} 张)", expanded=True):
             df_view = pd.DataFrame(cards)
-            display_cols = ['w', 'm', 'e', 'r']
+            display_cols = ['w', 'm', 'e', 'ec', 'r']
             df_view = df_view[[c for c in display_cols if c in df_view.columns]]
-            col_labels = ["正面", "中文/英文释义", "例句"]
-            if len(df_view.columns) > 3:
-                col_labels.append("词源")
-            df_view.columns = col_labels[:len(df_view.columns)]
+            rename_map = {
+                'w': "正面",
+                'm': "中文/英文释义",
+                'e': "英文例句",
+                'ec': "例句翻译",
+                'r': "词源",
+            }
+            df_view = df_view.rename(columns=rename_map)
             st.dataframe(df_view.head(constants.MAX_PREVIEW_CARDS), use_container_width=True, hide_index=True)
 
         render_anki_download_button(
