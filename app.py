@@ -6,6 +6,7 @@ resources, extraction, vocab, ai, anki_parse, tts, anki_package, state.
 import html
 import logging
 import os
+import random
 import re
 import time
 
@@ -37,6 +38,12 @@ resources.FULL_DF = FULL_DF
 cleanup_old_apkg_files()
 
 logger = logging.getLogger(__name__)
+
+EXTRACT_SOURCE_OPTIONS = ["文章 URL", "文件", "文本", "Anki", "词库"]
+EXTRACT_SOURCE_LEGACY_MAP = {
+    "文章 / 文件": "文章 URL",
+    "单词列表 / Anki": "Anki",
+}
 
 # ==========================================
 # Page Configuration
@@ -416,6 +423,35 @@ def validate_topic_label(raw_text: str) -> tuple[bool, str, str]:
     return True, topic, ""
 
 
+def normalize_extract_source_mode(value: str | None) -> str:
+    """Normalize extract source mode, including legacy labels from older UI versions."""
+    if not value:
+        return EXTRACT_SOURCE_OPTIONS[0]
+    normalized = EXTRACT_SOURCE_LEGACY_MAP.get(value, value)
+    if normalized not in EXTRACT_SOURCE_OPTIONS:
+        return EXTRACT_SOURCE_OPTIONS[0]
+    return normalized
+
+
+def handle_extract_source_change() -> None:
+    """Refresh source-specific widgets so source switching always reflects immediately."""
+    current_mode = normalize_extract_source_mode(st.session_state.get("extract_source_mode"))
+    previous_mode = st.session_state.get("_extract_source_prev_mode")
+    st.session_state["extract_source_mode"] = current_mode
+    if previous_mode == current_mode:
+        return
+
+    st.session_state["_extract_source_prev_mode"] = current_mode
+    st.session_state["uploader_id"] = str(random.randint(constants.MIN_RANDOM_ID, constants.MAX_RANDOM_ID))
+
+    if current_mode != "文章 URL":
+        st.session_state["url_input_key"] = ""
+    if current_mode != "文本" and "paste_key" in st.session_state:
+        st.session_state["paste_key"] = ""
+    if current_mode != "Anki" and "anki_import_uploader" in st.session_state:
+        del st.session_state["anki_import_uploader"]
+
+
 # ==========================================
 # UI Components
 # ==========================================
@@ -683,14 +719,22 @@ with tab_extract:
     st.markdown("### 🧩 提取单词")
     st.caption("来源已拆成 5 个入口：文章 URL、文件、文本、Anki、词库；整理后的结果会自动同步到“制作卡片”。")
 
+    if "extract_source_mode" not in st.session_state:
+        st.session_state["extract_source_mode"] = EXTRACT_SOURCE_OPTIONS[0]
+    st.session_state["extract_source_mode"] = normalize_extract_source_mode(st.session_state.get("extract_source_mode"))
+    if "_extract_source_prev_mode" not in st.session_state:
+        st.session_state["_extract_source_prev_mode"] = st.session_state["extract_source_mode"]
+
     st.markdown("#### 第一步：选择来源")
     extract_source_mode = st.radio(
         "提取来源",
-        ["文章 URL", "文件", "文本", "Anki", "词库"],
+        EXTRACT_SOURCE_OPTIONS,
         horizontal=True,
         label_visibility="collapsed",
-        key="extract_source_mode"
+        key="extract_source_mode",
+        on_change=handle_extract_source_change
     )
+    st.caption(f"当前来源：{extract_source_mode}")
 
     result_step_title = "#### 第四步：查看与整理结果"
     next_step_title = "#### 第五步：下一步"
