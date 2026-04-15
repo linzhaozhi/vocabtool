@@ -664,7 +664,7 @@ with tab_lookup:
                 words = st.session_state["topic_wordlist_words"]
                 data_list = [(w, VOCAB_DICT.get(w.lower(), 99999)) for w in words]
                 set_generated_words_state(data_list, len(words), None)
-                st.session_state["extract_source_mode"] = "单词列表 / Anki"
+                st.session_state["extract_source_mode"] = "Anki"
                 st.success("✅ 已导入到“提取单词”，现在可以继续整理或直接去制作卡片。")
 
         st.text_area(
@@ -681,18 +681,21 @@ with tab_lookup:
 # ==========================================
 with tab_extract:
     st.markdown("### 🧩 提取单词")
-    st.caption("先选来源，再整理词表；整理后的结果会自动同步到“制作卡片”。")
+    st.caption("来源已拆成 5 个入口：文章 URL、文件、文本、Anki、词库；整理后的结果会自动同步到“制作卡片”。")
 
     st.markdown("#### 第一步：选择来源")
     extract_source_mode = st.radio(
         "提取来源",
-        ["文章 / 文件", "单词列表 / Anki"],
+        ["文章 URL", "文件", "文本", "Anki", "词库"],
         horizontal=True,
         label_visibility="collapsed",
         key="extract_source_mode"
     )
 
-    if extract_source_mode == "文章 / 文件":
+    result_step_title = "#### 第四步：查看与整理结果"
+    next_step_title = "#### 第五步：下一步"
+
+    if extract_source_mode in ("文章 URL", "文件", "文本"):
         st.markdown("#### 第二步：设置提取规则")
         col1, col2 = st.columns(2)
         current_rank = col1.number_input("跳过前 N 个高频词", 1, 20000, 6000, step=100)
@@ -701,45 +704,69 @@ with tab_extract:
         if target_rank < current_rank:
             st.warning("⚠️ 结束词频排名必须大于等于起始词频排名。")
 
-        st.markdown("#### 第三步：提供内容")
-        st.caption("三选一即可：输入文章链接、上传文件，或直接粘贴文本。")
+        input_url = ""
+        uploaded_file = None
+        pasted_text = ""
+        button_key = "btn_extract_context"
+        missing_source_message = ""
 
-        input_url = st.text_input(
-            "🔗 输入文章链接（自动抓取正文）",
-            placeholder="https://www.economist.com/...",
-            key="url_input_key"
-        )
+        if extract_source_mode == "文章 URL":
+            st.markdown("#### 第三步：输入文章链接")
+            st.caption("输入文章链接后自动抓取正文，再按词频范围提取目标词。")
+            input_url = st.text_input(
+                "🔗 输入文章链接",
+                placeholder="https://www.economist.com/...",
+                key="url_input_key"
+            )
+            button_key = "btn_extract_url"
+            missing_source_message = "⚠️ 请先输入文章链接。"
+        elif extract_source_mode == "文件":
+            st.markdown("#### 第三步：上传文件")
+            st.caption("上传文档后自动读取正文，再按词频范围提取目标词。")
+            uploaded_file = st.file_uploader(
+                "上传文件",
+                type=['txt', 'pdf', 'docx', 'epub', 'csv', 'xlsx', 'xls', 'db', 'sqlite'],
+                key=st.session_state['uploader_id']
+            )
+            if uploaded_file and is_upload_too_large(uploaded_file):
+                st.error(f"❌ 文件过大，已限制为 {constants.MAX_UPLOAD_MB}MB。请缩小文件后重试。")
+                uploaded_file = None
+            button_key = "btn_extract_file"
+            missing_source_message = "⚠️ 请先上传要分析的文件。"
+        else:
+            st.markdown("#### 第三步：粘贴文本")
+            st.caption("适合直接粘贴文章、笔记或段落内容，再按词频范围提取目标词。")
+            pasted_text = st.text_area(
+                "粘贴文本内容",
+                height=180,
+                key="paste_key",
+                placeholder="支持直接粘贴文章内容..."
+            )
+            button_key = "btn_extract_text"
+            missing_source_message = "⚠️ 请先输入要分析的文本内容。"
 
-        uploaded_file = st.file_uploader(
-            "上传文件",
-            type=['txt', 'pdf', 'docx', 'epub', 'csv', 'xlsx', 'xls', 'db', 'sqlite'],
-            key=st.session_state['uploader_id']
-        )
-        if uploaded_file and is_upload_too_large(uploaded_file):
-            st.error(f"❌ 文件过大，已限制为 {constants.MAX_UPLOAD_MB}MB。请缩小文件后重试。")
-            uploaded_file = None
-
-        pasted_text = st.text_area(
-            "或在此粘贴文本",
-            height=120,
-            key="paste_key",
-            placeholder="支持直接粘贴文章内容..."
-        )
-
-        if st.button("🚀 开始提取", type="primary", key="btn_extract_context"):
+        if st.button("🚀 开始提取", type="primary", key=button_key):
             if target_rank < current_rank:
                 st.error("❌ 结束词频排名必须大于等于起始词频排名，请修正后重试。")
+            elif extract_source_mode == "文章 URL" and not input_url.strip():
+                st.warning(missing_source_message)
+            elif extract_source_mode == "文件" and not uploaded_file:
+                st.warning(missing_source_message)
+            elif extract_source_mode == "文本" and len(pasted_text.strip()) <= 2:
+                st.warning(missing_source_message)
             else:
                 with st.status("🔍 正在加载资源并分析文本...", expanded=True) as status:
                     start_time = time.time()
                     raw_text = ""
 
-                    if input_url:
+                    if extract_source_mode == "文章 URL":
                         status.write(f"🌐 正在抓取文章链接：{input_url}")
                         raw_text = extract_text_from_url(input_url)
-                    elif uploaded_file:
+                    elif extract_source_mode == "文件":
+                        status.write("📄 正在读取文件内容...")
                         raw_text = extract_text_from_file(uploaded_file)
                     else:
+                        status.write("📝 正在读取文本内容...")
                         raw_text = pasted_text
 
                     if len(raw_text) > 2:
@@ -755,9 +782,11 @@ with tab_extract:
                     else:
                         status.update(label="⚠️ 内容为空或太短", state="error")
 
-    else:
-        st.markdown("#### 第二步：导入词表")
-        st.caption("支持直接粘贴单词，也支持先上传 Anki 导出的 .txt 文件。")
+    elif extract_source_mode == "Anki":
+        result_step_title = "#### 第三步：查看与整理结果"
+        next_step_title = "#### 第四步：下一步"
+        st.markdown("#### 第二步：导入 Anki / 单词表")
+        st.caption("支持上传 Anki 导出的 .txt 文件，也支持直接粘贴现成词表。")
 
         anki_export_file = st.file_uploader(
             "上传 Anki 导出的 .txt 文件",
@@ -776,7 +805,7 @@ with tab_extract:
                     st.success(f"✅ 成功提取 {len(prefilled_text.splitlines())} 个单词")
 
         raw_input = st.text_area(
-            "✍️ 粘贴单词列表 (每行一个 或 逗号分隔)",
+            "✍️ 粘贴单词列表（每行一个或逗号分隔）",
             height=220,
             value=prefilled_text,
             placeholder="altruism\nhectic\nserendipity"
@@ -792,8 +821,11 @@ with tab_extract:
                 else:
                     st.warning("⚠️ 内容为空。")
 
-    with st.expander("高级工具：按词频生成词表", expanded=False):
-        st.caption("需要时再用；它不会干扰主提取流程。")
+    else:
+        result_step_title = "#### 第三步：查看与整理结果"
+        next_step_title = "#### 第四步：下一步"
+        st.markdown("#### 第二步：从词库生成词表")
+        st.caption("按词频范围直接选词，适合快速扩充词表。")
         gen_type = st.radio("生成模式", ["🔢 顺序生成", "🔀 随机抽取"], horizontal=True, key="rank_gen_type")
 
         if "顺序生成" in gen_type:
@@ -860,7 +892,7 @@ with tab_extract:
         with col_t2:
             st.metric("✅ 筛选后单词总数", original_count)
 
-        st.markdown("#### 第四步：查看与整理结果")
+        st.markdown(result_step_title)
         st.caption("可以直接在这里删改；改动会自动同步到“制作卡片”。")
 
         edited_words = st.text_area(
@@ -878,7 +910,7 @@ with tab_extract:
         if edited_words.strip() != "\n".join(cleaned_words):
             st.info("检测到空行、逗号分隔或重复项；制卡时会按整理后的唯一词表处理。")
 
-        st.markdown("#### 第五步：下一步")
+        st.markdown(next_step_title)
         col_copy, col_clear = st.columns([1, 1])
         with col_copy:
             render_copy_button(edited_words, key="copy_words_btn")
