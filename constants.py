@@ -41,6 +41,8 @@ DEFAULT_SESSION_STATE = {
 }
 
 VOICE_MAP = {
-    "👩 美音女声 (Jenny)": "en-US-JennyNeural",
-    "👨 美音男声 (Christopher)": "en-US-ChristopherNeural"
+    "👩 美音女声": "en-US-JennyNeural",
+    "👨 美音男声": "en-US-ChristopherNeural",
+    "👩 英音女声": "en-GB-SoniaNeural",
+    "👨 英音男声": "en-GB-RyanNeural",
 }

@@ -25,7 +25,7 @@ def get_vocab_dict() -> Dict[str, int]:
     return VOCAB_DICT
 
 
-@st.cache_resource(show_spinner="正在加载 NLP 引擎...")
+@st.cache_resource(show_spinner="正在加载分词与词形还原资源...")
 def load_nlp_resources() -> Tuple[Any, Any]:
     """Load NLTK and lemminflect resources with proper error handling."""
     import nltk
@@ -45,7 +45,7 @@ def load_nlp_resources() -> Tuple[Any, Any]:
                 logger.info(f"Downloading NLTK package: {pkg}")
                 nltk.download(pkg, download_dir=nltk_data_dir, quiet=True)
     except Exception as e:
-        ErrorHandler.handle(e, "NLP 资源加载失败")
+        ErrorHandler.handle(e, "词形还原资源加载失败")
 
     return nltk, lemminflect
 

@@ -61,7 +61,7 @@ def parse_anki_txt_export(uploaded_file: Any) -> str:
         return "\n".join(extracted_words)
 
     except Exception as e:
-        return ErrorHandler.handle_file_error(e, "Anki Export Import")
+        return ErrorHandler.handle_file_error(e, "Anki 导出文本")
 
 
 def extract_text_from_url(url: str) -> str:
@@ -81,9 +81,9 @@ def extract_text_from_url(url: str) -> str:
 
         return soup.get_text(separator=' ', strip=True)
     except requests.RequestException as e:
-        return ErrorHandler.handle_file_error(e, "URL")
+        return ErrorHandler.handle_file_error(e, "文章链接")
     except Exception as e:
-        return ErrorHandler.handle_file_error(e, "URL parsing")
+        return ErrorHandler.handle_file_error(e, "网页解析")
 
 
 def extract_from_txt(uploaded_file: Any) -> str:
@@ -163,7 +163,7 @@ def extract_from_excel(uploaded_file: Any) -> str:
         try:
             df = pd.read_excel(uploaded_file, sheet_name=None, engine='xlrd')
         except Exception as e:
-            return ErrorHandler.handle_file_error(e, "Excel")
+            return ErrorHandler.handle_file_error(e, "Excel 文件")
 
     try:
         text_parts = []
@@ -174,7 +174,7 @@ def extract_from_excel(uploaded_file: Any) -> str:
                 text_parts.extend(col_text.tolist())
         return " ".join(text_parts)
     except Exception as e:
-        return ErrorHandler.handle_file_error(e, "Excel")
+        return ErrorHandler.handle_file_error(e, "Excel 文件")
 
 
 def extract_from_sqlite(uploaded_file: Any) -> str:
@@ -200,10 +200,10 @@ def extract_from_sqlite(uploaded_file: Any) -> str:
 
                 return text
             except sqlite3.OperationalError as e:
-                return f"Error reading DB schema: {e}"
+                return f"读取数据库结构时出错：{e}"
 
     except Exception as e:
-        return ErrorHandler.handle_file_error(e, "SQLite DB")
+        return ErrorHandler.handle_file_error(e, "SQLite 数据库")
     finally:
         if tmp_db_path and os.path.exists(tmp_db_path):
             try:
@@ -232,7 +232,7 @@ def extract_text_from_file(uploaded_file: Any) -> str:
     if extractor:
         return extractor(uploaded_file)
 
-    return f"Unsupported file type: {file_type}"
+    return f"暂不支持这种文件类型：{file_type}"
 
 
 def is_upload_too_large(uploaded_file: Any) -> bool:

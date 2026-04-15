@@ -60,6 +60,12 @@ st.markdown("""
 <style>
     .stTextArea textarea { font-family: 'Consolas', monospace; font-size: 14px; }
     .stButton>button { border-radius: 8px; font-weight: 600; width: 100%; margin-top: 5px; }
+    .stTextInput > div > div > input,
+    .stTextArea textarea,
+    .stNumberInput input {
+        border-radius: 10px;
+        border: 1px solid #d7deea;
+    }
     .stat-box { padding: 15px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; text-align: center; color: #166534; margin-bottom: 20px; }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
@@ -72,9 +78,40 @@ st.markdown("""
     [data-testid="stMetric"] { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); padding: 1rem; border-radius: 10px; border: 1px solid #e2e8f0; }
     /* Tab labels: slightly bolder */
     .stTabs [data-baseweb="tab-list"] { gap: 0.5rem; }
-    .stTabs [data-baseweb="tab"] { padding: 0.6rem 1rem; border-radius: 8px; font-weight: 500; }
+    .stTabs [data-baseweb="tab"] {
+        padding: 0.6rem 1rem;
+        border-radius: 10px;
+        font-weight: 600;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+    }
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
+        border-color: #93c5fd;
+        color: #0f172a;
+        box-shadow: 0 10px 24px rgba(59, 130, 246, 0.12);
+    }
+    .stRadio [role="radiogroup"] {
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    .stRadio [role="radiogroup"] label {
+        background: #f8fafc;
+        border: 1px solid #dbe3ef;
+        border-radius: 999px;
+        padding: 0.2rem 0.75rem;
+    }
     /* App footer */
     .app-footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; text-align: center; color: #64748b; font-size: 0.875rem; }
+    .workflow-banner {
+        margin: 0.75rem 0 1.25rem;
+        padding: 0.95rem 1rem;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+        border: 1px solid #bfdbfe;
+        color: #1e3a8a;
+        font-size: 0.95rem;
+    }
     
     /* Reading Mode Styles */
     .reading-container {
@@ -195,7 +232,7 @@ def render_anki_download_button(
 ) -> None:
     """Safely render Anki package download button if file exists."""
     file_path = st.session_state.get('anki_pkg_path')
-    file_name = st.session_state.get('anki_pkg_name', "deck.apkg")
+    file_name = st.session_state.get('anki_pkg_name', "词卡.apkg")
 
     if not file_path:
         return
@@ -358,7 +395,7 @@ def validate_topic_label(raw_text: str) -> tuple[bool, str, str]:
     """Validate short topic labels for AI topic word-list generation."""
     topic = normalize_lookup_query(raw_text)
     if not topic:
-        return False, "", "⚠️ 请输入一个主题，比如“旅游”或“business”。"
+        return False, "", "⚠️ 请输入一个主题，比如“旅游”或“校园生活”。"
     if len(topic) > 30:
         return False, "", "⚠️ 主题太长了，请控制在 30 个字符以内。"
 
@@ -374,7 +411,7 @@ def validate_topic_label(raw_text: str) -> tuple[bool, str, str]:
         return False, "", "⚠️ 主题里不要带数字或整句标点，只保留简短主题词。"
 
     if not re.fullmatch(r"[A-Za-z\u4e00-\u9fff][A-Za-z\u4e00-\u9fff&/'\- ]*", topic):
-        return False, "", "⚠️ 主题建议只填写中英文词组，比如“旅游”或“daily life”。"
+        return False, "", "⚠️ 主题建议只填写简短词组，比如“旅游”或“校园生活”。"
 
     return True, topic, ""
 
@@ -382,12 +419,16 @@ def validate_topic_label(raw_text: str) -> tuple[bool, str, str]:
 # ==========================================
 # UI Components
 # ==========================================
-st.title("⚡️ Vocab Flow Ultra · Stable")
-st.caption("把查词、提词、制卡分开处理。支持内置 AI 释义、词源与语音。")
+st.title("⚡️ Vocab Flow Ultra · 稳定版")
+st.caption("把查词、提词、制卡分开处理。支持内置智能释义、词源与语音。")
+st.markdown(
+    '<div class="workflow-banner">查词、提词、制卡三个步骤已经分开。先确认词，再整理词表，最后生成卡片，路径会更清楚。</div>',
+    unsafe_allow_html=True
+)
 
 
 def render_quick_lookup() -> None:
-    st.markdown("### 🔍 AI 极速查词")
+    st.markdown("### 🔍 极速查词")
     st.caption("💡 只支持英文单词、短语，或很短的中文释义词组；不支持聊天式提问")
 
     if "quick_lookup_last_query" not in st.session_state:
@@ -511,7 +552,7 @@ def render_quick_lookup() -> None:
                 </div>
                 <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
                     <span style="display: inline-block; background: {rank_color}; color: white; padding: 4px 12px; border-radius: 6px; font-size: 14px; font-weight: 600;">
-                        📊 Rank: {rank} ({rank_label})
+                        📊 词频排名：{rank}（{rank_label}）
                     </span>
                 </div>
             </div>
@@ -534,7 +575,7 @@ with st.expander("📖 使用指南 & 支持格式", expanded=False):
     **🚀 极速工作流**
     1. **查单词**：在“查单词”里快速获取释义、词源和双语例句。
     2. **提取单词**：在“提取单词”里从文本、文件或词频范围整理词表。
-    3. **制作卡片**：在“制作卡片”里使用内置 AI 生成并下载 Anki 牌组。
+    3. **制作卡片**：在“制作卡片”里使用内置智能生成并下载 Anki 牌组。
     
     **📄 支持的文件格式**
     - 📝 文本：TXT
@@ -555,7 +596,7 @@ tab_lookup, tab_extract, tab_cards = st.tabs([
 with tab_lookup:
     render_quick_lookup()
 
-    st.markdown("### 🧠 AI 主题词表")
+    st.markdown("### 🧠 主题词表生成")
     st.caption(f"💡 只要选择主题和个数即可。单次最多生成 {constants.AI_TOPIC_WORDLIST_MAX} 个常见词。")
 
     if "topic_wordlist_result" not in st.session_state:
@@ -568,7 +609,7 @@ with tab_lookup:
         with col_topic:
             topic_word_topic = st.text_input(
                 "输入主题",
-                placeholder="如：旅游、business、daily life",
+                placeholder="如：旅游、商务、校园生活",
                 key="topic_word_topic",
                 label_visibility="collapsed",
                 autocomplete="off",
@@ -606,7 +647,7 @@ with tab_lookup:
                 else:
                     st.session_state["topic_wordlist_words"] = []
                     st.session_state["topic_wordlist_result"] = ""
-                    st.error("❌ 生成失败，AI 返回的词表格式无法解析。")
+                    st.error("❌ 生成失败，返回的词表格式无法解析。")
             else:
                 st.error(f"❌ 生成失败：{ai_result.get('error', '未知错误') if ai_result else '未知错误'}")
 
@@ -642,7 +683,7 @@ with tab_extract:
     st.markdown("### 🧩 提取单词")
     st.caption("先选来源，再整理词表；整理后的结果会自动同步到“制作卡片”。")
 
-    st.markdown("#### Step 1 选择来源")
+    st.markdown("#### 第一步：选择来源")
     extract_source_mode = st.radio(
         "提取来源",
         ["文章 / 文件", "单词列表 / Anki"],
@@ -652,19 +693,19 @@ with tab_extract:
     )
 
     if extract_source_mode == "文章 / 文件":
-        st.markdown("#### Step 2 设置提取规则")
+        st.markdown("#### 第二步：设置提取规则")
         col1, col2 = st.columns(2)
-        current_rank = col1.number_input("忽略前 N 高频词 (Min Rank)", 1, 20000, 6000, step=100)
-        target_rank = col2.number_input("忽略后 N 低频词 (Max Rank)", 2000, 50000, 10000, step=500)
+        current_rank = col1.number_input("跳过前 N 个高频词", 1, 20000, 6000, step=100)
+        target_rank = col2.number_input("保留到第 N 名词频", 2000, 50000, 10000, step=500)
 
         if target_rank < current_rank:
-            st.warning("⚠️ Max Rank 必须大于等于 Min Rank")
+            st.warning("⚠️ 结束词频排名必须大于等于起始词频排名。")
 
-        st.markdown("#### Step 3 提供内容")
-        st.caption("三选一即可：输入 URL、上传文件，或直接粘贴文本。")
+        st.markdown("#### 第三步：提供内容")
+        st.caption("三选一即可：输入文章链接、上传文件，或直接粘贴文本。")
 
         input_url = st.text_input(
-            "🔗 输入文章 URL (自动抓取)",
+            "🔗 输入文章链接（自动抓取正文）",
             placeholder="https://www.economist.com/...",
             key="url_input_key"
         )
@@ -687,14 +728,14 @@ with tab_extract:
 
         if st.button("🚀 开始提取", type="primary", key="btn_extract_context"):
             if target_rank < current_rank:
-                st.error("❌ Max Rank 必须大于等于 Min Rank，请修正后重试。")
+                st.error("❌ 结束词频排名必须大于等于起始词频排名，请修正后重试。")
             else:
                 with st.status("🔍 正在加载资源并分析文本...", expanded=True) as status:
                     start_time = time.time()
                     raw_text = ""
 
                     if input_url:
-                        status.write(f"🌐 正在抓取 URL: {input_url}...")
+                        status.write(f"🌐 正在抓取文章链接：{input_url}")
                         raw_text = extract_text_from_url(input_url)
                     elif uploaded_file:
                         raw_text = extract_text_from_file(uploaded_file)
@@ -702,7 +743,7 @@ with tab_extract:
                         raw_text = pasted_text
 
                     if len(raw_text) > 2:
-                        status.write("🧠 正在进行 NLP 词形还原与分级...")
+                        status.write("🧠 正在进行词形还原与词频分级...")
                         final_data, raw_count, stats_info = analyze_logic(
                             raw_text, current_rank, target_rank, False
                         )
@@ -715,7 +756,7 @@ with tab_extract:
                         status.update(label="⚠️ 内容为空或太短", state="error")
 
     else:
-        st.markdown("#### Step 2 导入词表")
+        st.markdown("#### 第二步：导入词表")
         st.caption("支持直接粘贴单词，也支持先上传 Anki 导出的 .txt 文件。")
 
         anki_export_file = st.file_uploader(
@@ -819,7 +860,7 @@ with tab_extract:
         with col_t2:
             st.metric("✅ 筛选后单词总数", original_count)
 
-        st.markdown("#### Step 4 查看与整理结果")
+        st.markdown("#### 第四步：查看与整理结果")
         st.caption("可以直接在这里删改；改动会自动同步到“制作卡片”。")
 
         edited_words = st.text_area(
@@ -837,7 +878,7 @@ with tab_extract:
         if edited_words.strip() != "\n".join(cleaned_words):
             st.info("检测到空行、逗号分隔或重复项；制卡时会按整理后的唯一词表处理。")
 
-        st.markdown("#### Step 5 下一步")
+        st.markdown("#### 第五步：下一步")
         col_copy, col_clear = st.columns([1, 1])
         with col_copy:
             render_copy_button(edited_words, key="copy_words_btn")
@@ -851,32 +892,32 @@ with tab_extract:
 # ==========================================
 with tab_cards:
     st.markdown("### 📦 制作卡片")
-    st.caption("使用内置 AI，把准备好的词表直接生成 Anki 卡片。")
+    st.caption("使用内置智能能力，把准备好的词表直接生成 Anki 卡片。")
 
     current_words_text = st.session_state.get("word_list_editor", "").strip()
     if not current_words_text:
         st.info("先到“提取单词”里准备词表，然后再来制作卡片。")
     else:
         beijing_time_str = get_beijing_time_str()
-        default_deck_name = f"Vocab_{beijing_time_str}"
+        default_deck_name = f"词卡_{beijing_time_str}"
         if "deck_name_input" not in st.session_state:
             st.session_state["deck_name_input"] = default_deck_name
 
-        col_name, col_voice = st.columns([2, 2])
+        col_name, col_voice = st.columns([2, 3])
         with col_name:
             deck_name = st.text_input("🏷️ 牌组名称", key="deck_name_input")
         with col_voice:
             selected_voice_label = st.radio(
-                "🎙️ 发音人",
+                "🎙️ 英语发音",
                 options=list(constants.VOICE_MAP.keys()),
                 index=0,
                 horizontal=True,
                 key="sel_voice_cards"
             )
         selected_voice_code = constants.VOICE_MAP[selected_voice_label]
+        st.caption("支持美音和英音；音频只朗读英文单词和英文例句。")
 
-        enable_audio_auto = st.checkbox("启用语音", value=True, key="chk_audio_cards")
-        ai_model_label = get_config()["openai_model"]
+        enable_audio_auto = st.checkbox("生成单词和例句音频", value=True, key="chk_audio_cards")
 
         col_title, col_copy_btn = st.columns([5, 1])
         with col_title:
@@ -901,7 +942,7 @@ with tab_cards:
 
         current_word_count = len(words_only)
         if current_word_count > constants.MAX_AUTO_LIMIT:
-            st.warning(f"⚠️ 单词数超过 {constants.MAX_AUTO_LIMIT}，内置 AI 仅处理前 {constants.MAX_AUTO_LIMIT} 个。请缩小列表后再生成。")
+            st.warning(f"⚠️ 单词数超过 {constants.MAX_AUTO_LIMIT}，内置智能仅处理前 {constants.MAX_AUTO_LIMIT} 个。请缩小列表后再生成。")
             words_for_generation = words_only[:constants.MAX_AUTO_LIMIT]
         else:
             words_for_generation = words_only
@@ -909,7 +950,7 @@ with tab_cards:
         col_generate, col_reset = st.columns([3, 1])
         with col_generate:
             start_auto_gen = st.button(
-                f"🚀 使用 {ai_model_label} 生成卡片",
+                "🚀 使用 DeepSeek 生成卡片",
                 type="primary",
                 use_container_width=True
             )
@@ -928,11 +969,11 @@ with tab_cards:
                     progress_bar.progress(ratio)
                     status_text.text(f"正在处理 ({current}/{total})")
 
-                status_text.text("🧠 正在请求 AI 生成...")
+                status_text.text("🧠 正在请求智能生成...")
                 ai_result = process_ai_in_batches(words_for_generation, progress_callback=update_ai_progress)
 
                 if ai_result:
-                    status_text.text("✅ AI 生成完成，正在解析...")
+                    status_text.text("✅ 内容生成完成，正在解析...")
                     parsed_data = parse_anki_data(ai_result)
 
                     if parsed_data:
@@ -962,14 +1003,14 @@ with tab_cards:
                             from errors import ErrorHandler
                             ErrorHandler.handle(e, "生成出错")
                     else:
-                        st.error("解析失败，AI 返回内容为空或格式错误。")
+                        st.error("解析失败，返回内容为空或格式错误。")
                 else:
-                    st.error("AI 生成失败，请检查 API Key 或网络连接。")
+                    st.error("生成失败，请检查 API Key 或网络连接。")
 
-        st.caption("⚠️ AI 生成内容可能存在错误，请人工复核。")
+        st.caption("⚠️ 智能生成内容可能存在错误，请人工复核。")
 
         render_anki_download_button(
-            f"📥 下载 {st.session_state.get('anki_pkg_name', 'deck.apkg')}",
+            f"📥 下载 {st.session_state.get('anki_pkg_name', '词卡.apkg')}",
             button_type="primary",
             use_container_width=True
         )
@@ -991,6 +1032,6 @@ with tab_cards:
                 st.dataframe(df_view.head(constants.MAX_PREVIEW_CARDS), use_container_width=True, hide_index=True)
 
 st.markdown(
-    '<p class="app-footer">Vocab Flow Ultra · 文本 → 词表 → Anki</p>',
+    '<p class="app-footer">Vocab Flow Ultra · 文本 → 词表 → Anki 卡片</p>',
     unsafe_allow_html=True
 )

@@ -34,6 +34,6 @@ class ErrorHandler:
     @staticmethod
     def handle_file_error(error: Exception, file_type: str) -> str:
         """Handle file processing errors."""
-        error_msg = f"Error processing {file_type}: {error}"
+        error_msg = f"处理{file_type}时出错：{error}"
         logger.error(error_msg)
         return error_msg
