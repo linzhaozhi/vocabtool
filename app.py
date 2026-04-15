@@ -667,6 +667,7 @@ with tab_cards:
                 words_only.append(cleaned)
 
         st.caption(f"当前待制作 {len(words_only)} 个词。")
+        st.caption(f"单次最多处理 {constants.MAX_AUTO_LIMIT} 个词。")
 
         current_word_count = len(words_only)
         if current_word_count > constants.MAX_AUTO_LIMIT:

@@ -125,6 +125,8 @@ def process_ai_in_batches(
     progress_callback: Optional[Callable[[int, int], None]] = None
 ) -> Optional[str]:
     """Process words in batches using AI with progress reporting."""
+    words_list = words_list[:constants.MAX_AUTO_LIMIT]
+
     client = get_openai_client()
     if not client:
         return None
