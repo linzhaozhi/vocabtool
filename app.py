@@ -354,26 +354,29 @@ def parse_topic_word_list(raw_text: str) -> list[str]:
     return parse_unique_words("\n".join(cleaned_lines))
 
 
-def validate_topic_word_request(raw_text: str) -> tuple[bool, str, str]:
-    """Validate constrained AI topic-word requests to avoid open-ended chat usage."""
-    query = normalize_lookup_query(raw_text)
-    if not query:
-        return False, "", "⚠️ 请输入类似“给我关于旅游的20个常见单词”的请求。"
-    if len(query) > 80:
-        return False, "", "⚠️ 请求太长了，请只描述主题和数量。"
+def validate_topic_label(raw_text: str) -> tuple[bool, str, str]:
+    """Validate short topic labels for AI topic word-list generation."""
+    topic = normalize_lookup_query(raw_text)
+    if not topic:
+        return False, "", "⚠️ 请输入一个主题，比如“旅游”或“business”。"
+    if len(topic) > 30:
+        return False, "", "⚠️ 主题太长了，请控制在 30 个字符以内。"
 
-    lowered = query.lower()
+    lowered = topic.lower()
     blocked_phrases = (
-        "为什么", "怎么", "如何", "解释", "分析", "总结", "写一段", "作文",
-        "翻译", "聊天", "对话", "请帮我", "tell me", "explain", "why", "how"
+        "为什么", "怎么", "如何", "解释", "分析", "总结", "翻译", "聊天",
+        "请帮我", "告诉我", "what", "why", "how", "tell me", "explain"
     )
-    if any(phrase in query for phrase in blocked_phrases) or any(phrase in lowered for phrase in blocked_phrases):
-        return False, "", "⚠️ 这里只支持“主题 + 数量”的词表请求，不支持开放式提问。"
+    if any(phrase in topic for phrase in blocked_phrases) or any(phrase in lowered for phrase in blocked_phrases):
+        return False, "", "⚠️ 这里只支持简短主题，不支持提问或聊天式输入。"
 
-    if not any(keyword in query for keyword in ("单词", "词汇")) and not any(keyword in lowered for keyword in ("word", "words", "vocabulary")):
-        return False, "", "⚠️ 请明确说明你要生成单词表，例如“给我关于旅游的20个常见单词”。"
+    if re.search(r"[0-9@#<>_=+*{}[\]|\\!?.,;:，。！？；：]", topic):
+        return False, "", "⚠️ 主题里不要带数字或整句标点，只保留简短主题词。"
 
-    return True, query, ""
+    if not re.fullmatch(r"[A-Za-z\u4e00-\u9fff][A-Za-z\u4e00-\u9fff&/'\- ]*", topic):
+        return False, "", "⚠️ 主题建议只填写中英文词组，比如“旅游”或“daily life”。"
+
+    return True, topic, ""
 
 
 # ==========================================
@@ -553,7 +556,7 @@ with tab_lookup:
     render_quick_lookup()
 
     st.markdown("### 🧠 AI 主题词表")
-    st.caption(f"💡 例如：给我关于旅游的20个常见单词。单次最多生成 {constants.AI_TOPIC_WORDLIST_MAX} 个。")
+    st.caption(f"💡 只要选择主题和个数即可。单次最多生成 {constants.AI_TOPIC_WORDLIST_MAX} 个常见词。")
 
     if "topic_wordlist_result" not in st.session_state:
         st.session_state["topic_wordlist_result"] = ""
@@ -561,14 +564,24 @@ with tab_lookup:
         st.session_state["topic_wordlist_words"] = []
 
     with st.form("topic_wordlist_form", clear_on_submit=False):
-        col_prompt, col_submit = st.columns([4, 1])
-        with col_prompt:
-            topic_word_request = st.text_input(
-                "输入主题词表请求",
-                placeholder="如：给我关于旅游的20个常见单词",
-                key="topic_word_request",
+        col_topic, col_count, col_submit = st.columns([3, 2, 1])
+        with col_topic:
+            topic_word_topic = st.text_input(
+                "输入主题",
+                placeholder="如：旅游、business、daily life",
+                key="topic_word_topic",
                 label_visibility="collapsed",
                 autocomplete="off",
+            )
+        with col_count:
+            topic_word_count = st.slider(
+                "个数",
+                min_value=1,
+                max_value=constants.AI_TOPIC_WORDLIST_MAX,
+                value=20,
+                step=1,
+                key="topic_word_count",
+                help=f"单次最多 {constants.AI_TOPIC_WORDLIST_MAX} 个"
             )
         with col_submit:
             topic_word_submit = st.form_submit_button(
@@ -578,12 +591,12 @@ with tab_lookup:
             )
 
     if topic_word_submit:
-        is_valid_request, normalized_request, error_message = validate_topic_word_request(topic_word_request)
-        if not is_valid_request:
+        is_valid_topic, normalized_topic, error_message = validate_topic_label(topic_word_topic)
+        if not is_valid_topic:
             st.warning(error_message)
         else:
             with st.spinner("🧠 正在生成主题词表..."):
-                ai_result = generate_topic_word_list(normalized_request)
+                ai_result = generate_topic_word_list(normalized_topic, int(topic_word_count))
 
             if ai_result and "error" not in ai_result:
                 generated_words = parse_topic_word_list(ai_result["result"])

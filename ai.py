@@ -134,24 +134,28 @@ express
         return {"error": str(e)}
 
 
-def generate_topic_word_list(request_text: str) -> Dict[str, Any]:
-    """Generate a topic-based English word list from a constrained natural-language request."""
+def generate_topic_word_list(topic: str, count: int) -> Dict[str, Any]:
+    """Generate a topic-based English word list from a topic and desired count."""
     client = get_openai_client()
     if not client:
         return {"error": "AI client not available"}
 
     model_name = get_config()["openai_model"]
+    normalized_topic = " ".join(str(topic).split()).strip()
+    if not normalized_topic:
+        return {"error": "Topic is required"}
+
+    normalized_count = max(1, min(int(count), constants.AI_TOPIC_WORDLIST_MAX))
 
     system_prompt = f"""# Role
 Topic Vocabulary Curator.
 
 # Goal
-Turn the user's request into a practical English word list about a topic.
+Create a practical English word list for the given topic.
 
-# Input Understanding
-- The user may ask in Chinese or English.
-- The request is about generating common words for a topic, not open-ended chatting.
-- If the requested number is missing, default to 20.
+# Input
+- The topic may be in Chinese or English.
+- The target length is provided separately.
 - Never generate more than {constants.AI_TOPIC_WORDLIST_MAX} entries.
 
 # Output Rules
@@ -170,7 +174,8 @@ Turn the user's request into a practical English word list about a topic.
 - Avoid obscure, literary, or overly technical words unless the topic clearly requires them.
 
 # Example
-User: 给我关于旅游的12个常见单词
+Topic: travel
+Count: 12
 Output:
 ```text
 travel
@@ -192,7 +197,10 @@ tour
             model=model_name,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": request_text}
+                {
+                    "role": "user",
+                    "content": f"Topic: {normalized_topic}\nCount: {normalized_count}"
+                }
             ],
             temperature=0.4
         )
