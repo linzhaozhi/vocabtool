@@ -20,6 +20,15 @@ except ImportError:
     logger.warning("OpenAI library not available")
 
 
+def extract_lookup_headword(raw_content: str) -> str:
+    """Extract the first non-empty line as the canonical English lookup headword."""
+    for line in raw_content.splitlines():
+        cleaned = line.strip().strip("`")
+        if cleaned:
+            return cleaned.lower()
+    return ""
+
+
 def get_openai_client() -> Optional[Any]:
     """Get configured OpenAI client with proper error handling."""
     if not OpenAI:
@@ -41,9 +50,7 @@ def get_openai_client() -> Optional[Any]:
 
 def get_word_quick_definition(word: str) -> Dict[str, Any]:
     """Get ultra-concise word definition using AI, with rank info."""
-    word_lower = word.lower().strip()
     vocab_dict = get_vocab_dict()
-    rank = vocab_dict.get(word_lower, 99999)
 
     client = get_openai_client()
     if not client:
@@ -56,6 +63,11 @@ Atomic Dictionary.
 
 # Goal
 Output ONE core meaning, ONE etymology, and TWO matching examples.
+
+# Input Understanding
+- The user input may be an English word/phrase OR a short Chinese gloss.
+- If the input is Chinese, infer the most natural English target word/phrase first.
+- Line 1 must ALWAYS be the final English word/phrase in lowercase.
 
 # Critical Constraint: ATOMIC SINGLE SENSE
 - **Force Single Sense**: Regardless of how many meanings a word has, pick ONLY the #1 most common one.
@@ -113,10 +125,83 @@ express
         )
 
         content = response.choices[0].message.content
-        return {"result": content, "rank": rank}
+        headword = extract_lookup_headword(content)
+        rank = vocab_dict.get(headword, 99999)
+        return {"result": content, "rank": rank, "headword": headword}
 
     except Exception as e:
         logger.error("Error getting definition: %s", e)
+        return {"error": str(e)}
+
+
+def generate_topic_word_list(request_text: str) -> Dict[str, Any]:
+    """Generate a topic-based English word list from a constrained natural-language request."""
+    client = get_openai_client()
+    if not client:
+        return {"error": "AI client not available"}
+
+    model_name = get_config()["openai_model"]
+
+    system_prompt = f"""# Role
+Topic Vocabulary Curator.
+
+# Goal
+Turn the user's request into a practical English word list about a topic.
+
+# Input Understanding
+- The user may ask in Chinese or English.
+- The request is about generating common words for a topic, not open-ended chatting.
+- If the requested number is missing, default to 20.
+- Never generate more than {constants.AI_TOPIC_WORDLIST_MAX} entries.
+
+# Output Rules
+- Output strictly inside one ```text code block.
+- One entry per line.
+- English only.
+- lowercase only.
+- No numbering.
+- No bullets.
+- No Chinese.
+- No explanations, headings, labels, or categories.
+- Prefer single words; use very short phrases only when they are clearly common and useful.
+
+# Quality Standard
+- Choose common, practical, high-frequency vocabulary tied closely to the topic.
+- Avoid obscure, literary, or overly technical words unless the topic clearly requires them.
+
+# Example
+User: 给我关于旅游的12个常见单词
+Output:
+```text
+travel
+trip
+ticket
+hotel
+flight
+passport
+luggage
+map
+train
+airport
+booking
+tour
+```"""
+
+    try:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": request_text}
+            ],
+            temperature=0.4
+        )
+
+        content = response.choices[0].message.content
+        return {"result": content}
+
+    except Exception as e:
+        logger.error("Error generating topic word list: %s", e)
         return {"error": str(e)}
 
 

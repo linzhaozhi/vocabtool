@@ -14,7 +14,7 @@ import streamlit as st
 
 import constants
 import resources
-from ai import get_word_quick_definition, process_ai_in_batches
+from ai import generate_topic_word_list, get_word_quick_definition, process_ai_in_batches
 from anki_package import cleanup_old_apkg_files, generate_anki_package
 from anki_parse import parse_anki_data
 from config import get_config
@@ -331,6 +331,51 @@ def validate_lookup_query(raw_text: str) -> tuple[bool, str, str]:
     return False, "", "⚠️ 这里只能查询英文单词/短语，或很短的中文释义词组；不支持提问、聊天或整句输入。"
 
 
+def extract_code_block_text(raw_text: str) -> str:
+    """Extract text content from fenced code blocks when present."""
+    code_blocks = re.findall(r'```(?:text)?\s*(.*?)\s*```', raw_text, re.DOTALL)
+    if code_blocks:
+        return "\n".join(code_blocks).strip()
+    return raw_text.strip()
+
+
+def parse_topic_word_list(raw_text: str) -> list[str]:
+    """Parse AI-generated topic word list into normalized unique entries."""
+    text = extract_code_block_text(raw_text)
+    cleaned_lines = []
+
+    for line in text.splitlines():
+        line = re.sub(r"^\s*(?:[-*•]|\d+[.)]?)\s*", "", line).strip()
+        if not line:
+            continue
+        if re.fullmatch(r"[A-Za-z]+(?:[ '-][A-Za-z]+)*", line) and line.count(" ") <= 2:
+            cleaned_lines.append(line.lower())
+
+    return parse_unique_words("\n".join(cleaned_lines))
+
+
+def validate_topic_word_request(raw_text: str) -> tuple[bool, str, str]:
+    """Validate constrained AI topic-word requests to avoid open-ended chat usage."""
+    query = normalize_lookup_query(raw_text)
+    if not query:
+        return False, "", "⚠️ 请输入类似“给我关于旅游的20个常见单词”的请求。"
+    if len(query) > 80:
+        return False, "", "⚠️ 请求太长了，请只描述主题和数量。"
+
+    lowered = query.lower()
+    blocked_phrases = (
+        "为什么", "怎么", "如何", "解释", "分析", "总结", "写一段", "作文",
+        "翻译", "聊天", "对话", "请帮我", "tell me", "explain", "why", "how"
+    )
+    if any(phrase in query for phrase in blocked_phrases) or any(phrase in lowered for phrase in blocked_phrases):
+        return False, "", "⚠️ 这里只支持“主题 + 数量”的词表请求，不支持开放式提问。"
+
+    if not any(keyword in query for keyword in ("单词", "词汇")) and not any(keyword in lowered for keyword in ("word", "words", "vocabulary")):
+        return False, "", "⚠️ 请明确说明你要生成单词表，例如“给我关于旅游的20个常见单词”。"
+
+    return True, query, ""
+
+
 # ==========================================
 # UI Components
 # ==========================================
@@ -414,24 +459,28 @@ def render_quick_lookup() -> None:
     result = st.session_state.get("quick_lookup_last_result")
     if result and 'error' not in result:
         raw_content = result['result']
-        lines = raw_content.split('\n')
-        formatted_lines = []
+        lines = [line.strip() for line in raw_content.split('\n') if line.strip()]
+        head_lines = []
+        definition_lines = []
+        example_lines = []
+        etymology_lines = []
+        other_lines = []
 
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
+        for idx, line in enumerate(lines):
             safe_line = html.escape(line)
 
             if line.startswith("🌱"):
-                formatted_lines.append(f'<div class="quick-lookup-line quick-lookup-ety">{safe_line}</div>')
+                etymology_lines.append(f'<div class="quick-lookup-line quick-lookup-ety">{safe_line}</div>')
             elif "|" in line and len(line) < 50:
-                formatted_lines.append(f'<div class="quick-lookup-line quick-lookup-def">{safe_line}</div>')
+                definition_lines.append(f'<div class="quick-lookup-line quick-lookup-def">{safe_line}</div>')
             elif line.startswith("•"):
-                formatted_lines.append(f'<div class="quick-lookup-line quick-lookup-ex">{safe_line}</div>')
+                example_lines.append(f'<div class="quick-lookup-line quick-lookup-ex">{safe_line}</div>')
+            elif idx == 0:
+                head_lines.append(f'<div class="quick-lookup-line quick-lookup-cn">{safe_line}</div>')
             else:
-                formatted_lines.append(f'<div class="quick-lookup-line quick-lookup-cn">{safe_line}</div>')
+                other_lines.append(f'<div class="quick-lookup-line quick-lookup-cn">{safe_line}</div>')
 
+        formatted_lines = head_lines + definition_lines + other_lines + example_lines + etymology_lines
         display_html = "".join(formatted_lines).replace('\n', '<br>')
         rank = result.get('rank', 99999)
 
@@ -502,6 +551,76 @@ tab_lookup, tab_extract, tab_cards = st.tabs([
 
 with tab_lookup:
     render_quick_lookup()
+
+    st.markdown("### 🧠 AI 主题词表")
+    st.caption(f"💡 例如：给我关于旅游的20个常见单词。单次最多生成 {constants.AI_TOPIC_WORDLIST_MAX} 个。")
+
+    if "topic_wordlist_result" not in st.session_state:
+        st.session_state["topic_wordlist_result"] = ""
+    if "topic_wordlist_words" not in st.session_state:
+        st.session_state["topic_wordlist_words"] = []
+
+    with st.form("topic_wordlist_form", clear_on_submit=False):
+        col_prompt, col_submit = st.columns([4, 1])
+        with col_prompt:
+            topic_word_request = st.text_input(
+                "输入主题词表请求",
+                placeholder="如：给我关于旅游的20个常见单词",
+                key="topic_word_request",
+                label_visibility="collapsed",
+                autocomplete="off",
+            )
+        with col_submit:
+            topic_word_submit = st.form_submit_button(
+                "生成",
+                type="primary",
+                use_container_width=True
+            )
+
+    if topic_word_submit:
+        is_valid_request, normalized_request, error_message = validate_topic_word_request(topic_word_request)
+        if not is_valid_request:
+            st.warning(error_message)
+        else:
+            with st.spinner("🧠 正在生成主题词表..."):
+                ai_result = generate_topic_word_list(normalized_request)
+
+            if ai_result and "error" not in ai_result:
+                generated_words = parse_topic_word_list(ai_result["result"])
+                if generated_words:
+                    st.session_state["topic_wordlist_words"] = generated_words[:constants.AI_TOPIC_WORDLIST_MAX]
+                    st.session_state["topic_wordlist_result"] = "\n".join(st.session_state["topic_wordlist_words"])
+                else:
+                    st.session_state["topic_wordlist_words"] = []
+                    st.session_state["topic_wordlist_result"] = ""
+                    st.error("❌ 生成失败，AI 返回的词表格式无法解析。")
+            else:
+                st.error(f"❌ 生成失败：{ai_result.get('error', '未知错误') if ai_result else '未知错误'}")
+
+    if st.session_state["topic_wordlist_result"]:
+        st.caption(f"已生成 {len(st.session_state['topic_wordlist_words'])} 个词，可复制或导入到“提取单词”。")
+
+        col_title, col_copy, col_import = st.columns([4, 1, 1])
+        with col_title:
+            st.markdown("#### 主题词表结果")
+        with col_copy:
+            render_copy_button(st.session_state["topic_wordlist_result"], key="copy_topic_words_btn")
+        with col_import:
+            if st.button("导入提取", key="btn_import_topic_words", use_container_width=True):
+                words = st.session_state["topic_wordlist_words"]
+                data_list = [(w, VOCAB_DICT.get(w.lower(), 99999)) for w in words]
+                set_generated_words_state(data_list, len(words), None)
+                st.session_state["extract_source_mode"] = "单词列表 / Anki"
+                st.success("✅ 已导入到“提取单词”，现在可以继续整理或直接去制作卡片。")
+
+        st.text_area(
+            "生成的主题词表",
+            value=st.session_state["topic_wordlist_result"],
+            height=220,
+            label_visibility="collapsed",
+            help="一行一个词，方便复制或导入后继续编辑。",
+            disabled=True
+        )
 
 # ==========================================
 # Tab 2: Word Extraction
