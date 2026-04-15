@@ -9,7 +9,6 @@ MAX_PREVIEW_CARDS = 10
 BEIJING_TIMEZONE_OFFSET = 8
 MAX_UPLOAD_MB = 200
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
-QUICK_LOOKUP_COOLDOWN_SECONDS = 1.2
 QUICK_LOOKUP_CACHE_MAX = 100
 
 # Temp .apkg files: subdir under system temp, cleanup files older than this

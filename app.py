@@ -26,7 +26,7 @@ from extraction import (
     parse_anki_txt_export,
 )
 from state import set_generated_words_state
-from utils import get_beijing_time_str, render_copy_button, render_pronunciation_button, run_gc
+from utils import get_beijing_time_str, render_copy_button, run_gc
 from vocab import analyze_logic
 
 # Load vocab and expose to app (and to resources for vocab/ai modules)
@@ -557,7 +557,7 @@ st.markdown(
 
 def render_quick_lookup() -> None:
     st.markdown("### 🔍 极速查词")
-    st.caption("💡 只支持英文单词、短语，或很短的中文释义词组；不支持聊天式提问。查询结果显示美音/英音音标，并提供默认美式发音。")
+    st.caption("💡 只支持英文单词、短语，或很短的中文释义词组；不支持聊天式提问。查询结果显示美音/英音音标。")
 
     if "quick_lookup_last_query" not in st.session_state:
         st.session_state["quick_lookup_last_query"] = ""
@@ -565,14 +565,10 @@ def render_quick_lookup() -> None:
         st.session_state["quick_lookup_last_result"] = None
     if "quick_lookup_is_loading" not in st.session_state:
         st.session_state["quick_lookup_is_loading"] = False
-    if "quick_lookup_block_until" not in st.session_state:
-        st.session_state["quick_lookup_block_until"] = 0.0
     if "quick_lookup_cache_keys" not in st.session_state:
         st.session_state["quick_lookup_cache_keys"] = []
 
-    now_ts = time.time()
-    in_cooldown = now_ts < st.session_state["quick_lookup_block_until"]
-    lookup_disabled = st.session_state["quick_lookup_is_loading"] or in_cooldown
+    lookup_disabled = st.session_state["quick_lookup_is_loading"]
 
     with st.form("quick_lookup_form", clear_on_submit=False):
         col_word, col_btn = st.columns([4, 1])
@@ -592,10 +588,6 @@ def render_quick_lookup() -> None:
                 disabled=lookup_disabled
             )
 
-    if in_cooldown:
-        wait_seconds = max(0.0, st.session_state["quick_lookup_block_until"] - now_ts)
-        st.caption(f"⏱️ 请稍候 {wait_seconds:.1f}s 再次查询")
-
     if lookup_submit:
         is_valid_query, query_word, error_message = validate_lookup_query(lookup_word)
         if not is_valid_query:
@@ -605,8 +597,6 @@ def render_quick_lookup() -> None:
         else:
             if st.session_state["quick_lookup_is_loading"]:
                 st.info("⏳ 查询进行中，请稍候。")
-            elif time.time() < st.session_state["quick_lookup_block_until"]:
-                st.info("⏱️ 请求过于频繁，请稍后再试。")
             else:
                 st.session_state["quick_lookup_is_loading"] = True
                 try:
@@ -626,7 +616,6 @@ def render_quick_lookup() -> None:
                     st.session_state["quick_lookup_last_result"] = st.session_state.get(cache_key)
                 finally:
                     st.session_state["quick_lookup_is_loading"] = False
-                    st.session_state["quick_lookup_block_until"] = time.time() + constants.QUICK_LOOKUP_COOLDOWN_SECONDS
 
     result = st.session_state.get("quick_lookup_last_result")
     if result and 'error' not in result:
@@ -689,12 +678,6 @@ def render_quick_lookup() -> None:
             </div>
         </div>
         """, unsafe_allow_html=True)
-        lookup_headword = result.get("headword", "").strip()
-        if lookup_headword:
-            render_pronunciation_button(
-                lookup_headword,
-                key=f"lookup_pron_{re.sub(r'[^a-z0-9]+', '_', lookup_headword.lower())}"
-            )
     elif result and 'error' in result:
         st.error(f"❌ 查询失败：{result.get('error', '未知错误')}")
 
