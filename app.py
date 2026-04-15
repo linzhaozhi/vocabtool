@@ -26,7 +26,7 @@ from extraction import (
     parse_anki_txt_export,
 )
 from state import set_generated_words_state
-from utils import get_beijing_time_str, render_copy_button, run_gc
+from utils import get_beijing_time_str, render_copy_button, render_pronunciation_button, run_gc
 from vocab import analyze_logic
 
 # Load vocab and expose to app (and to resources for vocab/ai modules)
@@ -65,113 +65,199 @@ if "anki_cards_cache" not in st.session_state:
 # Custom CSS
 st.markdown("""
 <style>
+    :root {
+        --vf-text: var(--text-color, #1f2937);
+        --vf-text-muted: color-mix(in srgb, var(--vf-text) 66%, transparent);
+        --vf-text-soft: color-mix(in srgb, var(--vf-text) 48%, transparent);
+        --vf-surface: color-mix(in srgb, var(--secondary-background-color, #f8fafc) 72%, var(--background-color, #ffffff) 28%);
+        --vf-surface-soft: color-mix(in srgb, var(--secondary-background-color, #f8fafc) 84%, var(--background-color, #ffffff) 16%);
+        --vf-surface-elevated: color-mix(in srgb, var(--background-color, #ffffff) 76%, var(--secondary-background-color, #f8fafc) 24%);
+        --vf-border: color-mix(in srgb, var(--vf-text) 12%, transparent);
+        --vf-border-strong: color-mix(in srgb, var(--vf-text) 18%, transparent);
+        --vf-shadow-soft: 0 14px 32px color-mix(in srgb, var(--vf-text) 10%, transparent);
+        --vf-primary-soft: color-mix(in srgb, var(--primary-color, #60a5fa) 18%, var(--background-color, #ffffff) 82%);
+        --vf-primary-soft-2: color-mix(in srgb, var(--primary-color, #60a5fa) 30%, var(--secondary-background-color, #f8fafc) 70%);
+        --vf-success-soft: color-mix(in srgb, #22c55e 16%, var(--secondary-background-color, #f8fafc) 84%);
+        --vf-success-text: color-mix(in srgb, #22c55e 48%, var(--vf-text) 52%);
+        --vf-lookup-def: color-mix(in srgb, var(--primary-color, #60a5fa) 58%, var(--vf-text) 42%);
+        --vf-lookup-ety-bg: color-mix(in srgb, #10b981 18%, var(--secondary-background-color, #f8fafc) 82%);
+        --vf-lookup-ety-text: color-mix(in srgb, #10b981 56%, var(--vf-text) 44%);
+        --vf-accent-gradient: linear-gradient(
+            135deg,
+            color-mix(in srgb, var(--primary-color, #60a5fa) 72%, #4f46e5 28%) 0%,
+            color-mix(in srgb, var(--primary-color, #60a5fa) 42%, #111827 58%) 100%
+        );
+    }
     .stTextArea textarea { font-family: 'Consolas', monospace; font-size: 14px; }
-    .stButton>button { border-radius: 8px; font-weight: 600; width: 100%; margin-top: 5px; }
+    .stButton>button {
+        border-radius: 10px;
+        font-weight: 600;
+        width: 100%;
+        margin-top: 5px;
+        border: 1px solid var(--vf-border);
+        box-shadow: 0 8px 20px color-mix(in srgb, var(--vf-text) 6%, transparent);
+    }
     .stTextInput > div > div > input,
     .stTextArea textarea,
     .stNumberInput input {
         border-radius: 10px;
-        border: 1px solid #d7deea;
+        border: 1px solid var(--vf-border-strong);
+        background: var(--vf-surface-elevated);
+        color: var(--vf-text);
     }
-    .stat-box { padding: 15px; background-color: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; text-align: center; color: #166534; margin-bottom: 20px; }
+    .stTextInput > div > div > input:focus,
+    .stTextArea textarea:focus,
+    .stNumberInput input:focus {
+        border-color: color-mix(in srgb, var(--primary-color, #60a5fa) 60%, transparent);
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-color, #60a5fa) 30%, transparent);
+    }
+    .stat-box {
+        padding: 15px;
+        background: var(--vf-success-soft);
+        border: 1px solid color-mix(in srgb, #22c55e 28%, transparent);
+        border-radius: 10px;
+        text-align: center;
+        color: var(--vf-success-text);
+        margin-bottom: 20px;
+    }
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    .stExpander { border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 10px; }
+    .stExpander {
+        border: 1px solid var(--vf-border);
+        border-radius: 12px;
+        margin-bottom: 10px;
+        background: color-mix(in srgb, var(--vf-surface-soft) 86%, transparent);
+    }
     .stProgress > div > div > div > div { background-color: #4CAF50; }
-    .ai-warning { font-size: 12px; color: #666; margin-top: -5px; margin-bottom: 10px; text-align: center; }
+    .ai-warning { font-size: 12px; color: var(--vf-text-soft); margin-top: -5px; margin-bottom: 10px; text-align: center; }
     /* Search form: card-style container */
-    .stForm { border: 1px solid #e5e7eb; border-radius: 12px; padding: 1.25rem 1.5rem; background: #fafafa; margin-bottom: 1rem; }
+    .stForm {
+        border: 1px solid var(--vf-border);
+        border-radius: 14px;
+        padding: 1.25rem 1.5rem;
+        background: var(--vf-surface-soft);
+        box-shadow: var(--vf-shadow-soft);
+        margin-bottom: 1rem;
+    }
     /* Metric cards: subtle background */
-    [data-testid="stMetric"] { background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); padding: 1rem; border-radius: 10px; border: 1px solid #e2e8f0; }
+    [data-testid="stMetric"] {
+        background: linear-gradient(135deg, var(--vf-surface-soft) 0%, var(--vf-surface) 100%);
+        padding: 1rem;
+        border-radius: 12px;
+        border: 1px solid var(--vf-border);
+        box-shadow: 0 10px 24px color-mix(in srgb, var(--vf-text) 6%, transparent);
+    }
     /* Tab labels: slightly bolder */
     .stTabs [data-baseweb="tab-list"] { gap: 0.5rem; }
     .stTabs [data-baseweb="tab"] {
         padding: 0.6rem 1rem;
         border-radius: 10px;
         font-weight: 600;
-        border: 1px solid #e2e8f0;
-        background: #f8fafc;
+        border: 1px solid var(--vf-border);
+        background: var(--vf-surface);
+        color: var(--vf-text-muted);
+        transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
     }
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(135deg, #dbeafe 0%, #eff6ff 100%);
-        border-color: #93c5fd;
-        color: #0f172a;
-        box-shadow: 0 10px 24px rgba(59, 130, 246, 0.12);
+        background: linear-gradient(135deg, var(--vf-primary-soft) 0%, var(--vf-primary-soft-2) 100%);
+        border-color: color-mix(in srgb, var(--primary-color, #60a5fa) 42%, transparent);
+        color: var(--vf-text);
+        box-shadow: 0 10px 24px color-mix(in srgb, var(--primary-color, #60a5fa) 18%, transparent);
+        transform: translateY(-1px);
     }
     .stRadio [role="radiogroup"] {
         gap: 0.5rem;
         flex-wrap: wrap;
     }
     .stRadio [role="radiogroup"] label {
-        background: #f8fafc;
-        border: 1px solid #dbe3ef;
+        background: var(--vf-surface);
+        border: 1px solid var(--vf-border);
         border-radius: 999px;
-        padding: 0.2rem 0.75rem;
+        padding: 0.25rem 0.8rem;
+        transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+    }
+    .stRadio [role="radiogroup"] label:hover {
+        transform: translateY(-1px);
+        border-color: color-mix(in srgb, var(--primary-color, #60a5fa) 28%, var(--vf-border) 72%);
+    }
+    .stRadio [role="radiogroup"] label:has(input:checked) {
+        background: linear-gradient(135deg, var(--vf-primary-soft) 0%, var(--vf-primary-soft-2) 100%);
+        border-color: color-mix(in srgb, var(--primary-color, #60a5fa) 46%, transparent);
+        box-shadow: 0 10px 18px color-mix(in srgb, var(--primary-color, #60a5fa) 16%, transparent);
     }
     /* App footer */
-    .app-footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; text-align: center; color: #64748b; font-size: 0.875rem; }
+    .app-footer {
+        margin-top: 2.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--vf-border);
+        text-align: center;
+        color: var(--vf-text-soft);
+        font-size: 0.875rem;
+    }
     .workflow-banner {
         margin: 0.75rem 0 1.25rem;
         padding: 0.95rem 1rem;
         border-radius: 12px;
-        background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
-        border: 1px solid #bfdbfe;
-        color: #1e3a8a;
+        background: linear-gradient(135deg, var(--vf-primary-soft) 0%, var(--vf-surface-soft) 100%);
+        border: 1px solid color-mix(in srgb, var(--primary-color, #60a5fa) 34%, transparent);
+        color: var(--vf-text);
         font-size: 0.95rem;
+        box-shadow: var(--vf-shadow-soft);
     }
     
     /* Reading Mode Styles */
     .reading-container {
-        background-color: #f9fafb;
+        background-color: var(--vf-surface);
         padding: 30px;
         border-radius: 12px;
         font-family: 'Georgia', serif;
         font-size: 18px;
         line-height: 1.8;
-        color: #1f2937;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        color: var(--vf-text);
+        box-shadow: var(--vf-shadow-soft);
     }
     .reading-text {
         user-select: text;
         cursor: text;
     }
     .reading-text::selection {
-        background-color: #dbeafe;
+        background-color: color-mix(in srgb, var(--primary-color, #60a5fa) 35%, transparent);
     }
     .word-definition {
-        background: white;
-        border: 2px solid #3b82f6;
+        background: var(--vf-surface-elevated);
+        border: 2px solid color-mix(in srgb, var(--primary-color, #60a5fa) 70%, transparent);
         border-radius: 8px;
         padding: 15px;
         margin-top: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        box-shadow: var(--vf-shadow-soft);
     }
     .definition-title {
         font-weight: bold;
-        color: #1e40af;
+        color: var(--vf-lookup-def);
         margin-bottom: 8px;
         font-size: 20px;
     }
     .definition-meaning {
-        color: #374151;
+        color: var(--vf-text);
         margin-bottom: 12px;
         font-size: 16px;
     }
     .example-sentence {
-        background-color: #f3f4f6;
+        background-color: var(--vf-surface-soft);
         padding: 10px;
-        border-left: 4px solid #3b82f6;
+        border-left: 4px solid color-mix(in srgb, var(--primary-color, #60a5fa) 72%, transparent);
         margin: 5px 0;
         font-style: italic;
-        color: #4b5563;
+        color: var(--vf-text-muted);
     }
     .search-box {
         position: sticky;
         top: 0;
-        background: white;
+        background: var(--vf-surface-elevated);
         padding: 15px;
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border: 1px solid var(--vf-border);
+        box-shadow: var(--vf-shadow-soft);
         margin-bottom: 20px;
         z-index: 100;
     }
@@ -179,7 +265,7 @@ st.markdown("""
         font-family: 'Noto Sans CJK SC', 'Noto Sans SC', 'WenQuanYi Micro Hei', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
         font-size: 16px;
         line-height: 1.65;
-        color: #1f2937;
+        color: var(--vf-text);
         font-weight: 400;
         -webkit-font-smoothing: antialiased;
         text-rendering: optimizeLegibility;
@@ -192,22 +278,28 @@ st.markdown("""
         font-weight: 400;
     }
     .quick-lookup-def {
-        color: #1e3a8a;
+        color: var(--vf-lookup-def);
         margin-bottom: 6px;
     }
+    .quick-lookup-phon {
+        color: var(--vf-text-muted);
+        margin-bottom: 8px;
+        font-size: 17px;
+        letter-spacing: 0.01em;
+    }
     .quick-lookup-ety {
-        color: #065f46;
-        background: #ecfdf5;
+        color: var(--vf-lookup-ety-text);
+        background: var(--vf-lookup-ety-bg);
         padding: 6px 10px;
         border-radius: 8px;
         margin: 6px 0;
     }
     .quick-lookup-ex {
-        color: #374151;
+        color: var(--vf-text-muted);
         margin-top: 6px;
     }
     .quick-lookup-cn {
-        color: #6b7280;
+        color: var(--vf-text-soft);
         margin-bottom: 8px;
     }
 </style>
@@ -456,7 +548,7 @@ def handle_extract_source_change() -> None:
 # UI Components
 # ==========================================
 st.title("⚡️ Vocab Flow Ultra · 稳定版")
-st.caption("把查词、提词、制卡分开处理。支持内置智能释义、词源与语音。")
+st.caption(f"把查词、提词、制卡分开处理。支持内置智能释义、词源与语音，默认词库来自 {constants.VOCAB_PROJECT_NAME}。")
 st.markdown(
     '<div class="workflow-banner">查词、提词、制卡三个步骤已经分开。先确认词，再整理词表，最后生成卡片，路径会更清楚。</div>',
     unsafe_allow_html=True
@@ -465,7 +557,7 @@ st.markdown(
 
 def render_quick_lookup() -> None:
     st.markdown("### 🔍 极速查词")
-    st.caption("💡 只支持英文单词、短语，或很短的中文释义词组；不支持聊天式提问")
+    st.caption("💡 只支持英文单词、短语，或很短的中文释义词组；不支持聊天式提问。查询结果显示美音/英音音标，并提供默认美式发音。")
 
     if "quick_lookup_last_query" not in st.session_state:
         st.session_state["quick_lookup_last_query"] = ""
@@ -541,6 +633,7 @@ def render_quick_lookup() -> None:
         raw_content = result['result']
         lines = [line.strip() for line in raw_content.split('\n') if line.strip()]
         head_lines = []
+        phonetic_lines = []
         definition_lines = []
         example_lines = []
         etymology_lines = []
@@ -551,6 +644,8 @@ def render_quick_lookup() -> None:
 
             if line.startswith("🌱"):
                 etymology_lines.append(f'<div class="quick-lookup-line quick-lookup-ety">{safe_line}</div>')
+            elif line.startswith("🔊"):
+                phonetic_lines.append(f'<div class="quick-lookup-line quick-lookup-phon">{safe_line}</div>')
             elif "|" in line and len(line) < 50:
                 definition_lines.append(f'<div class="quick-lookup-line quick-lookup-def">{safe_line}</div>')
             elif line.startswith("•"):
@@ -560,7 +655,7 @@ def render_quick_lookup() -> None:
             else:
                 other_lines.append(f'<div class="quick-lookup-line quick-lookup-cn">{safe_line}</div>')
 
-        formatted_lines = head_lines + definition_lines + other_lines + example_lines + etymology_lines
+        formatted_lines = head_lines + phonetic_lines + definition_lines + other_lines + example_lines + etymology_lines
         display_html = "".join(formatted_lines).replace('\n', '<br>')
         rank = result.get('rank', 99999)
 
@@ -581,19 +676,25 @@ def render_quick_lookup() -> None:
             rank_label = "未收录"
 
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 3px; border-radius: 12px; margin: 15px 0;">
-            <div style="background: white; padding: 25px; border-radius: 10px;">
+        <div style="background: var(--vf-accent-gradient); padding: 3px; border-radius: 14px; margin: 15px 0; box-shadow: var(--vf-shadow-soft);">
+            <div style="background: var(--vf-surface-elevated); border: 1px solid var(--vf-border); padding: 25px; border-radius: 12px;">
                 <div class="quick-lookup-card">
                     {display_html}
                 </div>
-                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--vf-border);">
                     <span style="display: inline-block; background: {rank_color}; color: white; padding: 4px 12px; border-radius: 6px; font-size: 14px; font-weight: 600;">
-                        📊 词频排名：{rank}（{rank_label}）
+                        📊 {constants.VOCAB_PROJECT_NAME}词频排名：{rank}（{rank_label}）
                     </span>
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
+        lookup_headword = result.get("headword", "").strip()
+        if lookup_headword:
+            render_pronunciation_button(
+                lookup_headword,
+                key=f"lookup_pron_{re.sub(r'[^a-z0-9]+', '_', lookup_headword.lower())}"
+            )
     elif result and 'error' in result:
         st.error(f"❌ 查询失败：{result.get('error', '未知错误')}")
 
@@ -604,7 +705,7 @@ if hasattr(st, "fragment"):
     render_quick_lookup = st.fragment(render_quick_lookup)
 
 if not VOCAB_DICT:
-    st.error("⚠️ 缺失词频数据文件，请检查根目录或 `data/` 目录中的 `coca_cleaned.csv` / `vocab.pkl`。")
+    st.error(f"⚠️ 缺失词库数据文件，请检查根目录或 `data/` 目录中的 `{constants.VOCAB_PROJECT_FILE}`（默认）/ `vocab.pkl`。")
 
 with st.expander("📖 使用指南 & 支持格式", expanded=False):
     st.markdown("""
@@ -613,6 +714,9 @@ with st.expander("📖 使用指南 & 支持格式", expanded=False):
     2. **提取单词**：在“提取单词”里从文本、文件或词频范围整理词表。
     3. **制作卡片**：在“制作卡片”里使用内置智能生成并下载 Anki 牌组。
     
+    **📚 当前词库**
+    - 默认词库：NGSL 项目词表（`ngsl_31k.csv`）
+
     **📄 支持的文件格式**
     - 📝 文本：TXT
     - 📄 文档：PDF, DOCX, EPUB
@@ -717,7 +821,7 @@ with tab_lookup:
 # ==========================================
 with tab_extract:
     st.markdown("### 🧩 提取单词")
-    st.caption("来源已拆成 5 个入口：文章 URL、文件、文本、Anki、词库；整理后的结果会自动同步到“制作卡片”。")
+    st.caption(f"来源已拆成 5 个入口：文章 URL、文件、文本、Anki、词库；其中“词库”使用 {constants.VOCAB_PROJECT_NAME} 词表。整理后的结果会自动同步到“制作卡片”。")
 
     if "extract_source_mode" not in st.session_state:
         st.session_state["extract_source_mode"] = EXTRACT_SOURCE_OPTIONS[0]
@@ -869,7 +973,7 @@ with tab_extract:
         result_step_title = "#### 第三步：查看与整理结果"
         next_step_title = "#### 第四步：下一步"
         st.markdown("#### 第二步：从词库生成词表")
-        st.caption("按词频范围直接选词，适合快速扩充词表。")
+        st.caption(f"按 {constants.VOCAB_PROJECT_NAME} 词频范围直接选词，适合快速扩充词表。")
         gen_type = st.radio("生成模式", ["🔢 顺序生成", "🔀 随机抽取"], horizontal=True, key="rank_gen_type")
 
         if "顺序生成" in gen_type:
@@ -991,9 +1095,20 @@ with tab_cards:
                 key="sel_voice_cards"
             )
         selected_voice_code = constants.VOICE_MAP[selected_voice_label]
-        st.caption("支持美音和英音；音频只朗读英文单词和英文例句。")
+        st.caption("支持美音和英音；音频只朗读英文单词和英文例句，卡片会显示对应的美音/英音音标。")
 
-        enable_audio_auto = st.checkbox("生成单词和例句音频", value=True, key="chk_audio_cards")
+        col_audio, col_example_count = st.columns([2, 2])
+        with col_audio:
+            enable_audio_auto = st.checkbox("生成单词和例句音频", value=True, key="chk_audio_cards")
+        with col_example_count:
+            selected_example_count = st.radio(
+                "🧾 例句数量",
+                options=[1, 2],
+                index=constants.AI_CARD_EXAMPLE_COUNT_DEFAULT - 1,
+                horizontal=True,
+                format_func=lambda value: f"{value} 句",
+                key="sel_example_count"
+            )
 
         col_title, col_copy_btn = st.columns([5, 1])
         with col_title:
@@ -1046,7 +1161,11 @@ with tab_cards:
                     status_text.text(f"正在处理 ({current}/{total})")
 
                 status_text.text("🧠 正在请求智能生成...")
-                ai_result = process_ai_in_batches(words_for_generation, progress_callback=update_ai_progress)
+                ai_result = process_ai_in_batches(
+                    words_for_generation,
+                    example_count=int(selected_example_count),
+                    progress_callback=update_ai_progress
+                )
 
                 if ai_result:
                     status_text.text("✅ 内容生成完成，正在解析...")
@@ -1095,16 +1214,20 @@ with tab_cards:
             cards = st.session_state["anki_cards_cache"]
             with st.expander(f"👀 预览卡片 (前 {constants.MAX_PREVIEW_CARDS} 张)", expanded=True):
                 df_view = pd.DataFrame(cards)
-                display_cols = ['w', 'm', 'e', 'ec', 'r']
+                display_cols = ['w', 'p', 'm', 'e', 'ec', 'r']
                 df_view = df_view[[c for c in display_cols if c in df_view.columns]]
                 rename_map = {
                     'w': "正面",
+                    'p': "音标",
                     'm': "中文/英文释义",
                     'e': "英文例句",
                     'ec': "例句翻译",
                     'r': "词源",
                 }
                 df_view = df_view.rename(columns=rename_map)
+                for column_name in ("英文例句", "例句翻译"):
+                    if column_name in df_view.columns:
+                        df_view[column_name] = df_view[column_name].astype(str).str.replace(r"<br\s*/?>", "\n", regex=True)
                 st.dataframe(df_view.head(constants.MAX_PREVIEW_CARDS), use_container_width=True, hide_index=True)
 
 st.markdown(

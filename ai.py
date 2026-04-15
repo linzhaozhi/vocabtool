@@ -62,20 +62,22 @@ def get_word_quick_definition(word: str) -> Dict[str, Any]:
 Atomic Dictionary.
 
 # Goal
-Output ONE core meaning, ONE etymology, and TWO matching examples.
+Output ONE core meaning, US/UK phonetics, ONE etymology, and TWO matching examples.
 
 # Input Understanding
 - The user input may be an English word/phrase OR a short Chinese gloss.
 - If the input is Chinese, infer the most natural English target word/phrase first.
 - Line 1 must ALWAYS be the final English word/phrase in lowercase.
+- Line 2 must ALWAYS contain both US and UK phonetics.
 
 # Critical Constraint: ATOMIC SINGLE SENSE
 - **Force Single Sense**: Regardless of how many meanings a word has, pick ONLY the #1 most common one.
 - **Strict Alignment**: The Definition, Etymology, and BOTH Examples must strictly support this single meaning.
-- **Format**: Follow the 4-line structure below perfectly.
+- **Format**: Follow the 6-line structure below perfectly.
 
 # Output Format
 [word] (lowercase)
+🔊 美 /US IPA/；英 /UK IPA/
 [CN Meaning] | [Short EN Definition (<8 words)]
 🌱 词源: [root (CN) + affix (CN)] (Explain origin briefly)
 • [English Example 1] ([CN Trans])
@@ -87,6 +89,7 @@ spring
 
 **Model Output:**
 spring
+🔊 美 /sprɪŋ/；英 /sprɪŋ/
 春天 | The season after winter
 🌱 词源: spring- (涌出/生长) → 万物复苏
 • Flowers bloom in spring. (花朵在春天绽放。)
@@ -97,6 +100,7 @@ date
 
 **Model Output:**
 date
+🔊 美 /deɪt/；英 /deɪt/
 日期 | Specific day of the month
 🌱 词源: dat- (给予/指定) + -e (名词后缀)
 • What is today's date? (今天是几号？)
@@ -107,6 +111,7 @@ express
 
 **Model Output:**
 express
+🔊 美 /ɪkˈspres/；英 /ɪkˈspres/
 表达；表示 | Convey a thought or feeling
 🌱 词源: ex- (向外) + press (压/挤)
 • She expressed her thanks to us. (她向我们表达了谢意。)
@@ -215,10 +220,15 @@ tour
 
 def process_ai_in_batches(
     words_list: List[str],
+    example_count: int = constants.AI_CARD_EXAMPLE_COUNT_DEFAULT,
     progress_callback: Optional[Callable[[int, int], None]] = None
 ) -> Optional[str]:
     """Process words in batches using AI with progress reporting."""
     words_list = words_list[:constants.MAX_AUTO_LIMIT]
+    example_count = max(
+        constants.AI_CARD_EXAMPLE_COUNT_MIN,
+        min(int(example_count), constants.AI_CARD_EXAMPLE_COUNT_MAX)
+    )
 
     client = get_openai_client()
     if not client:
@@ -229,6 +239,17 @@ def process_ai_in_batches(
     full_results = []
 
     system_prompt = "You are a helpful assistant for vocabulary learning."
+    example_demo = (
+        "hectic schedule ||| 美 /ˈhektɪk/；英 /ˈhektɪk/ ||| 忙乱的日程/非常忙碌 ||| "
+        "She has a hectic schedule with meetings all day. ||| "
+        "她的日程很忙，一整天都排满了会议。 ||| "
+        "hect- (持续/习惯 - 希腊语) + -ic (形容词后缀)"
+        if example_count == 1 else
+        "hectic schedule ||| 美 /ˈhektɪk/；英 /ˈhektɪk/ ||| 忙乱的日程/非常忙碌 ||| "
+        "She has a hectic schedule with meetings all day.<br>My week became hectic before the trip. ||| "
+        "她的日程很忙，一整天都排满了会议。<br>旅行前我的一周变得非常忙乱。 ||| "
+        "hect- (持续/习惯 - 希腊语) + -ic (形容词后缀)"
+    )
 
     for i in range(0, total_words, constants.AI_BATCH_SIZE):
         batch = words_list[i:i + constants.AI_BATCH_SIZE]
@@ -244,30 +265,33 @@ You are an expert English Lexicographer.
 2. **Layout**: One entry per line.
 3. **Separator**: Use `|||` as the delimiter.
 4. **Target Structure**:
-   `Word/Phrase` ||| `Chinese Definition` ||| `Short English Example Sentence` ||| `Chinese Translation of the Example` ||| `Etymology (Chinese)`
+   `Word/Phrase` ||| `Pronunciation` ||| `Chinese Definition` ||| `English Example Sentence(s)` ||| `Chinese Translation(s)` ||| `Etymology (Chinese)`
 
 # Field Constraints
 1. Field 1: Phrase - Output the target word OR a very short high-frequency collocation (1-3 words max).
-2. Field 2: Definition - **Simplified Chinese Only**. Concise meaning corresponding to the phrase.
-3. Field 3: Example - Short authentic English sentence.
-4. Field 4: Example Translation - **Simplified Chinese Only**. Must be a faithful translation of Field 3.
-5. Field 5: Etymology - **Simplified Chinese Only**. Format: `root (CN meaning) + affix (CN meaning)`.
+2. Field 2: Pronunciation - Output BOTH pronunciations in this exact format: `美 /.../；英 /.../`.
+3. Field 3: Definition - **Simplified Chinese Only**. Concise meaning corresponding to the phrase.
+4. Field 4: Example - Exactly {example_count} short authentic English sentence(s).
+   - If {example_count} is 1, output just 1 sentence.
+   - If {example_count} is 2, join the 2 sentences with `<br>`.
+5. Field 5: Example Translation - **Simplified Chinese Only**. Must faithfully translate Field 4 in matching order.
+   - If {example_count} is 1, output just 1 translation.
+   - If {example_count} is 2, join the 2 translations with `<br>`.
+6. Field 6: Etymology - **Simplified Chinese Only**. Format: `root (CN meaning) + affix (CN meaning)`.
 
 # Valid Example
 Input: hectic
 Output:
-hectic schedule ||| 忙乱的日程/非常忙碌 ||| She has a hectic schedule with meetings all day. ||| 她的日程很忙，一整天都排满了会议。 ||| hect- (持续/习惯 - 希腊语) + -ic (形容词后缀)
-
-Input: altruism
-Output:
-altruism ||| 利他主义/无私 ||| Motivated by altruism, he donated anonymously. ||| 出于利他精神，他匿名捐了款。 ||| alter (其他) + -ism (主义/行为)
+{example_demo}
 
 # Task
 Process the input list strictly.
 
 # Final Checks
-- Every line must contain exactly 5 fields separated by `|||`.
-- Field 4 must translate Field 3, not the isolated word.
+- Every line must contain exactly 6 fields separated by `|||`.
+- Field 2 must include both `美 /.../` and `英 /.../`.
+- Field 5 must translate Field 4, not the isolated word.
+- If {example_count} is 2, Field 4 and Field 5 must each contain exactly 2 items separated by `<br>` in matching order.
 - Do not omit any input item."""
 
         for attempt in range(constants.MAX_RETRIES):

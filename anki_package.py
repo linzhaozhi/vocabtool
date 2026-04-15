@@ -51,6 +51,8 @@ def generate_anki_package(
     .card { font-family: 'Arial', sans-serif; font-size: 20px; text-align: center; color: #333; background-color: white; padding: 20px; }
     .phrase { font-size: 28px; font-weight: 700; color: #0056b3; margin-bottom: 20px; }
     .nightMode .phrase { color: #66b0ff; }
+    .phonetic { font-size: 18px; color: #475569; margin-bottom: 14px; text-align: left; }
+    .nightMode .phonetic { color: #cbd5e1; }
     hr { border: 0; height: 1px; background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0)); margin-bottom: 15px; }
     .meaning { font-size: 20px; font-weight: bold; color: #222; margin-bottom: 15px; text-align: left; }
     .nightMode .meaning { color: #e0e0e0; }
@@ -84,7 +86,7 @@ def generate_anki_package(
         constants.ANKI_MODEL_ID,
         'VocabFlow Unified Model',
         fields=[
-            {'name': 'Phrase'}, {'name': 'Meaning'},
+            {'name': 'Phrase'}, {'name': 'Phonetic'}, {'name': 'Meaning'},
             {'name': 'Example'}, {'name': 'Example_Translation'}, {'name': 'Etymology'},
             {'name': 'Audio_Phrase'}, {'name': 'Audio_Example'}
         ],
@@ -97,6 +99,9 @@ def generate_anki_package(
             'afmt': '''
             {{FrontSide}}
             <hr>
+            {{#Phonetic}}
+            <div class="phonetic">{{Phonetic}}</div>
+            {{/Phonetic}}
             <div class="meaning">{{Meaning}}</div>
             <div class="example">
                 <div>🗣️ {{Example}}</div>
@@ -120,6 +125,7 @@ def generate_anki_package(
 
         for idx, card in enumerate(cards_data):
             phrase = safe_str_clean(card.get('w', ''))
+            phonetic = safe_str_clean(card.get('p', ''))
             meaning = safe_str_clean(card.get('m', ''))
             example = safe_str_clean(card.get('e', ''))
             example_translation = safe_str_clean(card.get('ec', ''))
@@ -143,11 +149,13 @@ def generate_anki_package(
                 media_files.append(phrase_path)
                 audio_phrase_field = f"[sound:{phrase_filename}]"
 
-                if example and len(example) > 3:
+                tts_example = re.sub(r'<br\s*/?>', '. ', example, flags=re.IGNORECASE)
+                tts_example = re.sub(r'\s+', ' ', tts_example).strip()
+                if tts_example and len(tts_example) > 3:
                     example_filename = f"tts_{safe_phrase}_{unique_id}_e.mp3"
                     example_path = os.path.join(tmp_dir, example_filename)
                     audio_tasks.append({
-                        'text': example,
+                        'text': tts_example,
                         'path': example_path,
                         'voice': tts_voice
                     })
@@ -157,13 +165,13 @@ def generate_anki_package(
             if note_id:
                 note = genanki.Note(
                     model=model,
-                    fields=[phrase, meaning, example, example_translation, etymology, audio_phrase_field, audio_example_field],
+                    fields=[phrase, phonetic, meaning, example, example_translation, etymology, audio_phrase_field, audio_example_field],
                     guid=note_id
                 )
             else:
                 note = genanki.Note(
                     model=model,
-                    fields=[phrase, meaning, example, example_translation, etymology, audio_phrase_field, audio_example_field]
+                    fields=[phrase, phonetic, meaning, example, example_translation, etymology, audio_phrase_field, audio_example_field]
                 )
             notes_buffer.append(note)
 

@@ -84,6 +84,8 @@ def load_vocab_data() -> Tuple[Dict[str, int], Optional[pd.DataFrame]]:
             logger.warning(f"Could not load pickle file: {e}")
 
     possible_files = [
+        BASE_DIR / constants.VOCAB_PROJECT_FILE,
+        DATA_DIR / constants.VOCAB_PROJECT_FILE,
         BASE_DIR / "coca_cleaned.csv",
         BASE_DIR / "data.csv",
         BASE_DIR / "vocab.csv",

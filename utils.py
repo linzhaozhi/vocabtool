@@ -99,6 +99,67 @@ def render_copy_button(text: str, key: str = "copy_words") -> None:
     components.html(html_block, height=48)
 
 
+def render_pronunciation_button(text: str, key: str = "pronounce_word") -> None:
+    """Render a lightweight browser-side pronunciation button for US English."""
+    payload = json.dumps(text).replace("</", "<\\/")
+    html_block = f"""
+    <style>
+      .pron-wrap {{
+        display: flex;
+        justify-content: flex-end;
+        margin: 2px 0 10px;
+      }}
+      .pron-btn {{
+        border: 1px solid #cbd5e1;
+        background: #ffffff;
+        color: #334155;
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+      }}
+      .pron-btn.primary {{
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+        border-color: #93c5fd;
+        color: #1d4ed8;
+      }}
+      .pron-btn:hover {{
+        transform: translateY(-1px);
+        border-color: #60a5fa;
+        box-shadow: 0 4px 10px rgba(59, 130, 246, 0.12);
+      }}
+    </style>
+    <div class="pron-wrap">
+      <button id="{key}_us" class="pron-btn primary" type="button">🔊 美式发音</button>
+    </div>
+    <script>
+      const speakText = {payload};
+      const pickVoice = (langPrefix) => {{
+        const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+        return voices.find(v => v.lang && v.lang.toLowerCase().startsWith(langPrefix.toLowerCase())) || null;
+      }};
+      const speak = (langPrefix) => {{
+        if (!window.speechSynthesis || !speakText) return;
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(speakText);
+        utterance.lang = langPrefix;
+        const matchedVoice = pickVoice(langPrefix);
+        if (matchedVoice) utterance.voice = matchedVoice;
+        utterance.rate = 0.92;
+        window.speechSynthesis.speak(utterance);
+      }};
+      const usBtn = document.getElementById("{key}_us");
+      if (usBtn) usBtn.onclick = () => speak("en-US");
+      if (window.speechSynthesis) {{
+        window.speechSynthesis.getVoices();
+        window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+      }}
+    </script>
+    """
+    components.html(html_block, height=56)
+
+
 def run_gc() -> None:
     """Run garbage collection to reduce memory pressure after heavy tasks."""
     try:

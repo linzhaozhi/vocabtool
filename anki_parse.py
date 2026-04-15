@@ -21,6 +21,11 @@ def split_example_translation(example_field: str) -> tuple[str, str]:
     return example, translation
 
 
+def normalize_html_breaks(text: str) -> str:
+    """Normalize inline HTML break tags so multi-example fields stay consistent."""
+    return re.sub(r"\s*<br\s*/?>\s*", "<br>", text, flags=re.IGNORECASE).strip()
+
+
 def parse_anki_data(raw_text: str) -> List[Dict[str, str]]:
     """Parse AI-generated text into structured Anki card data."""
     parsed_cards = []
@@ -46,18 +51,31 @@ def parse_anki_data(raw_text: str) -> List[Dict[str, str]]:
             continue
 
         phrase = parts[0]
-        meaning = parts[1]
-        example = parts[2] if len(parts) > 2 else ""
+        phonetic = ""
+        meaning = ""
+        example = ""
         example_translation = ""
         etymology = ""
 
-        if len(parts) >= 5:
+        if len(parts) >= 6:
+            phonetic = parts[1]
+            meaning = parts[2]
+            example = parts[3]
+            example_translation = parts[4]
+            etymology = " ||| ".join(parts[5:]).strip()
+        elif len(parts) >= 5:
+            meaning = parts[1]
+            example = parts[2]
             example_translation = parts[3]
             etymology = " ||| ".join(parts[4:]).strip()
         elif len(parts) == 4:
+            meaning = parts[1]
+            example = parts[2]
             example, example_translation = split_example_translation(example)
             etymology = parts[3]
         else:
+            meaning = parts[1]
+            example = parts[2] if len(parts) > 2 else ""
             example, example_translation = split_example_translation(example)
 
         if not phrase or not meaning:
@@ -69,9 +87,10 @@ def parse_anki_data(raw_text: str) -> List[Dict[str, str]]:
 
         parsed_cards.append({
             'w': phrase,
+            'p': phonetic,
             'm': meaning,
-            'e': example,
-            'ec': example_translation,
+            'e': normalize_html_breaks(example),
+            'ec': normalize_html_breaks(example_translation),
             'r': etymology
         })
 
