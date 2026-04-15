@@ -232,6 +232,36 @@ def reset_anki_state() -> None:
     st.session_state["anki_pkg_name"] = ""
 
 
+def reset_extraction_state() -> None:
+    """Clear extracted word results and any generated card artifacts."""
+    reset_anki_state()
+    for key in ("gen_words_data", "raw_count", "process_time", "stats_info", "word_list_editor", "extract_word_editor"):
+        if key in st.session_state:
+            del st.session_state[key]
+
+
+def parse_unique_words(raw_text: str) -> list[str]:
+    """Normalize a raw word list into unique entries while preserving order."""
+    words = []
+    seen_words = set()
+    for word in re.split(r"[,\n\t]+", raw_text):
+        cleaned = word.strip()
+        if cleaned and cleaned.lower() not in seen_words:
+            seen_words.add(cleaned.lower())
+            words.append(cleaned)
+    return words
+
+
+def sync_extract_editor_to_cards() -> None:
+    """Keep the card creation editor in sync with extraction edits."""
+    st.session_state["word_list_editor"] = st.session_state.get("extract_word_editor", "")
+
+
+def sync_card_editor_to_extract() -> None:
+    """Keep the extraction editor in sync with card creation edits."""
+    st.session_state["extract_word_editor"] = st.session_state.get("word_list_editor", "")
+
+
 # ==========================================
 # UI Components
 # ==========================================
@@ -407,15 +437,19 @@ with tab_lookup:
 # ==========================================
 with tab_extract:
     st.markdown("### 🧩 提取单词")
-    st.caption("从文章、文件、Anki 导出或词频区间里整理出待学习词表。")
+    st.caption("先选来源，再整理词表；整理后的结果会自动同步到“制作卡片”。")
 
-    mode_context, mode_direct, mode_rank = st.tabs([
-        "📄 语境分析",
-        "📝 直接输入 (含 Anki 导入)",
-        "🔢 词频列表"
-    ])
+    st.markdown("#### Step 1 选择来源")
+    extract_source_mode = st.radio(
+        "提取来源",
+        ["文章 / 文件", "单词列表 / Anki"],
+        horizontal=True,
+        label_visibility="collapsed",
+        key="extract_source_mode"
+    )
 
-    with mode_context:
+    if extract_source_mode == "文章 / 文件":
+        st.markdown("#### Step 2 设置提取规则")
         col1, col2 = st.columns(2)
         current_rank = col1.number_input("忽略前 N 高频词 (Min Rank)", 1, 20000, 6000, step=100)
         target_rank = col2.number_input("忽略后 N 低频词 (Max Rank)", 2000, 50000, 10000, step=500)
@@ -423,7 +457,8 @@ with tab_extract:
         if target_rank < current_rank:
             st.warning("⚠️ Max Rank 必须大于等于 Min Rank")
 
-        st.markdown("#### 📥 导入内容")
+        st.markdown("#### Step 3 提供内容")
+        st.caption("三选一即可：输入 URL、上传文件，或直接粘贴文本。")
 
         input_url = st.text_input(
             "🔗 输入文章 URL (自动抓取)",
@@ -432,10 +467,9 @@ with tab_extract:
         )
 
         uploaded_file = st.file_uploader(
-            "或直接上传文件",
+            "上传文件",
             type=['txt', 'pdf', 'docx', 'epub', 'csv', 'xlsx', 'xls', 'db', 'sqlite'],
-            key=st.session_state['uploader_id'],
-            label_visibility="collapsed"
+            key=st.session_state['uploader_id']
         )
         if uploaded_file and is_upload_too_large(uploaded_file):
             st.error(f"❌ 文件过大，已限制为 {constants.MAX_UPLOAD_MB}MB。请缩小文件后重试。")
@@ -443,12 +477,12 @@ with tab_extract:
 
         pasted_text = st.text_area(
             "或在此粘贴文本",
-            height=100,
+            height=120,
             key="paste_key",
             placeholder="支持直接粘贴文章内容..."
         )
 
-        if st.button("🚀 开始分析", type="primary"):
+        if st.button("🚀 开始提取", type="primary", key="btn_extract_context"):
             if target_rank < current_rank:
                 st.error("❌ Max Rank 必须大于等于 Min Rank，请修正后重试。")
             else:
@@ -473,13 +507,13 @@ with tab_extract:
                         set_generated_words_state(final_data, raw_count, stats_info)
                         st.session_state['process_time'] = time.time() - start_time
                         run_gc()
-                        status.update(label="✅ 分析完成", state="complete", expanded=False)
+                        status.update(label="✅ 提取完成", state="complete", expanded=False)
                     else:
                         status.update(label="⚠️ 内容为空或太短", state="error")
 
-    with mode_direct:
-        st.markdown("#### 📤 导入 Anki 牌组导出文件 (可选)")
-        st.caption("💡 提示：在 Anki 导出时，推荐选择 **'Notes in Plain Text'** (笔记纯文本)。但如果您选择了 **'Cards in Plain Text'**，系统也会尝试自动解析。")
+    else:
+        st.markdown("#### Step 2 导入词表")
+        st.caption("支持直接粘贴单词，也支持先上传 Anki 导出的 .txt 文件。")
 
         anki_export_file = st.file_uploader(
             "上传 Anki 导出的 .txt 文件",
@@ -499,38 +533,31 @@ with tab_extract:
 
         raw_input = st.text_area(
             "✍️ 粘贴单词列表 (每行一个 或 逗号分隔)",
-            height=200,
+            height=220,
             value=prefilled_text,
             placeholder="altruism\nhectic\nserendipity"
         )
 
-        if st.button("🚀 生成列表", key="btn_direct", type="primary"):
+        if st.button("🚀 导入词表", key="btn_direct", type="primary"):
             with st.spinner("正在解析列表..."):
-                if raw_input.strip():
-                    words = [w.strip() for w in re.split(r'[,\n\t]+', raw_input) if w.strip()]
-                    unique_words = []
-                    seen = set()
-
-                    for word in words:
-                        if word.lower() not in seen:
-                            seen.add(word.lower())
-                            unique_words.append(word)
-
+                unique_words = parse_unique_words(raw_input)
+                if unique_words:
                     data_list = [(w, VOCAB_DICT.get(w.lower(), 99999)) for w in unique_words]
                     set_generated_words_state(data_list, len(unique_words), None)
                     st.toast(f"✅ 已加载 {len(unique_words)} 个单词", icon="🎉")
                 else:
                     st.warning("⚠️ 内容为空。")
 
-    with mode_rank:
-        gen_type = st.radio("生成模式", ["🔢 顺序生成", "🔀 随机抽取"], horizontal=True)
+    with st.expander("高级工具：按词频生成词表", expanded=False):
+        st.caption("需要时再用；它不会干扰主提取流程。")
+        gen_type = st.radio("生成模式", ["🔢 顺序生成", "🔀 随机抽取"], horizontal=True, key="rank_gen_type")
 
         if "顺序生成" in gen_type:
             col_a, col_b = st.columns(2)
-            start_rank = col_a.number_input("起始排名", 1, 20000, 8000, step=100)
-            count = col_b.number_input("数量", 10, 5000, 10, step=10)
+            start_rank = col_a.number_input("起始排名", 1, 20000, 8000, step=100, key="rank_start")
+            count = col_b.number_input("数量", 10, 5000, 10, step=10, key="rank_count")
 
-            if st.button("🚀 生成列表"):
+            if st.button("🚀 生成词频列表", key="btn_rank_ordered"):
                 with st.spinner("正在提取..."):
                     if FULL_DF is not None:
                         rank_col = next(c for c in FULL_DF.columns if 'rank' in c)
@@ -543,14 +570,14 @@ with tab_extract:
                         )
         else:
             col_min, col_max, col_cnt = st.columns([1, 1, 1])
-            min_rank = col_min.number_input("最小排名", 1, 20000, 12000, step=100)
-            max_rank = col_max.number_input("最大排名", 1, 25000, 15000, step=100)
-            random_count = col_cnt.number_input("抽取数量", 10, 5000, 10, step=10)
+            min_rank = col_min.number_input("最小排名", 1, 20000, 12000, step=100, key="rank_min")
+            max_rank = col_max.number_input("最大排名", 1, 25000, 15000, step=100, key="rank_max")
+            random_count = col_cnt.number_input("抽取数量", 10, 5000, 10, step=10, key="rank_random_count")
 
             if max_rank < min_rank:
                 st.warning("⚠️ 最大排名必须大于等于最小排名")
 
-            if st.button("🎲 随机抽取"):
+            if st.button("🎲 随机抽取词表", key="btn_rank_random"):
                 if max_rank < min_rank:
                     st.error("❌ 最大排名必须大于等于最小排名，请修正后重试。")
                 else:
@@ -568,7 +595,6 @@ with tab_extract:
                                 None
                             )
 
-    # Display results (shared across all modes)
     if st.session_state.get('gen_words_data'):
         data = st.session_state['gen_words_data']
         original_count = len(data)
@@ -590,26 +616,32 @@ with tab_extract:
         with col_t2:
             st.metric("✅ 筛选后单词总数", original_count)
 
-        st.markdown("### ✅ 提取成功")
-        words_only = [w for w, r in data]
-        words_text = "\n".join(words_only)
+        st.markdown("#### Step 4 查看与整理结果")
+        st.caption("可以直接在这里删改；改动会自动同步到“制作卡片”。")
 
-        col_title, col_copy_btn = st.columns([5, 1])
-        with col_title:
-            st.markdown("### 📝 提取结果预览")
-        with col_copy_btn:
-            render_copy_button(words_text, key="copy_words_btn")
-        st.caption("💡 当前结果已经保存到“制作卡片”，下一步可在那边继续编辑。")
-
-        st.text_area(
+        edited_words = st.text_area(
             f"提取出的单词列表 (共 {original_count} 个)",
-            value=words_text,
             height=300,
+            key="extract_word_editor",
             label_visibility="collapsed",
-            help="提取结果预览",
-            disabled=True
+            help="每行一个单词，也支持粘贴逗号分隔内容。",
+            on_change=sync_extract_editor_to_cards
         )
-        st.success("➡️ 词表已就绪，切换到“制作卡片”即可继续。")
+        st.session_state["word_list_editor"] = edited_words
+
+        cleaned_words = parse_unique_words(edited_words)
+        st.caption(f"当前词表共 {len(cleaned_words)} 个唯一词条。")
+        if edited_words.strip() != "\n".join(cleaned_words):
+            st.info("检测到空行、逗号分隔或重复项；制卡时会按整理后的唯一词表处理。")
+
+        st.markdown("#### Step 5 下一步")
+        col_copy, col_clear = st.columns([1, 1])
+        with col_copy:
+            render_copy_button(edited_words, key="copy_words_btn")
+        with col_clear:
+            st.button("清空提取结果", type="secondary", on_click=reset_extraction_state, use_container_width=True)
+
+        st.success("➡️ 词表已同步到“制作卡片”标签，切换后可直接生成。")
 
 # ==========================================
 # Tab 3: Card Creation
@@ -655,16 +687,11 @@ with tab_cards:
             height=300,
             key="word_list_editor",
             label_visibility="collapsed",
-            help="每行一个单词"
+            help="每行一个单词",
+            on_change=sync_card_editor_to_extract
         )
 
-        words_only = []
-        seen_words = set()
-        for word in re.split(r"[,\n\t]+", edited_words):
-            cleaned = word.strip()
-            if cleaned and cleaned.lower() not in seen_words:
-                seen_words.add(cleaned.lower())
-                words_only.append(cleaned)
+        words_only = parse_unique_words(edited_words)
 
         st.caption(f"当前待制作 {len(words_only)} 个词。")
         st.caption(f"单次最多处理 {constants.MAX_AUTO_LIMIT} 个词。")

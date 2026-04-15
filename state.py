@@ -43,7 +43,18 @@ def set_generated_words_state(
     stats_info: Optional[Dict[str, float]] = None
 ) -> None:
     """Update extracted words and keep editor text in sync with new generation."""
+    pkg_path = st.session_state.get('anki_pkg_path')
+    if pkg_path and os.path.exists(pkg_path):
+        try:
+            os.remove(pkg_path)
+        except OSError as e:
+            logger.warning("Could not remove temp anki package: %s", e)
+
+    st.session_state['anki_pkg_path'] = ""
+    st.session_state['anki_pkg_name'] = ""
+    st.session_state['anki_cards_cache'] = None
     st.session_state['gen_words_data'] = data_list
     st.session_state['raw_count'] = raw_count
     st.session_state['stats_info'] = stats_info
     st.session_state['word_list_editor'] = "\n".join([w for w, _ in data_list])
+    st.session_state['extract_word_editor'] = st.session_state['word_list_editor']
