@@ -40,6 +40,7 @@ cleanup_old_apkg_files()
 logger = logging.getLogger(__name__)
 
 EXTRACT_SOURCE_OPTIONS = ["文章 URL", "文件", "文本", "Anki", "词库"]
+EXTRACT_SOURCE_WIDGET_KEY = "extract_source_mode_widget"
 EXTRACT_SOURCE_LEGACY_MAP = {
     "文章 / 文件": "文章 URL",
     "单词列表 / Anki": "Anki",
@@ -49,7 +50,7 @@ EXTRACT_SOURCE_LEGACY_MAP = {
 # Page Configuration
 # ==========================================
 st.set_page_config(
-    page_title="Vocab Flow Ultra",
+    page_title="单词流",
     page_icon="⚡️",
     layout="centered",
     initial_sidebar_state="collapsed"
@@ -66,27 +67,66 @@ if "anki_cards_cache" not in st.session_state:
 st.markdown("""
 <style>
     :root {
-        --vf-text: var(--text-color, #1f2937);
-        --vf-text-muted: color-mix(in srgb, var(--vf-text) 66%, transparent);
-        --vf-text-soft: color-mix(in srgb, var(--vf-text) 48%, transparent);
-        --vf-surface: color-mix(in srgb, var(--secondary-background-color, #f8fafc) 72%, var(--background-color, #ffffff) 28%);
-        --vf-surface-soft: color-mix(in srgb, var(--secondary-background-color, #f8fafc) 84%, var(--background-color, #ffffff) 16%);
-        --vf-surface-elevated: color-mix(in srgb, var(--background-color, #ffffff) 76%, var(--secondary-background-color, #f8fafc) 24%);
-        --vf-border: color-mix(in srgb, var(--vf-text) 12%, transparent);
-        --vf-border-strong: color-mix(in srgb, var(--vf-text) 18%, transparent);
-        --vf-shadow-soft: 0 14px 32px color-mix(in srgb, var(--vf-text) 10%, transparent);
-        --vf-primary-soft: color-mix(in srgb, var(--primary-color, #60a5fa) 18%, var(--background-color, #ffffff) 82%);
-        --vf-primary-soft-2: color-mix(in srgb, var(--primary-color, #60a5fa) 30%, var(--secondary-background-color, #f8fafc) 70%);
-        --vf-success-soft: color-mix(in srgb, #22c55e 16%, var(--secondary-background-color, #f8fafc) 84%);
-        --vf-success-text: color-mix(in srgb, #22c55e 48%, var(--vf-text) 52%);
-        --vf-lookup-def: color-mix(in srgb, var(--primary-color, #60a5fa) 58%, var(--vf-text) 42%);
-        --vf-lookup-ety-bg: color-mix(in srgb, #10b981 18%, var(--secondary-background-color, #f8fafc) 82%);
-        --vf-lookup-ety-text: color-mix(in srgb, #10b981 56%, var(--vf-text) 44%);
-        --vf-accent-gradient: linear-gradient(
-            135deg,
-            color-mix(in srgb, var(--primary-color, #60a5fa) 72%, #4f46e5 28%) 0%,
-            color-mix(in srgb, var(--primary-color, #60a5fa) 42%, #111827 58%) 100%
-        );
+        --vf-text: #0f172a;
+        --vf-text-muted: #334155;
+        --vf-text-soft: #475569;
+        --vf-surface: #f8fafc;
+        --vf-surface-soft: #f1f5f9;
+        --vf-surface-elevated: #ffffff;
+        --vf-border: #cbd5e1;
+        --vf-border-strong: #94a3b8;
+        --vf-shadow-soft: 0 14px 32px rgba(15, 23, 42, 0.12);
+        --vf-primary-soft: #dbeafe;
+        --vf-primary-soft-2: #bfdbfe;
+        --vf-success-soft: #ecfdf5;
+        --vf-success-text: #166534;
+        --vf-lookup-def: #1d4ed8;
+        --vf-lookup-ety-bg: #ecfdf5;
+        --vf-lookup-ety-text: #047857;
+        --vf-accent-gradient: linear-gradient(135deg, #2563eb 0%, #1d4ed8 55%, #0f172a 100%);
+    }
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --vf-text: #f8fafc;
+            --vf-text-muted: #e2e8f0;
+            --vf-text-soft: #cbd5e1;
+            --vf-surface: #0f172a;
+            --vf-surface-soft: #111827;
+            --vf-surface-elevated: #1e293b;
+            --vf-border: #334155;
+            --vf-border-strong: #475569;
+            --vf-shadow-soft: 0 16px 36px rgba(2, 6, 23, 0.42);
+            --vf-primary-soft: #1d4ed8;
+            --vf-primary-soft-2: #1e40af;
+            --vf-success-soft: #052e1c;
+            --vf-success-text: #bbf7d0;
+            --vf-lookup-def: #bfdbfe;
+            --vf-lookup-ety-bg: #0f2f2a;
+            --vf-lookup-ety-text: #d1fae5;
+            --vf-accent-gradient: linear-gradient(135deg, #2563eb 0%, #1d4ed8 48%, #0f172a 100%);
+        }
+    }
+    html[data-theme="dark"],
+    body[data-theme="dark"],
+    .stApp[data-theme="dark"],
+    [data-theme="dark"] {
+        --vf-text: #f8fafc;
+        --vf-text-muted: #e2e8f0;
+        --vf-text-soft: #cbd5e1;
+        --vf-surface: #0f172a;
+        --vf-surface-soft: #111827;
+        --vf-surface-elevated: #1e293b;
+        --vf-border: #334155;
+        --vf-border-strong: #475569;
+        --vf-shadow-soft: 0 16px 36px rgba(2, 6, 23, 0.42);
+        --vf-primary-soft: #1d4ed8;
+        --vf-primary-soft-2: #1e40af;
+        --vf-success-soft: #052e1c;
+        --vf-success-text: #bbf7d0;
+        --vf-lookup-def: #bfdbfe;
+        --vf-lookup-ety-bg: #0f2f2a;
+        --vf-lookup-ety-text: #d1fae5;
+        --vf-accent-gradient: linear-gradient(135deg, #2563eb 0%, #1d4ed8 48%, #0f172a 100%);
     }
     .stTextArea textarea { font-family: 'Consolas', monospace; font-size: 14px; }
     .stButton>button {
@@ -94,27 +134,49 @@ st.markdown("""
         font-weight: 600;
         width: 100%;
         margin-top: 5px;
-        border: 1px solid var(--vf-border);
-        box-shadow: 0 8px 20px color-mix(in srgb, var(--vf-text) 6%, transparent);
+        border: 1px solid var(--vf-border-strong);
+        background: var(--vf-surface-elevated);
+        color: var(--vf-text);
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+    }
+    .stButton>button:hover {
+        border-color: var(--primary-color, #60a5fa);
+        color: var(--vf-text);
     }
     .stTextInput > div > div > input,
     .stTextArea textarea,
     .stNumberInput input {
-        border-radius: 10px;
+        border-radius: 12px;
         border: 1px solid var(--vf-border-strong);
         background: var(--vf-surface-elevated);
-        color: var(--vf-text);
+        color: var(--vf-text) !important;
+        caret-color: var(--vf-text);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+    .stTextInput > div > div > input::placeholder,
+    .stTextArea textarea::placeholder,
+    .stNumberInput input::placeholder {
+        color: var(--vf-text-soft);
+        opacity: 1;
+    }
+    .stTextInput > div > div > input:disabled,
+    .stTextArea textarea:disabled,
+    .stNumberInput input:disabled {
+        opacity: 1;
+        color: var(--vf-text) !important;
+        -webkit-text-fill-color: var(--vf-text) !important;
+        background: var(--vf-surface-elevated);
     }
     .stTextInput > div > div > input:focus,
     .stTextArea textarea:focus,
     .stNumberInput input:focus {
-        border-color: color-mix(in srgb, var(--primary-color, #60a5fa) 60%, transparent);
-        box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-color, #60a5fa) 30%, transparent);
+        border-color: var(--primary-color, #60a5fa);
+        box-shadow: 0 0 0 1px rgba(96, 165, 250, 0.34);
     }
     .stat-box {
         padding: 15px;
         background: var(--vf-success-soft);
-        border: 1px solid color-mix(in srgb, #22c55e 28%, transparent);
+        border: 1px solid rgba(34, 197, 94, 0.3);
         border-radius: 10px;
         text-align: center;
         color: var(--vf-success-text);
@@ -126,7 +188,13 @@ st.markdown("""
         border: 1px solid var(--vf-border);
         border-radius: 12px;
         margin-bottom: 10px;
-        background: color-mix(in srgb, var(--vf-surface-soft) 86%, transparent);
+        background: var(--vf-surface-soft);
+    }
+    .stExpander summary,
+    .stExpander summary p,
+    .stExpander details,
+    .stExpander details * {
+        color: var(--vf-text) !important;
     }
     .stProgress > div > div > div > div { background-color: #4CAF50; }
     .ai-warning { font-size: 12px; color: var(--vf-text-soft); margin-top: -5px; margin-bottom: 10px; text-align: center; }
@@ -145,7 +213,13 @@ st.markdown("""
         padding: 1rem;
         border-radius: 12px;
         border: 1px solid var(--vf-border);
-        box-shadow: 0 10px 24px color-mix(in srgb, var(--vf-text) 6%, transparent);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    }
+    [data-testid="stMetric"] label,
+    [data-testid="stMetric"] p,
+    [data-testid="stMetricValue"],
+    [data-testid="stMetricDelta"] {
+        color: var(--vf-text) !important;
     }
     /* Tab labels: slightly bolder */
     .stTabs [data-baseweb="tab-list"] { gap: 0.5rem; }
@@ -155,14 +229,17 @@ st.markdown("""
         font-weight: 600;
         border: 1px solid var(--vf-border);
         background: var(--vf-surface);
-        color: var(--vf-text-muted);
+        color: var(--vf-text-soft);
         transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+    }
+    .stTabs [data-baseweb="tab"] * {
+        color: inherit !important;
     }
     .stTabs [aria-selected="true"] {
         background: linear-gradient(135deg, var(--vf-primary-soft) 0%, var(--vf-primary-soft-2) 100%);
-        border-color: color-mix(in srgb, var(--primary-color, #60a5fa) 42%, transparent);
-        color: var(--vf-text);
-        box-shadow: 0 10px 24px color-mix(in srgb, var(--primary-color, #60a5fa) 18%, transparent);
+        border-color: rgba(96, 165, 250, 0.5);
+        color: #eff6ff;
+        box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24);
         transform: translateY(-1px);
     }
     .stRadio [role="radiogroup"] {
@@ -176,14 +253,20 @@ st.markdown("""
         padding: 0.25rem 0.8rem;
         transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
     }
+    .stRadio [role="radiogroup"] label * {
+        color: var(--vf-text) !important;
+    }
     .stRadio [role="radiogroup"] label:hover {
         transform: translateY(-1px);
-        border-color: color-mix(in srgb, var(--primary-color, #60a5fa) 28%, var(--vf-border) 72%);
+        border-color: rgba(96, 165, 250, 0.52);
     }
     .stRadio [role="radiogroup"] label:has(input:checked) {
         background: linear-gradient(135deg, var(--vf-primary-soft) 0%, var(--vf-primary-soft-2) 100%);
-        border-color: color-mix(in srgb, var(--primary-color, #60a5fa) 46%, transparent);
-        box-shadow: 0 10px 18px color-mix(in srgb, var(--primary-color, #60a5fa) 16%, transparent);
+        border-color: rgba(96, 165, 250, 0.6);
+        box-shadow: 0 10px 18px rgba(37, 99, 235, 0.24);
+    }
+    .stRadio [role="radiogroup"] label:has(input:checked) * {
+        color: #eff6ff !important;
     }
     /* App footer */
     .app-footer {
@@ -199,10 +282,29 @@ st.markdown("""
         padding: 0.95rem 1rem;
         border-radius: 12px;
         background: linear-gradient(135deg, var(--vf-primary-soft) 0%, var(--vf-surface-soft) 100%);
-        border: 1px solid color-mix(in srgb, var(--primary-color, #60a5fa) 34%, transparent);
+        border: 1px solid rgba(96, 165, 250, 0.45);
         color: var(--vf-text);
         font-size: 0.95rem;
         box-shadow: var(--vf-shadow-soft);
+    }
+    .stCaptionContainer p,
+    .stMarkdown p,
+    .stMarkdown li,
+    .stMarkdown span,
+    .stAlert,
+    .stInfo,
+    .stSuccess,
+    .stWarning,
+    .stError {
+        color: var(--vf-text);
+    }
+    [data-testid="stFileUploaderDropzone"] {
+        background: var(--vf-surface-elevated);
+        border: 1px dashed var(--vf-border-strong);
+        border-radius: 12px;
+    }
+    [data-testid="stFileUploaderDropzone"] * {
+        color: var(--vf-text) !important;
     }
     
     /* Reading Mode Styles */
@@ -225,7 +327,7 @@ st.markdown("""
     }
     .word-definition {
         background: var(--vf-surface-elevated);
-        border: 2px solid color-mix(in srgb, var(--primary-color, #60a5fa) 70%, transparent);
+        border: 2px solid rgba(96, 165, 250, 0.6);
         border-radius: 8px;
         padding: 15px;
         margin-top: 10px;
@@ -245,10 +347,10 @@ st.markdown("""
     .example-sentence {
         background-color: var(--vf-surface-soft);
         padding: 10px;
-        border-left: 4px solid color-mix(in srgb, var(--primary-color, #60a5fa) 72%, transparent);
+        border-left: 4px solid rgba(96, 165, 250, 0.78);
         margin: 5px 0;
         font-style: italic;
-        color: var(--vf-text-muted);
+        color: var(--vf-text);
     }
     .search-box {
         position: sticky;
@@ -282,7 +384,7 @@ st.markdown("""
         margin-bottom: 6px;
     }
     .quick-lookup-phon {
-        color: var(--vf-text-muted);
+        color: var(--vf-text);
         margin-bottom: 8px;
         font-size: 17px;
         letter-spacing: 0.01em;
@@ -295,11 +397,14 @@ st.markdown("""
         margin: 6px 0;
     }
     .quick-lookup-ex {
-        color: var(--vf-text-muted);
+        color: var(--vf-text);
+        background: var(--vf-surface-soft);
+        padding: 8px 10px;
+        border-radius: 8px;
         margin-top: 6px;
     }
     .quick-lookup-cn {
-        color: var(--vf-text-soft);
+        color: var(--vf-text-muted);
         margin-bottom: 8px;
     }
 </style>
@@ -525,15 +630,8 @@ def normalize_extract_source_mode(value: str | None) -> str:
     return normalized
 
 
-def handle_extract_source_change() -> None:
-    """Refresh source-specific widgets so source switching always reflects immediately."""
-    current_mode = normalize_extract_source_mode(st.session_state.get("extract_source_mode"))
-    previous_mode = st.session_state.get("_extract_source_prev_mode")
-    st.session_state["extract_source_mode"] = current_mode
-    if previous_mode == current_mode:
-        return
-
-    st.session_state["_extract_source_prev_mode"] = current_mode
+def refresh_extract_source_inputs(current_mode: str) -> None:
+    """Reset source-specific widgets so switching sources always shows the right inputs."""
     st.session_state["uploader_id"] = str(random.randint(constants.MIN_RANDOM_ID, constants.MAX_RANDOM_ID))
 
     if current_mode != "文章 URL":
@@ -544,10 +642,25 @@ def handle_extract_source_change() -> None:
         del st.session_state["anki_import_uploader"]
 
 
+def set_extract_source_mode(mode: str | None) -> str:
+    """Persist the current source mode and refresh dependent widgets when it changes."""
+    current_mode = normalize_extract_source_mode(mode)
+    previous_mode = normalize_extract_source_mode(st.session_state.get("extract_source_mode"))
+    st.session_state["extract_source_mode"] = current_mode
+    if previous_mode != current_mode:
+        refresh_extract_source_inputs(current_mode)
+    return current_mode
+
+
+def handle_extract_source_change() -> None:
+    """Handle source changes from the UI widget."""
+    set_extract_source_mode(st.session_state.get(EXTRACT_SOURCE_WIDGET_KEY))
+
+
 # ==========================================
 # UI Components
 # ==========================================
-st.title("⚡️ Vocab Flow Ultra · 稳定版")
+st.title("⚡️ 单词流 · 稳定版")
 st.caption(f"把查词、提词、制卡分开处理。支持内置智能释义、词源与语音，默认词库来自 {constants.VOCAB_PROJECT_NAME}。")
 st.markdown(
     '<div class="workflow-banner">查词、提词、制卡三个步骤已经分开。先确认词，再整理词表，最后生成卡片，路径会更清楚。</div>',
@@ -806,11 +919,13 @@ with tab_extract:
     st.markdown("### 🧩 提取单词")
     st.caption(f"来源已拆成 5 个入口：文章 URL、文件、文本、Anki、词库；其中“词库”使用 {constants.VOCAB_PROJECT_NAME} 词表。整理后的结果会自动同步到“制作卡片”。")
 
-    if "extract_source_mode" not in st.session_state:
-        st.session_state["extract_source_mode"] = EXTRACT_SOURCE_OPTIONS[0]
-    st.session_state["extract_source_mode"] = normalize_extract_source_mode(st.session_state.get("extract_source_mode"))
-    if "_extract_source_prev_mode" not in st.session_state:
-        st.session_state["_extract_source_prev_mode"] = st.session_state["extract_source_mode"]
+    saved_extract_source_mode = set_extract_source_mode(st.session_state.get("extract_source_mode"))
+    if EXTRACT_SOURCE_WIDGET_KEY not in st.session_state:
+        st.session_state[EXTRACT_SOURCE_WIDGET_KEY] = saved_extract_source_mode
+    else:
+        widget_extract_source_mode = normalize_extract_source_mode(st.session_state.get(EXTRACT_SOURCE_WIDGET_KEY))
+        if widget_extract_source_mode != saved_extract_source_mode:
+            st.session_state[EXTRACT_SOURCE_WIDGET_KEY] = saved_extract_source_mode
 
     st.markdown("#### 第一步：选择来源")
     extract_source_mode = st.radio(
@@ -818,9 +933,12 @@ with tab_extract:
         EXTRACT_SOURCE_OPTIONS,
         horizontal=True,
         label_visibility="collapsed",
-        key="extract_source_mode",
+        key=EXTRACT_SOURCE_WIDGET_KEY,
         on_change=handle_extract_source_change
     )
+    extract_source_mode = normalize_extract_source_mode(extract_source_mode)
+    if extract_source_mode != st.session_state.get("extract_source_mode"):
+        extract_source_mode = set_extract_source_mode(extract_source_mode)
     st.caption(f"当前来源：{extract_source_mode}")
 
     result_step_title = "#### 第四步：查看与整理结果"
