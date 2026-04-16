@@ -237,8 +237,50 @@ GLOBAL_CSS = """
         margin-bottom: 0.2rem;
         font-size: 1rem;
     }
+    .flow-action-panel {
+        margin-bottom: 0.65rem;
+        padding: 0.8rem 0.95rem;
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.14) 0%, rgba(147, 197, 253, 0.12) 100%);
+        border: 1px solid rgba(96, 165, 250, 0.4);
+        color: var(--vf-text);
+        line-height: 1.45;
+    }
+    .flow-action-panel strong {
+        display: block;
+        margin-bottom: 0.15rem;
+        font-size: 0.98rem;
+    }
+    .flow-next-panel {
+        margin-top: 0.5rem;
+        padding: 0.95rem 1rem;
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.18) 0%, rgba(29, 78, 216, 0.12) 100%);
+        border: 1px solid rgba(96, 165, 250, 0.44);
+        color: var(--vf-text);
+        box-shadow: 0 12px 24px rgba(37, 99, 235, 0.12);
+    }
+    .flow-next-panel strong {
+        display: block;
+        margin-bottom: 0.2rem;
+        font-size: 1rem;
+    }
     .card-reset-panel {
         min-height: 2rem;
+    }
+    div[data-testid="stVerticalBlock"]:has(.flow-action-panel) div[data-testid="stButton"] > button {
+        min-height: 46px;
+        font-size: 16px;
+        font-weight: 700;
+        color: #eff6ff;
+        border: none;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
+    }
+    div[data-testid="stVerticalBlock"]:has(.flow-action-panel) div[data-testid="stButton"] > button:hover {
+        color: #ffffff;
+        transform: translateY(-1px);
+        box-shadow: 0 16px 28px rgba(37, 99, 235, 0.26);
     }
     div[data-testid="stVerticalBlock"]:has(.card-generate-panel) div[data-testid="stButton"] > button {
         min-height: 56px;

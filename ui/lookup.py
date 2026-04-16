@@ -212,6 +212,10 @@ def render_lookup_tab(vocab_dict: dict[str, int]) -> None:
         with col_copy:
             render_copy_button(st.session_state["topic_wordlist_result"], key="copy_topic_words_btn")
         with col_import:
+            st.markdown(
+                '<div class="flow-action-panel"><strong>下一步：导入提取</strong>把这份词表送到“提取单词”，继续整理或筛选。</div>',
+                unsafe_allow_html=True,
+            )
             if st.button("导入提取", key="btn_import_topic_words", use_container_width=True):
                 words = st.session_state["topic_wordlist_words"]
                 data_list = [(word, vocab_dict.get(word.lower(), 99999)) for word in words]
