@@ -279,15 +279,19 @@ GLOBAL_CSS = """
         box-shadow: 0 16px 28px rgba(37, 99, 235, 0.26);
     }
     div[data-testid="stVerticalBlock"]:has(.card-generate-hint) div[data-testid="stButton"] > button {
-        min-height: 72px;
+        width: min(100%, 26rem);
+        min-height: 78px;
+        padding: 0.85rem 1.4rem;
         border-radius: 16px;
-        font-size: 22px;
+        font-size: 23px;
         font-weight: 700;
         letter-spacing: 0.01em;
         color: #ffffff;
         border: none;
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 38%, #1e40af 72%, #172554 100%);
         box-shadow: 0 18px 34px rgba(37, 99, 235, 0.32);
+        justify-content: flex-start;
+        text-align: left;
     }
     div[data-testid="stVerticalBlock"]:has(.card-generate-hint) div[data-testid="stButton"] > button:hover {
         color: #ffffff;
@@ -296,6 +300,10 @@ GLOBAL_CSS = """
     }
     div[data-testid="stVerticalBlock"]:has(.card-generate-hint) div[data-testid="stButton"] > button:focus {
         box-shadow: 0 0 0 2px rgba(191, 219, 254, 0.45), 0 18px 34px rgba(37, 99, 235, 0.32);
+    }
+    div[data-testid="stVerticalBlock"]:has(.card-generate-hint) div[data-testid="stButton"] {
+        display: flex;
+        justify-content: flex-start;
     }
     div[data-testid="stVerticalBlock"]:has(.card-reset-panel) div[data-testid="stButton"] {
         display: flex;

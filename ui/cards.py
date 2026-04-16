@@ -94,7 +94,7 @@ def render_cards_tab() -> None:
             '<div class="card-generate-hint"><strong>最后一步：生成卡片</strong>确认词表没问题后，点击下面按钮开始批量生成。</div>',
             unsafe_allow_html=True,
         )
-        start_auto_gen = st.button("🚀 使用 DeepSeek 生成卡片", type="primary", use_container_width=True)
+        start_auto_gen = st.button("🚀 使用 DeepSeek 生成卡片", type="primary", use_container_width=False)
     with col_reset:
         st.markdown('<div class="card-reset-panel"></div>', unsafe_allow_html=True)
         st.button("清空", type="secondary", on_click=reset_anki_state, use_container_width=False)
