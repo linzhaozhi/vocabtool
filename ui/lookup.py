@@ -14,6 +14,7 @@ from utils import render_copy_button
 def _render_quick_lookup() -> None:
     st.markdown("### 🔍 极速查词")
     st.caption("💡 只支持英文单词、短语，或很短的中文释义词组；不支持聊天式提问。查询结果显示美音/英音音标。")
+    st.caption("例如：`serendipity`、`take off`、`run into`、`偶然发现`")
 
     if "quick_lookup_last_query" not in st.session_state:
         st.session_state["quick_lookup_last_query"] = ""
@@ -29,7 +30,7 @@ def _render_quick_lookup() -> None:
         with col_word:
             lookup_word = st.text_input(
                 "输入单词或短语",
-                placeholder="如：serendipity, take off, run into, 偶然发现",
+                placeholder="输入英文单词、短语或中文释义",
                 key="quick_lookup_word",
                 label_visibility="collapsed",
                 autocomplete="off",
@@ -214,7 +215,7 @@ def render_lookup_tab(vocab_dict: dict[str, int]) -> None:
                 words = st.session_state["topic_wordlist_words"]
                 data_list = [(word, vocab_dict.get(word.lower(), 99999)) for word in words]
                 set_generated_words_state(data_list, len(words), None)
-                st.session_state["extract_source_mode"] = "Anki"
+                st.session_state["extract_source_mode"] = "单词表"
                 st.success("✅ 已导入到“提取单词”，现在可以继续整理或直接去制作卡片。")
 
         st.text_area(

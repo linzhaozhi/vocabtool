@@ -77,7 +77,7 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
     """Render the extraction tab."""
     st.markdown("### 🧩 提取单词")
     st.caption(
-        f"来源已拆成 5 个入口：文章 URL、文件、文本、Anki、词库；其中“词库”使用 {constants.VOCAB_PROJECT_NAME} 词表。整理后的结果会自动同步到“制作卡片”。"
+        f"来源已拆成 6 个入口：文章 URL、文件、文本、单词表、Anki、词库；其中“词库”使用 {constants.VOCAB_PROJECT_NAME} 词表。整理后的结果会自动同步到“制作卡片”。"
     )
 
     saved_extract_source_mode = set_extract_source_mode(st.session_state.get("extract_source_mode"))
@@ -190,23 +190,23 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
                     else:
                         status.update(label="⚠️ 内容为空或太短", state="error")
 
-    elif extract_source_mode == "Anki":
+    elif extract_source_mode == "单词表":
         result_step_title = "#### 第三步：查看与整理结果"
         next_step_title = "#### 第四步：下一步"
-        st.markdown("#### 第二步：导入 Anki / 单词表")
-        st.caption("支持上传 Anki 导出的 .txt 文件，也支持直接粘贴现成词表。")
+        st.markdown("#### 第二步：导入单词表")
+        st.caption("支持上传简单词表 `.txt` 文件，也支持直接粘贴现成词表。")
 
-        anki_export_file = st.file_uploader("上传 Anki 导出的 .txt 文件", type=["txt"], key="anki_import_uploader")
-        if anki_export_file and is_upload_too_large(anki_export_file):
+        word_list_file = st.file_uploader("上传单词表文件", type=["txt"], key="wordlist_import_uploader")
+        if word_list_file and is_upload_too_large(word_list_file):
             st.error(f"❌ 文件过大，已限制为 {constants.MAX_UPLOAD_MB}MB。请缩小文件后重试。")
-            anki_export_file = None
+            word_list_file = None
 
         prefilled_text = ""
-        if anki_export_file:
-            with st.spinner("正在智能解析 Anki 导出文件..."):
-                prefilled_text = parse_anki_txt_export(anki_export_file)
+        if word_list_file:
+            with st.spinner("正在读取词表文件..."):
+                prefilled_text = extract_text_from_file(word_list_file)
                 if prefilled_text:
-                    st.success(f"✅ 成功提取 {len(prefilled_text.splitlines())} 个单词")
+                    st.success("✅ 已读取词表文件内容")
 
         raw_input = st.text_area(
             "✍️ 粘贴单词列表（每行一个或逗号分隔）",
@@ -224,6 +224,31 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
                     st.toast(f"✅ 已加载 {len(unique_words)} 个单词", icon="🎉")
                 else:
                     st.warning("⚠️ 内容为空。")
+
+    elif extract_source_mode == "Anki":
+        result_step_title = "#### 第三步：查看与整理结果"
+        next_step_title = "#### 第四步：下一步"
+        st.markdown("#### 第二步：导入 Anki")
+        st.caption("这里专门用于导入 Anki 导出的 .txt 文件。")
+
+        anki_export_file = st.file_uploader("上传 Anki 导出的 .txt 文件", type=["txt"], key="anki_import_uploader")
+        if anki_export_file and is_upload_too_large(anki_export_file):
+            st.error(f"❌ 文件过大，已限制为 {constants.MAX_UPLOAD_MB}MB。请缩小文件后重试。")
+            anki_export_file = None
+
+        if st.button("🚀 解析 Anki 导出", key="btn_import_anki", type="primary"):
+            if not anki_export_file:
+                st.warning("⚠️ 请先上传 Anki 导出的 .txt 文件。")
+            else:
+                with st.spinner("正在智能解析 Anki 导出文件..."):
+                    parsed_text = parse_anki_txt_export(anki_export_file)
+                    unique_words = parse_unique_words(parsed_text)
+                    if unique_words:
+                        data_list = [(word, vocab_dict.get(word.lower(), 99999)) for word in unique_words]
+                        set_generated_words_state(data_list, len(unique_words), None)
+                        st.toast(f"✅ 已从 Anki 导出中提取 {len(unique_words)} 个单词", icon="🎉")
+                    else:
+                        st.warning("⚠️ 没有从文件中解析到可用单词。")
 
     else:
         result_step_title = "#### 第三步：查看与整理结果"

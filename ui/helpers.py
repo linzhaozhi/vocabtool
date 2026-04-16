@@ -11,11 +11,12 @@ import constants
 
 logger = logging.getLogger(__name__)
 
-EXTRACT_SOURCE_OPTIONS = ["文章 URL", "文件", "文本", "Anki", "词库"]
+EXTRACT_SOURCE_OPTIONS = ["文章 URL", "文件", "文本", "单词表", "Anki", "词库"]
 EXTRACT_SOURCE_WIDGET_KEY = "extract_source_mode_widget"
 EXTRACT_SOURCE_LEGACY_MAP = {
     "文章 / 文件": "文章 URL",
-    "单词列表 / Anki": "Anki",
+    "单词列表 / Anki": "单词表",
+    "单词列表": "单词表",
 }
 
 
@@ -305,6 +306,8 @@ def refresh_extract_source_inputs(current_mode: str) -> None:
         st.session_state["url_input_key"] = ""
     if current_mode != "文本" and "paste_key" in st.session_state:
         st.session_state["paste_key"] = ""
+    if current_mode != "单词表" and "wordlist_import_uploader" in st.session_state:
+        del st.session_state["wordlist_import_uploader"]
     if current_mode != "Anki" and "anki_import_uploader" in st.session_state:
         del st.session_state["anki_import_uploader"]
 
