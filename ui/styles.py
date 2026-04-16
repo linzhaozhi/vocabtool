@@ -224,7 +224,7 @@ GLOBAL_CSS = """
         box-shadow: var(--vf-shadow-soft);
     }
     .card-generate-hint {
-        margin-bottom: 0.55rem;
+        margin-bottom: 0.65rem;
         color: var(--vf-text);
         line-height: 1.5;
     }
@@ -262,7 +262,7 @@ GLOBAL_CSS = """
         font-size: 1rem;
     }
     .card-reset-panel {
-        min-height: 2rem;
+        min-height: 3.6rem;
     }
     div[data-testid="stVerticalBlock"]:has(.flow-action-panel) div[data-testid="stButton"] > button {
         min-height: 46px;
@@ -279,22 +279,23 @@ GLOBAL_CSS = """
         box-shadow: 0 16px 28px rgba(37, 99, 235, 0.26);
     }
     div[data-testid="stVerticalBlock"]:has(.card-generate-hint) div[data-testid="stButton"] > button {
-        min-height: 64px;
-        font-size: 20px;
+        min-height: 72px;
+        border-radius: 16px;
+        font-size: 22px;
         font-weight: 700;
         letter-spacing: 0.01em;
-        color: #eff6ff;
+        color: #ffffff;
         border: none;
-        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 45%, #1e3a8a 100%);
-        box-shadow: 0 16px 30px rgba(37, 99, 235, 0.28);
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 38%, #1e40af 72%, #172554 100%);
+        box-shadow: 0 18px 34px rgba(37, 99, 235, 0.32);
     }
     div[data-testid="stVerticalBlock"]:has(.card-generate-hint) div[data-testid="stButton"] > button:hover {
         color: #ffffff;
         transform: translateY(-1px);
-        box-shadow: 0 20px 34px rgba(37, 99, 235, 0.34);
+        box-shadow: 0 22px 38px rgba(37, 99, 235, 0.38);
     }
     div[data-testid="stVerticalBlock"]:has(.card-generate-hint) div[data-testid="stButton"] > button:focus {
-        box-shadow: 0 0 0 2px rgba(191, 219, 254, 0.45), 0 16px 30px rgba(37, 99, 235, 0.28);
+        box-shadow: 0 0 0 2px rgba(191, 219, 254, 0.45), 0 18px 34px rgba(37, 99, 235, 0.32);
     }
     div[data-testid="stVerticalBlock"]:has(.card-reset-panel) div[data-testid="stButton"] {
         display: flex;
@@ -303,7 +304,7 @@ GLOBAL_CSS = """
     div[data-testid="stVerticalBlock"]:has(.card-reset-panel) div[data-testid="stButton"] > button {
         width: auto;
         min-height: 38px;
-        margin-top: 0.45rem;
+        margin-top: 0.2rem;
         padding: 0.35rem 0.9rem;
         font-size: 13px;
         font-weight: 500;
