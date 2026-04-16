@@ -88,7 +88,7 @@ def render_cards_tab() -> None:
     else:
         words_for_generation = words_only
 
-    col_generate, col_reset = st.columns([3, 1])
+    col_generate, col_reset = st.columns([4, 1])
     with col_generate:
         st.markdown(
             '<div class="card-generate-panel"><strong>最后一步：生成卡片</strong>确认词表没问题后，点击下面按钮开始批量生成。</div>',
@@ -96,7 +96,8 @@ def render_cards_tab() -> None:
         )
         start_auto_gen = st.button("🚀 使用 DeepSeek 生成卡片", type="primary", use_container_width=True)
     with col_reset:
-        st.button("清空结果", type="secondary", on_click=reset_anki_state, use_container_width=True)
+        st.markdown('<div class="card-reset-panel"></div>', unsafe_allow_html=True)
+        st.button("清空", type="secondary", on_click=reset_anki_state, use_container_width=False)
 
     if start_auto_gen:
         if not words_for_generation:

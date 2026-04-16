@@ -237,6 +237,9 @@ GLOBAL_CSS = """
         margin-bottom: 0.2rem;
         font-size: 1rem;
     }
+    .card-reset-panel {
+        min-height: 2rem;
+    }
     div[data-testid="stVerticalBlock"]:has(.card-generate-panel) div[data-testid="stButton"] > button {
         min-height: 56px;
         font-size: 18px;
@@ -254,6 +257,30 @@ GLOBAL_CSS = """
     }
     div[data-testid="stVerticalBlock"]:has(.card-generate-panel) div[data-testid="stButton"] > button:focus {
         box-shadow: 0 0 0 2px rgba(191, 219, 254, 0.45), 0 16px 30px rgba(37, 99, 235, 0.28);
+    }
+    div[data-testid="stVerticalBlock"]:has(.card-reset-panel) div[data-testid="stButton"] {
+        display: flex;
+        justify-content: flex-end;
+    }
+    div[data-testid="stVerticalBlock"]:has(.card-reset-panel) div[data-testid="stButton"] > button {
+        width: auto;
+        min-height: 38px;
+        margin-top: 0.45rem;
+        padding: 0.35rem 0.9rem;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--vf-text-soft);
+        border: 1px solid var(--vf-border);
+        background: var(--vf-surface-soft);
+        box-shadow: none;
+        opacity: 0.92;
+    }
+    div[data-testid="stVerticalBlock"]:has(.card-reset-panel) div[data-testid="stButton"] > button:hover {
+        color: var(--vf-text);
+        border-color: var(--vf-border-strong);
+        background: var(--vf-surface);
+        box-shadow: none;
+        transform: none;
     }
     .stCaptionContainer p,
     .stMarkdown p,
