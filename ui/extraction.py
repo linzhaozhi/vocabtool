@@ -42,8 +42,8 @@ def _render_generated_words_result() -> None:
     with col_t2:
         st.metric("✅ 筛选后单词总数", original_count)
 
-    result_step_title = st.session_state.get("_extract_result_step_title", "#### 第四步：查看与整理结果")
-    next_step_title = st.session_state.get("_extract_next_step_title", "#### 第五步：下一步")
+    result_step_title = st.session_state.get("_extract_result_step_title", "#### 查看与整理结果")
+    next_step_title = st.session_state.get("_extract_next_step_title", "#### 下一步")
 
     st.markdown(result_step_title)
     st.caption("可以直接在这里删改；改动会自动同步到“制作卡片”。")
@@ -102,8 +102,8 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
         extract_source_mode = set_extract_source_mode(extract_source_mode)
     st.caption(f"当前来源：{extract_source_mode}")
 
-    result_step_title = "#### 第四步：查看与整理结果"
-    next_step_title = "#### 第五步：下一步"
+    result_step_title = "#### 查看与整理结果"
+    next_step_title = "#### 下一步"
 
     if extract_source_mode in ("文章 URL", "文件", "文本"):
         st.markdown("#### 第二步：设置提取规则")
@@ -121,7 +121,7 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
         missing_source_message = ""
 
         if extract_source_mode == "文章 URL":
-            st.markdown("#### 第三步：输入文章链接")
+            st.markdown("#### 输入文章链接")
             st.caption("输入文章链接后自动抓取正文，再按词频范围提取目标词。")
             input_url = st.text_input(
                 "🔗 输入文章链接",
@@ -131,7 +131,7 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
             button_key = "btn_extract_url"
             missing_source_message = "⚠️ 请先输入文章链接。"
         elif extract_source_mode == "文件":
-            st.markdown("#### 第三步：上传文件")
+            st.markdown("#### 上传文件")
             st.caption("上传文档后自动读取正文，再按词频范围提取目标词。")
             uploaded_file = st.file_uploader(
                 "上传文件",
@@ -144,7 +144,7 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
             button_key = "btn_extract_file"
             missing_source_message = "⚠️ 请先上传要分析的文件。"
         else:
-            st.markdown("#### 第三步：粘贴文本")
+            st.markdown("#### 粘贴文本")
             st.caption("适合直接粘贴文章、笔记或段落内容，再按词频范围提取目标词。")
             pasted_text = st.text_area(
                 "粘贴文本内容",
@@ -191,9 +191,9 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
                         status.update(label="⚠️ 内容为空或太短", state="error")
 
     elif extract_source_mode == "单词表":
-        result_step_title = "#### 第三步：查看与整理结果"
-        next_step_title = "#### 第四步：下一步"
-        st.markdown("#### 第二步：导入单词表")
+        result_step_title = "#### 查看与整理结果"
+        next_step_title = "#### 下一步"
+        st.markdown("#### 导入单词表")
         st.caption("支持上传简单词表 `.txt` 文件，也支持直接粘贴现成词表。")
 
         word_list_file = st.file_uploader("上传单词表文件", type=["txt"], key="wordlist_import_uploader")
@@ -226,9 +226,9 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
                     st.warning("⚠️ 内容为空。")
 
     elif extract_source_mode == "Anki":
-        result_step_title = "#### 第三步：查看与整理结果"
-        next_step_title = "#### 第四步：下一步"
-        st.markdown("#### 第二步：导入 Anki")
+        result_step_title = "#### 查看与整理结果"
+        next_step_title = "#### 下一步"
+        st.markdown("#### 导入 Anki")
         st.caption("这里专门用于导入 Anki 导出的 .txt 文件。")
 
         anki_export_file = st.file_uploader("上传 Anki 导出的 .txt 文件", type=["txt"], key="anki_import_uploader")
@@ -251,9 +251,9 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
                         st.warning("⚠️ 没有从文件中解析到可用单词。")
 
     else:
-        result_step_title = "#### 第三步：查看与整理结果"
-        next_step_title = "#### 第四步：下一步"
-        st.markdown("#### 第二步：从词库生成词表")
+        result_step_title = "#### 查看与整理结果"
+        next_step_title = "#### 下一步"
+        st.markdown("#### 从词库生成词表")
         st.caption(f"按 {constants.VOCAB_PROJECT_NAME} 词频范围直接选词，适合快速扩充词表。")
         gen_type = st.radio("生成模式", ["🔢 顺序生成", "🔀 随机抽取"], horizontal=True, key="rank_gen_type")
 
