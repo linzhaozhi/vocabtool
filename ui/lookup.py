@@ -14,7 +14,7 @@ from utils import render_copy_button
 def _render_quick_lookup() -> None:
     st.markdown("### 🔍 极速查词")
     st.caption("💡 只支持英文单词、短语，或很短的中文释义词组；不支持聊天式提问。查询结果显示美音/英音音标。")
-    st.caption("例如：`serendipity`、`take off`、`run into`、`偶然发现`")
+    st.markdown("例如：serendipity、take off、run into、偶然发现")
 
     if "quick_lookup_last_query" not in st.session_state:
         st.session_state["quick_lookup_last_query"] = ""
@@ -152,6 +152,7 @@ def render_lookup_tab(vocab_dict: dict[str, int]) -> None:
 
     st.markdown("### 🧠 主题词表生成")
     st.caption(f"💡 只要选择主题和个数即可。单次最多生成 {constants.AI_TOPIC_WORDLIST_MAX} 个常见词。")
+    st.markdown("例如：旅游、商务、校园生活")
 
     if "topic_wordlist_result" not in st.session_state:
         st.session_state["topic_wordlist_result"] = ""
@@ -163,7 +164,7 @@ def render_lookup_tab(vocab_dict: dict[str, int]) -> None:
         with col_topic:
             topic_word_topic = st.text_input(
                 "输入主题",
-                placeholder="如：旅游、商务、校园生活",
+                placeholder="输入简短主题",
                 key="topic_word_topic",
                 label_visibility="collapsed",
                 autocomplete="off",
