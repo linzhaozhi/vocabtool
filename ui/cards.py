@@ -90,6 +90,10 @@ def render_cards_tab() -> None:
 
     col_generate, col_reset = st.columns([3, 1])
     with col_generate:
+        st.markdown(
+            '<div class="card-generate-panel"><strong>最后一步：生成卡片</strong>确认词表没问题后，点击下面按钮开始批量生成。</div>',
+            unsafe_allow_html=True,
+        )
         start_auto_gen = st.button("🚀 使用 DeepSeek 生成卡片", type="primary", use_container_width=True)
     with col_reset:
         st.button("清空结果", type="secondary", on_click=reset_anki_state, use_container_width=True)

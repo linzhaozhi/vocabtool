@@ -223,6 +223,38 @@ GLOBAL_CSS = """
         font-size: 0.95rem;
         box-shadow: var(--vf-shadow-soft);
     }
+    .card-generate-panel {
+        margin-bottom: 0.75rem;
+        padding: 0.85rem 1rem;
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.16) 0%, rgba(29, 78, 216, 0.12) 100%);
+        border: 1px solid rgba(96, 165, 250, 0.45);
+        color: var(--vf-text);
+        line-height: 1.5;
+    }
+    .card-generate-panel strong {
+        display: block;
+        margin-bottom: 0.2rem;
+        font-size: 1rem;
+    }
+    div[data-testid="stVerticalBlock"]:has(.card-generate-panel) div[data-testid="stButton"] > button {
+        min-height: 56px;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        color: #eff6ff;
+        border: none;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 45%, #1e3a8a 100%);
+        box-shadow: 0 16px 30px rgba(37, 99, 235, 0.28);
+    }
+    div[data-testid="stVerticalBlock"]:has(.card-generate-panel) div[data-testid="stButton"] > button:hover {
+        color: #ffffff;
+        transform: translateY(-1px);
+        box-shadow: 0 20px 34px rgba(37, 99, 235, 0.34);
+    }
+    div[data-testid="stVerticalBlock"]:has(.card-generate-panel) div[data-testid="stButton"] > button:focus {
+        box-shadow: 0 0 0 2px rgba(191, 219, 254, 0.45), 0 16px 30px rgba(37, 99, 235, 0.28);
+    }
     .stCaptionContainer p,
     .stMarkdown p,
     .stMarkdown li,
