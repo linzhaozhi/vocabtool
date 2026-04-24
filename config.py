@@ -29,5 +29,4 @@ def get_config():
             or constants.DEEPSEEK_BASE_URL_DEFAULT
         ),
         "deepseek_model": s.get("DEEPSEEK_MODEL") or s.get("OPENAI_MODEL", "deepseek-chat"),
-        "deepseek_chat_model": s.get("DEEPSEEK_CHAT_MODEL", constants.DEEPSEEK_CHAT_MODEL_DEFAULT),
     }

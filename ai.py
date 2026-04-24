@@ -108,20 +108,6 @@ def get_deepseek_model() -> str:
     return str(get_config()["deepseek_model"]).strip()
 
 
-def get_deepseek_chat_model() -> str:
-    """Return the DeepSeek model used by the chat tab."""
-    return str(get_config()["deepseek_chat_model"]).strip()
-
-
-def _is_allowed_deepseek_chat_model(model_name: str) -> bool:
-    """Only allow the configured DeepSeek chat model family for the chat tab."""
-    normalized_model = model_name.strip().lower()
-    return (
-        normalized_model.startswith(constants.DEEPSEEK_CHAT_MODEL_REQUIRED_PREFIX)
-        and constants.DEEPSEEK_CHAT_MODEL_BLOCKED_FRAGMENT not in normalized_model
-    )
-
-
 def get_word_quick_definition(word: str) -> Dict[str, Any]:
     """Get ultra-concise word definition using AI, with rank info."""
     vocab_dict = get_vocab_dict()
@@ -285,69 +271,6 @@ tour
     except Exception as e:
         logger.error("Error generating topic word list: %s", e)
         return {"error": str(e)}
-
-
-def chat_with_deepseek(messages: List[Dict[str, str]]) -> Dict[str, Any]:
-    """Send a multi-turn chat request to DeepSeek's chat model."""
-    model_name = get_deepseek_chat_model()
-    if not _is_allowed_deepseek_chat_model(model_name):
-        return {
-            "error": (
-                f"DeepSeek 聊天已锁定 {constants.DEEPSEEK_CHAT_MODEL_REQUIRED_PREFIX} 系列模型，"
-                f"当前配置是 {model_name or '空'}。请不要配置为 pro。"
-            ),
-            "model": model_name,
-        }
-    normalized_messages: List[Dict[str, str]] = []
-
-    for message in messages:
-        role = str(message.get("role", "")).strip()
-        content = str(message.get("content", "")).strip()
-        if role in {"system", "user", "assistant"} and content:
-            normalized_messages.append({"role": role, "content": content})
-
-    if not normalized_messages:
-        return {"error": "No chat messages provided"}
-
-    if not any(message["role"] == "system" for message in normalized_messages):
-        normalized_messages.insert(
-            0,
-            {
-                "role": "system",
-                "content": (
-                    "你是 DeepSeek 聊天助手。回答时尽量清晰、直接、自然；"
-                    "用户用中文就优先用中文回答，需要时可以补充简短英文。"
-                ),
-            },
-        )
-
-    try:
-        response = _call_deepseek_chat_completion(model_name, normalized_messages, 0.7)
-        if "error" in response:
-            return {"error": response["error"], "model": model_name}
-
-        content = response.get("content", "")
-        if not content:
-            return {"error": "DeepSeek 返回了空内容"}
-        response_model = str(response.get("model", "") or "").strip()
-        if response_model and not _is_allowed_deepseek_chat_model(response_model):
-            return {
-                "error": (
-                    f"DeepSeek 返回的实际模型是 {response_model}，不是 "
-                    f"{constants.DEEPSEEK_CHAT_MODEL_REQUIRED_PREFIX} 系列。请检查平台模型映射。"
-                ),
-                "model": model_name,
-                "response_model": response_model,
-            }
-        return {
-            "result": content,
-            "model": model_name,
-            "response_model": response_model or model_name,
-            "base_url": response.get("base_url", get_config()["deepseek_base_url"]),
-        }
-    except Exception as e:
-        logger.error("Error chatting with DeepSeek: %s", e)
-        return {"error": str(e), "model": model_name}
 
 
 def process_ai_in_batches(

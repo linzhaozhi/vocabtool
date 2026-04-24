@@ -10,7 +10,6 @@ import streamlit as st
 import resources
 from anki_package import cleanup_old_apkg_files
 from ui.cards import render_cards_tab
-from ui.chat import render_chat_tab
 from ui.extraction import render_extraction_tab
 from ui.helpers import initialize_session_state
 from ui.lookup import render_lookup_tab
@@ -37,11 +36,10 @@ apply_global_styles()
 render_app_header()
 render_help_panel(bool(VOCAB_DICT))
 
-tab_lookup, tab_extract, tab_cards, tab_chat = st.tabs([
+tab_lookup, tab_extract, tab_cards = st.tabs([
     "1️⃣ 查单词",
     "2️⃣ 提取单词",
     "3️⃣ 制作卡片",
-    "4️⃣ DeepSeek 聊天",
 ])
 
 with tab_lookup:
@@ -52,8 +50,5 @@ with tab_extract:
 
 with tab_cards:
     render_cards_tab()
-
-with tab_chat:
-    render_chat_tab()
 
 render_app_footer()
