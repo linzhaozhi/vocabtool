@@ -447,6 +447,116 @@ GLOBAL_CSS = """
         color: var(--vf-text-muted);
         margin-bottom: 8px;
     }
+    .chatbox-hero {
+        margin: 0.35rem 0 1rem;
+        padding: 1.15rem 1.15rem 1rem;
+        border-radius: 20px;
+        background:
+            radial-gradient(circle at top right, rgba(96, 165, 250, 0.22), transparent 34%),
+            linear-gradient(135deg, var(--vf-surface-elevated) 0%, var(--vf-surface-soft) 100%);
+        border: 1px solid rgba(96, 165, 250, 0.28);
+        box-shadow: var(--vf-shadow-soft);
+    }
+    .chatbox-hero-title {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--vf-text);
+        margin-bottom: 0.35rem;
+    }
+    .chatbox-hero-text {
+        color: var(--vf-text-muted);
+        line-height: 1.6;
+        margin-bottom: 0.85rem;
+    }
+    .chatbox-meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+    }
+    .chatbox-meta-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 2rem;
+        padding: 0.2rem 0.8rem;
+        border-radius: 999px;
+        border: 1px solid rgba(96, 165, 250, 0.35);
+        background: rgba(37, 99, 235, 0.1);
+        color: var(--vf-text);
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+    .chatbox-empty {
+        margin: 0.35rem 0 0.9rem;
+        padding: 0.95rem 1rem;
+        border-radius: 16px;
+        border: 1px dashed rgba(96, 165, 250, 0.36);
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(148, 163, 184, 0.08) 100%);
+        color: var(--vf-text);
+        line-height: 1.6;
+    }
+    .chatbox-empty strong {
+        font-size: 1rem;
+    }
+    div[data-testid="stVerticalBlock"]:has(.chatbox-empty) div[data-testid="stButton"] > button {
+        min-height: 52px;
+        padding: 0.75rem 0.95rem;
+        border-radius: 16px;
+        background: var(--vf-surface-elevated);
+        border: 1px solid var(--vf-border);
+        color: var(--vf-text);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+        text-align: left;
+        line-height: 1.45;
+        white-space: normal;
+    }
+    div[data-testid="stVerticalBlock"]:has(.chatbox-empty) div[data-testid="stButton"] > button:hover {
+        transform: translateY(-1px);
+        border-color: rgba(96, 165, 250, 0.48);
+        box-shadow: 0 14px 28px rgba(37, 99, 235, 0.12);
+    }
+    div[data-testid="stChatMessage"] {
+        padding: 0.35rem 0;
+    }
+    div[data-testid="stChatMessage"] [data-testid="stMarkdownContainer"] {
+        border-radius: 18px;
+        padding: 0.85rem 1rem;
+        background: var(--vf-surface-soft);
+        border: 1px solid var(--vf-border);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.07);
+    }
+    div[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]),
+    div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
+        margin-right: 3.5rem;
+    }
+    div[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-assistant"]) [data-testid="stMarkdownContainer"],
+    div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) [data-testid="stMarkdownContainer"] {
+        background: linear-gradient(135deg, var(--vf-surface-elevated) 0%, var(--vf-surface-soft) 100%);
+    }
+    div[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]),
+    div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+        margin-left: 3.5rem;
+    }
+    div[data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) [data-testid="stMarkdownContainer"],
+    div[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stMarkdownContainer"] {
+        background: linear-gradient(135deg, rgba(37, 99, 235, 0.16) 0%, rgba(29, 78, 216, 0.08) 100%);
+        border-color: rgba(96, 165, 250, 0.32);
+    }
+    div[data-testid="stChatInput"] {
+        margin-top: 1rem;
+        padding: 0.55rem 0.65rem;
+        border-radius: 18px;
+        border: 1px solid var(--vf-border);
+        background: linear-gradient(135deg, var(--vf-surface-elevated) 0%, var(--vf-surface-soft) 100%);
+        box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
+    }
+    div[data-testid="stChatInput"] textarea,
+    div[data-testid="stChatInput"] input {
+        color: var(--vf-text) !important;
+    }
+    div[data-testid="stChatInput"] button {
+        border-radius: 14px;
+        min-height: 44px;
+    }
 </style>
 """
 
