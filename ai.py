@@ -4,7 +4,6 @@ import logging
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-import requests
 import streamlit as st
 
 import constants
@@ -13,6 +12,12 @@ from errors import ErrorHandler
 from resources import get_vocab_dict
 
 logger = logging.getLogger(__name__)
+
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+    logger.warning("OpenAI library not available")
 
 
 def extract_lookup_headword(raw_content: str) -> str:
@@ -24,49 +29,77 @@ def extract_lookup_headword(raw_content: str) -> str:
     return ""
 
 
+def _get_openai_compatible_client(
+    api_key: str,
+    base_url: str,
+    missing_key_message: str,
+) -> Optional[Any]:
+    """Build an OpenAI-compatible client for DeepSeek/OpenAI-style endpoints."""
+    if not OpenAI:
+        st.error("❌ 未安装 OpenAI 库，无法使用 AI 功能。")
+        return None
+
+    if not api_key:
+        st.error(missing_key_message)
+        return None
+
+    try:
+        return OpenAI(api_key=api_key, base_url=base_url)
+    except Exception as e:
+        ErrorHandler.handle(e, "初始化 AI 客户端失败")
+        return None
+
+
+def get_openai_client() -> Optional[Any]:
+    """Get the shared OpenAI-compatible client used by lookup, topics, and cards."""
+    cfg = get_config()
+    return _get_openai_compatible_client(
+        cfg["openai_api_key"],
+        cfg["openai_base_url"],
+        "❌ 未找到 OPENAI_API_KEY 或 DEEPSEEK_API_KEY。请在 .streamlit/secrets.toml 中配置。",
+    )
+
+
+def get_deepseek_client() -> Optional[Any]:
+    """Get the DeepSeek chat client through the OpenAI-compatible SDK."""
+    cfg = get_config()
+    return _get_openai_compatible_client(
+        cfg["deepseek_api_key"],
+        cfg["deepseek_base_url"],
+        "❌ 未找到 DEEPSEEK_API_KEY 或 OPENAI_API_KEY。请在 .streamlit/secrets.toml 中配置。",
+    )
+
+
 def _call_deepseek_chat_completion(
     model_name: str,
     messages: List[Dict[str, str]],
     temperature: float,
 ) -> Dict[str, Any]:
-    """Call DeepSeek's chat completions API directly."""
+    """Call a DeepSeek/OpenAI-compatible chat completions endpoint."""
     cfg = get_config()
-    api_key = cfg["deepseek_api_key"]
-    if not api_key:
-        st.error("❌ 未找到 DEEPSEEK_API_KEY。请在 .streamlit/secrets.toml 中配置。")
-        return {"error": "DeepSeek API key not available"}
+    client = _get_openai_compatible_client(
+        cfg["deepseek_api_key"],
+        cfg["deepseek_base_url"],
+        "❌ 未找到 DEEPSEEK_API_KEY 或 OPENAI_API_KEY。请在 .streamlit/secrets.toml 中配置。",
+    )
+    if not client:
+        return {"error": "AI client not available"}
 
     try:
-        response = requests.post(
-            f"{cfg['deepseek_base_url'].rstrip('/')}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": model_name,
-                "messages": messages,
-                "temperature": temperature,
-            },
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            temperature=temperature,
             timeout=constants.DEEPSEEK_REQUEST_TIMEOUT_SECONDS,
         )
-        try:
-            response_data = response.json()
-        except ValueError:
-            response_data = {}
-
-        if response.status_code >= 400:
-            error_detail = response_data.get("error", response.text)
-            return {"error": f"DeepSeek API {response.status_code}: {error_detail}"}
-
-        content = response_data["choices"][0]["message"]["content"]
+        content = response.choices[0].message.content
         return {
             "content": content,
-            "model": response_data.get("model", model_name),
+            "model": str(getattr(response, "model", "") or model_name),
             "base_url": cfg["deepseek_base_url"],
         }
     except Exception as e:
-        logger.error("DeepSeek API request failed: %s", e)
+        logger.error("AI API request failed: %s", e)
         return {"error": str(e)}
 
 

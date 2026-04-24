@@ -15,8 +15,19 @@ def get_config():
     """Return app config from st.secrets with defaults. Use in Streamlit context."""
     s = _get_secrets()
     return {
-        "deepseek_api_key": s.get("DEEPSEEK_API_KEY", ""),
-        "deepseek_base_url": s.get("DEEPSEEK_BASE_URL", constants.DEEPSEEK_BASE_URL_DEFAULT),
-        "deepseek_model": s.get("DEEPSEEK_MODEL", "deepseek-chat"),
+        "openai_api_key": s.get("OPENAI_API_KEY") or s.get("DEEPSEEK_API_KEY", ""),
+        "openai_base_url": (
+            s.get("OPENAI_BASE_URL")
+            or s.get("DEEPSEEK_BASE_URL")
+            or constants.DEEPSEEK_BASE_URL_DEFAULT
+        ),
+        "openai_model": s.get("OPENAI_MODEL") or s.get("DEEPSEEK_MODEL", "deepseek-chat"),
+        "deepseek_api_key": s.get("DEEPSEEK_API_KEY") or s.get("OPENAI_API_KEY", ""),
+        "deepseek_base_url": (
+            s.get("DEEPSEEK_BASE_URL")
+            or s.get("OPENAI_BASE_URL")
+            or constants.DEEPSEEK_BASE_URL_DEFAULT
+        ),
+        "deepseek_model": s.get("DEEPSEEK_MODEL") or s.get("OPENAI_MODEL", "deepseek-chat"),
         "deepseek_chat_model": s.get("DEEPSEEK_CHAT_MODEL", constants.DEEPSEEK_CHAT_MODEL_DEFAULT),
     }
