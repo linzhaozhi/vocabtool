@@ -69,8 +69,9 @@ def test_parse_anki_data_card_shape():
     result = parse_anki_data(raw)
     assert len(result) == 1
     card = result[0]
-    assert set(card.keys()) == {"w", "m", "e", "ec", "r"}
+    assert set(card.keys()) == {"w", "p", "m", "e", "ec", "r"}
     assert card["w"] == "phrase"
+    assert card["p"] == ""
     assert card["m"] == "def"
     assert card["e"] == "example"
     assert card["ec"] == ""
@@ -92,3 +93,16 @@ def test_parse_anki_data_extracts_inline_example_translation():
     assert len(result) == 1
     assert result[0]["e"] == "This is an example."
     assert result[0]["ec"] == "这是一个例句。"
+
+
+def test_parse_anki_data_six_fields_with_phonetics():
+    raw = (
+        "hectic ||| 美 /ˈhektɪk/；英 /ˈhektɪk/ ||| 忙乱的 ||| "
+        "She has a hectic day.<br>My week is hectic. ||| "
+        "她今天很忙乱。<br>我的一周很忙乱。 ||| hect- + -ic"
+    )
+    result = parse_anki_data(raw)
+    assert len(result) == 1
+    assert result[0]["p"] == "美 /ˈhektɪk/；英 /ˈhektɪk/"
+    assert result[0]["e"] == "She has a hectic day.<br>My week is hectic."
+    assert result[0]["ec"] == "她今天很忙乱。<br>我的一周很忙乱。"

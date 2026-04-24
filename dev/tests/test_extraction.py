@@ -4,7 +4,15 @@ from io import BytesIO
 
 import pytest
 
-from extraction import clean_anki_field, parse_anki_txt_export
+from extraction import (
+    clean_anki_field,
+    extract_text_from_url,
+    get_extraction_error_message,
+    is_extraction_error_text,
+    make_extraction_error,
+    parse_anki_txt_export,
+    validate_article_url,
+)
 
 
 def test_clean_anki_field_plain():
@@ -61,3 +69,30 @@ def test_parse_anki_txt_export_skips_comments():
     result = parse_anki_txt_export(f)
     assert "comment" not in result
     assert "word1" in result
+
+
+def test_extraction_error_marker_roundtrip():
+    result = make_extraction_error("读取失败")
+    assert is_extraction_error_text(result)
+    assert get_extraction_error_message(result) == "读取失败"
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "not-a-url",
+        "ftp://example.com/file.txt",
+        "http://localhost:8501",
+        "http://127.0.0.1:8501",
+        "http://192.168.1.10/article",
+    ],
+)
+def test_validate_article_url_rejects_unsafe_urls(url):
+    is_valid, _ = validate_article_url(url)
+    assert is_valid is False
+
+
+def test_extract_text_from_url_rejects_before_network():
+    result = extract_text_from_url("http://127.0.0.1:8501")
+    assert is_extraction_error_text(result)
+    assert "URL" in get_extraction_error_message(result) or "IP" in get_extraction_error_message(result)

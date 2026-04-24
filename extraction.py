@@ -2,12 +2,14 @@
 
 import csv
 import html
+import ipaddress
 import os
 import re
 import sqlite3
 import tempfile
 from io import StringIO
 from typing import Any
+from urllib.parse import urlparse
 
 import pandas as pd
 import requests
@@ -18,6 +20,60 @@ from resources import get_file_parsers
 from utils import detect_file_encoding
 
 logger = __import__("logging").getLogger(__name__)
+
+
+def make_extraction_error(message: str) -> str:
+    """Mark extraction errors so the UI never analyzes them as article text."""
+    return f"{constants.EXTRACTION_ERROR_PREFIX}{message}"
+
+
+def is_extraction_error_text(text: str) -> bool:
+    """Return True when an extractor returned a marked error message."""
+    return isinstance(text, str) and text.startswith(constants.EXTRACTION_ERROR_PREFIX)
+
+
+def get_extraction_error_message(text: str) -> str:
+    """Strip the internal extraction-error marker for user display."""
+    if is_extraction_error_text(text):
+        return text[len(constants.EXTRACTION_ERROR_PREFIX):].strip()
+    return text
+
+
+def _handle_extraction_error(error: Exception, file_type: str) -> str:
+    return make_extraction_error(ErrorHandler.handle_file_error(error, file_type))
+
+
+def validate_article_url(url: str) -> tuple[bool, str]:
+    """Validate article URLs before fetching remote content."""
+    cleaned_url = str(url or "").strip()
+    parsed = urlparse(cleaned_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False, "文章链接必须是完整的 http:// 或 https:// URL。"
+
+    hostname = parsed.hostname
+    if not hostname:
+        return False, "文章链接缺少有效域名。"
+
+    normalized_host = hostname.lower()
+    if normalized_host in {"localhost", "localhost.localdomain"} or normalized_host.endswith(".local"):
+        return False, "为了稳定和安全，文章 URL 不能指向本机或局域网地址。"
+
+    try:
+        ip_addr = ipaddress.ip_address(normalized_host.strip("[]"))
+    except ValueError:
+        return True, cleaned_url
+
+    if (
+        ip_addr.is_private
+        or ip_addr.is_loopback
+        or ip_addr.is_link_local
+        or ip_addr.is_reserved
+        or ip_addr.is_multicast
+        or ip_addr.is_unspecified
+    ):
+        return False, "为了稳定和安全，文章 URL 不能指向本机或内网 IP。"
+
+    return True, cleaned_url
 
 
 def clean_anki_field(text: str) -> str:
@@ -61,11 +117,16 @@ def parse_anki_txt_export(uploaded_file: Any) -> str:
         return "\n".join(extracted_words)
 
     except Exception as e:
-        return ErrorHandler.handle_file_error(e, "Anki 导出文本")
+        return _handle_extraction_error(e, "Anki 导出文本")
 
 
 def extract_text_from_url(url: str) -> str:
     """Extract text content from a URL."""
+    is_valid_url, normalized_or_error = validate_article_url(url)
+    if not is_valid_url:
+        return make_extraction_error(normalized_or_error)
+    url = normalized_or_error
+
     _, _, _, _, BeautifulSoup = get_file_parsers()
 
     try:
@@ -81,9 +142,9 @@ def extract_text_from_url(url: str) -> str:
 
         return soup.get_text(separator=' ', strip=True)
     except requests.RequestException as e:
-        return ErrorHandler.handle_file_error(e, "文章链接")
+        return _handle_extraction_error(e, "文章链接")
     except Exception as e:
-        return ErrorHandler.handle_file_error(e, "网页解析")
+        return _handle_extraction_error(e, "网页解析")
 
 
 def extract_from_txt(uploaded_file: Any) -> str:
@@ -107,7 +168,7 @@ def extract_from_pdf(uploaded_file: Any) -> str:
         pages_text = [page.extract_text() for page in reader.pages if page.extract_text()]
         return "\n".join(pages_text)
     except Exception as e:
-        return ErrorHandler.handle_file_error(e, "PDF")
+        return _handle_extraction_error(e, "PDF")
 
 
 def extract_from_docx(uploaded_file: Any) -> str:
@@ -118,7 +179,7 @@ def extract_from_docx(uploaded_file: Any) -> str:
         doc = docx.Document(uploaded_file)
         return "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
     except Exception as e:
-        return ErrorHandler.handle_file_error(e, "DOCX")
+        return _handle_extraction_error(e, "DOCX")
 
 
 def extract_from_epub(uploaded_file: Any) -> str:
@@ -134,7 +195,7 @@ def extract_from_epub(uploaded_file: Any) -> str:
                 text_parts.append(soup.get_text(separator=' ', strip=True))
         return "\n".join(text_parts)
     except Exception as e:
-        return ErrorHandler.handle_file_error(e, "EPUB")
+        return _handle_extraction_error(e, "EPUB")
 
 
 def extract_from_csv(uploaded_file: Any) -> str:
@@ -152,7 +213,7 @@ def extract_from_csv(uploaded_file: Any) -> str:
             text_parts.extend(col_text.tolist())
         return " ".join(text_parts)
     except Exception as e:
-        return ErrorHandler.handle_file_error(e, "CSV")
+        return _handle_extraction_error(e, "CSV")
 
 
 def extract_from_excel(uploaded_file: Any) -> str:
@@ -163,7 +224,7 @@ def extract_from_excel(uploaded_file: Any) -> str:
         try:
             df = pd.read_excel(uploaded_file, sheet_name=None, engine='xlrd')
         except Exception as e:
-            return ErrorHandler.handle_file_error(e, "Excel 文件")
+            return _handle_extraction_error(e, "Excel 文件")
 
     try:
         text_parts = []
@@ -174,7 +235,7 @@ def extract_from_excel(uploaded_file: Any) -> str:
                 text_parts.extend(col_text.tolist())
         return " ".join(text_parts)
     except Exception as e:
-        return ErrorHandler.handle_file_error(e, "Excel 文件")
+        return _handle_extraction_error(e, "Excel 文件")
 
 
 def extract_from_sqlite(uploaded_file: Any) -> str:
@@ -200,10 +261,10 @@ def extract_from_sqlite(uploaded_file: Any) -> str:
 
                 return text
             except sqlite3.OperationalError as e:
-                return f"读取数据库结构时出错：{e}"
+                return make_extraction_error(f"读取数据库结构时出错：{e}")
 
     except Exception as e:
-        return ErrorHandler.handle_file_error(e, "SQLite 数据库")
+        return _handle_extraction_error(e, "SQLite 数据库")
     finally:
         if tmp_db_path and os.path.exists(tmp_db_path):
             try:
@@ -214,7 +275,11 @@ def extract_from_sqlite(uploaded_file: Any) -> str:
 
 def extract_text_from_file(uploaded_file: Any) -> str:
     """Main function to extract text from uploaded files."""
-    file_type = uploaded_file.name.split('.')[-1].lower()
+    file_name = getattr(uploaded_file, "name", "")
+    if "." not in file_name:
+        return make_extraction_error("无法识别文件类型，请上传带扩展名的文件。")
+
+    file_type = file_name.split('.')[-1].lower()
 
     extractors = {
         'txt': extract_from_txt,
@@ -232,7 +297,7 @@ def extract_text_from_file(uploaded_file: Any) -> str:
     if extractor:
         return extractor(uploaded_file)
 
-    return f"暂不支持这种文件类型：{file_type}"
+    return make_extraction_error(f"暂不支持这种文件类型：{file_type}")
 
 
 def is_upload_too_large(uploaded_file: Any) -> bool:

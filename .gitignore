@@ -29,6 +29,8 @@ build/
 *.swp
 
 # --- 6. 其他常用 ---
+.DS_Store
+
 # Jupyter Notebook 的缓存
 .ipynb_checkpoints
 # 测试覆盖率报告

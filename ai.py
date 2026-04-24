@@ -1,6 +1,7 @@
 # AI-backed word definitions and batch card generation.
 
 import logging
+import re
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -34,7 +35,7 @@ def _get_openai_compatible_client(
     base_url: str,
     missing_key_message: str,
 ) -> Optional[Any]:
-    """Build an OpenAI-compatible client for DeepSeek/OpenAI-style endpoints."""
+    """Build an OpenAI-compatible client for OpenAI-style endpoints."""
     if not OpenAI:
         st.error("❌ 未安装 OpenAI 库，无法使用 AI 功能。")
         return None
@@ -44,43 +45,62 @@ def _get_openai_compatible_client(
         return None
 
     try:
-        return OpenAI(api_key=api_key, base_url=base_url)
+        client_kwargs = {"api_key": api_key}
+        if base_url:
+            client_kwargs["base_url"] = base_url
+        return OpenAI(**client_kwargs)
     except Exception as e:
         ErrorHandler.handle(e, "初始化 AI 客户端失败")
         return None
 
 
-def get_openai_client() -> Optional[Any]:
-    """Get the shared OpenAI-compatible client used by lookup, topics, and cards."""
+def get_ai_client() -> Optional[Any]:
+    """Get the active AI client used by lookup, topics, and cards."""
     cfg = get_config()
     return _get_openai_compatible_client(
-        cfg["openai_api_key"],
-        cfg["openai_base_url"],
-        "❌ 未找到 OPENAI_API_KEY 或 DEEPSEEK_API_KEY。请在 .streamlit/secrets.toml 中配置。",
+        cfg["ai_api_key"],
+        cfg["ai_base_url"],
+        cfg["ai_missing_key_message"],
     )
+
+
+def get_openai_client() -> Optional[Any]:
+    """Backward-compatible alias for the active AI client."""
+    return get_ai_client()
 
 
 def get_deepseek_client() -> Optional[Any]:
-    """Get the DeepSeek chat client through the OpenAI-compatible SDK."""
-    cfg = get_config()
-    return _get_openai_compatible_client(
-        cfg["deepseek_api_key"],
-        cfg["deepseek_base_url"],
-        "❌ 未找到 DEEPSEEK_API_KEY 或 OPENAI_API_KEY。请在 .streamlit/secrets.toml 中配置。",
-    )
+    """Backward-compatible alias for the active AI client."""
+    return get_ai_client()
 
 
-def _call_deepseek_chat_completion(
+def _sanitize_ai_error(error: Exception) -> str:
+    """Return a user-safe AI error message without leaking credentials."""
+    raw_message = str(error)
+    scrubbed = re.sub(r"sk-[A-Za-z0-9_\-]{8,}", "sk-****", raw_message)
+    scrubbed = re.sub(r"(Bearer\s+)[A-Za-z0-9._\-]+", r"\1****", scrubbed, flags=re.IGNORECASE)
+    lowered = scrubbed.lower()
+
+    if "401" in scrubbed or "invalid_api_key" in lowered or "incorrect api key" in lowered:
+        return "API Key 无效或不属于当前配置的模型服务，请检查 secrets 里的 API Key、Base URL 和模型名。"
+    if "timeout" in lowered or "timed out" in lowered:
+        return "AI 请求超时，请稍后重试，或减少本次处理的单词数量。"
+    if "model" in lowered and ("not found" in lowered or "does not exist" in lowered):
+        return "当前模型名不可用，请检查 OPENAI_MODEL / DEEPSEEK_MODEL 配置。"
+    return scrubbed
+
+
+def _call_ai_chat_completion(
     model_name: str,
     messages: List[Dict[str, str]],
     temperature: float,
 ) -> Dict[str, Any]:
-    """Call a DeepSeek/OpenAI-compatible chat completions endpoint."""
+    """Call the active OpenAI-compatible chat completions endpoint."""
     cfg = get_config()
     client = _get_openai_compatible_client(
-        cfg["deepseek_api_key"],
-        cfg["deepseek_base_url"],
-        "❌ 未找到 DEEPSEEK_API_KEY 或 OPENAI_API_KEY。请在 .streamlit/secrets.toml 中配置。",
+        cfg["ai_api_key"],
+        cfg["ai_base_url"],
+        cfg["ai_missing_key_message"],
     )
     if not client:
         return {"error": "AI client not available"}
@@ -96,22 +116,44 @@ def _call_deepseek_chat_completion(
         return {
             "content": content,
             "model": str(getattr(response, "model", "") or model_name),
-            "base_url": cfg["deepseek_base_url"],
+            "base_url": cfg["ai_base_url"],
+            "provider": cfg["ai_provider"],
         }
     except Exception as e:
         logger.error("AI API request failed: %s", e)
-        return {"error": str(e)}
+        return {"error": _sanitize_ai_error(e)}
+
+
+def _call_deepseek_chat_completion(
+    model_name: str,
+    messages: List[Dict[str, str]],
+    temperature: float,
+) -> Dict[str, Any]:
+    """Backward-compatible alias for the active AI chat completion call."""
+    return _call_ai_chat_completion(model_name, messages, temperature)
+
+
+def get_ai_model() -> str:
+    """Return the active model used by lookup, topic lists, and cards."""
+    return str(get_config()["ai_model"]).strip()
 
 
 def get_deepseek_model() -> str:
-    """Return the shared DeepSeek model used by lookup, topic lists, and cards."""
-    return str(get_config()["deepseek_model"]).strip()
+    """Backward-compatible alias for the active AI model."""
+    return get_ai_model()
+
+
+def _count_parseable_cards(raw_text: str) -> int:
+    """Count parseable cards without making ai.py depend on UI code."""
+    from anki_parse import parse_anki_data
+
+    return len(parse_anki_data(raw_text))
 
 
 def get_word_quick_definition(word: str) -> Dict[str, Any]:
     """Get ultra-concise word definition using AI, with rank info."""
     vocab_dict = get_vocab_dict()
-    model_name = get_deepseek_model()
+    model_name = get_ai_model()
 
     system_prompt = """# Role
 Atomic Dictionary.
@@ -175,7 +217,7 @@ express
     user_prompt = word
 
     try:
-        response = _call_deepseek_chat_completion(
+        response = _call_ai_chat_completion(
             model_name,
             [
                 {"role": "system", "content": system_prompt},
@@ -198,7 +240,7 @@ express
 
 def generate_topic_word_list(topic: str, count: int) -> Dict[str, Any]:
     """Generate a topic-based English word list from a topic and desired count."""
-    model_name = get_deepseek_model()
+    model_name = get_ai_model()
     normalized_topic = " ".join(str(topic).split()).strip()
     if not normalized_topic:
         return {"error": "Topic is required"}
@@ -251,7 +293,7 @@ tour
 ```"""
 
     try:
-        response = _call_deepseek_chat_completion(
+        response = _call_ai_chat_completion(
             model_name,
             [
                 {"role": "system", "content": system_prompt},
@@ -285,9 +327,10 @@ def process_ai_in_batches(
         min(int(example_count), constants.AI_CARD_EXAMPLE_COUNT_MAX)
     )
 
-    model_name = get_deepseek_model()
+    model_name = get_ai_model()
     total_words = len(words_list)
     full_results = []
+    failed_batches: list[str] = []
 
     system_prompt = "You are a helpful assistant for vocabulary learning."
     example_demo = (
@@ -347,7 +390,7 @@ Process the input list strictly.
 
         for attempt in range(constants.MAX_RETRIES):
             try:
-                response = _call_deepseek_chat_completion(
+                response = _call_ai_chat_completion(
                     model_name,
                     [
                         {"role": "system", "content": system_prompt},
@@ -360,7 +403,12 @@ Process the input list strictly.
 
                 content = response.get("content", "")
                 if not content:
-                    raise RuntimeError("DeepSeek 返回了空内容")
+                    raise RuntimeError("AI 返回了空内容")
+                parsed_count = _count_parseable_cards(content)
+                if parsed_count < len(batch):
+                    raise RuntimeError(
+                        f"AI 返回格式不完整：本批 {len(batch)} 个词，只解析到 {parsed_count} 张卡片"
+                    )
                 full_results.append(content)
 
                 if progress_callback:
@@ -374,10 +422,14 @@ Process the input list strictly.
                     time.sleep(1 + attempt)
                     continue
                 else:
+                    failed_batches.append(", ".join(batch))
                     ErrorHandler.handle(
                         e,
                         f"Batch {i//constants.AI_BATCH_SIZE + 1} failed after {constants.MAX_RETRIES} attempts",
                         show_user=True
                     )
+
+    if failed_batches and full_results:
+        st.warning(f"⚠️ 有 {len(failed_batches)} 个批次生成失败，已保留成功生成的部分。建议减少词数后重试失败词。")
 
     return "\n".join(full_results)

@@ -7,6 +7,7 @@ import constants
 from ai import process_ai_in_batches
 from anki_package import generate_anki_package
 from anki_parse import parse_anki_data
+from config import get_config
 from ui.helpers import (
     parse_unique_words,
     render_anki_download_button,
@@ -21,6 +22,7 @@ def render_cards_tab() -> None:
     """Render the card-generation tab."""
     st.markdown("### 📦 制作卡片")
     st.caption("使用内置智能能力，把准备好的词表直接生成 Anki 卡片。")
+    ai_provider_label = get_config().get("ai_provider_label", "智能模型")
 
     current_words_text = st.session_state.get("word_list_editor", "").strip()
     if not current_words_text:
@@ -94,7 +96,7 @@ def render_cards_tab() -> None:
             '<div class="card-generate-hint"><strong>最后一步：生成卡片</strong>确认词表没问题后，点击下面按钮开始批量生成。</div>',
             unsafe_allow_html=True,
         )
-        start_auto_gen = st.button("🚀 使用 DeepSeek 生成卡片", type="primary", use_container_width=False)
+        start_auto_gen = st.button(f"🚀 使用 {ai_provider_label} 生成卡片", type="primary", use_container_width=False)
     with col_reset:
         st.markdown('<div class="card-reset-panel"></div>', unsafe_allow_html=True)
         st.button("清空", type="secondary", on_click=reset_anki_state, use_container_width=False)

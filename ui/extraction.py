@@ -6,7 +6,14 @@ from typing import Any
 import streamlit as st
 
 import constants
-from extraction import extract_text_from_file, extract_text_from_url, is_upload_too_large, parse_anki_txt_export
+from extraction import (
+    extract_text_from_file,
+    extract_text_from_url,
+    get_extraction_error_message,
+    is_extraction_error_text,
+    is_upload_too_large,
+    parse_anki_txt_export,
+)
 from state import set_generated_words_state
 from ui.helpers import (
     EXTRACT_SOURCE_OPTIONS,
@@ -183,7 +190,11 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
                         status.write("📝 正在读取文本内容...")
                         raw_text = pasted_text
 
-                    if len(raw_text) > 2:
+                    if is_extraction_error_text(raw_text):
+                        error_message = get_extraction_error_message(raw_text)
+                        status.write(f"❌ {error_message}")
+                        status.update(label="❌ 提取失败", state="error")
+                    elif len(raw_text) > 2:
                         status.write("🧠 正在进行词形还原与词频分级...")
                         final_data, raw_count, stats_info = analyze_logic(raw_text, current_rank, target_rank, False)
 
@@ -209,7 +220,10 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
         if word_list_file:
             with st.spinner("正在读取词表文件..."):
                 prefilled_text = extract_text_from_file(word_list_file)
-                if prefilled_text:
+                if is_extraction_error_text(prefilled_text):
+                    st.error(f"❌ {get_extraction_error_message(prefilled_text)}")
+                    prefilled_text = ""
+                elif prefilled_text:
                     st.success("✅ 已读取词表文件内容")
 
         raw_input = st.text_area(
@@ -246,13 +260,16 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
             else:
                 with st.spinner("正在智能解析 Anki 导出文件..."):
                     parsed_text = parse_anki_txt_export(anki_export_file)
-                    unique_words = parse_unique_words(parsed_text)
-                    if unique_words:
-                        data_list = [(word, vocab_dict.get(word.lower(), 99999)) for word in unique_words]
-                        set_generated_words_state(data_list, len(unique_words), None)
-                        st.toast(f"✅ 已从 Anki 导出中提取 {len(unique_words)} 个单词", icon="🎉")
+                    if is_extraction_error_text(parsed_text):
+                        st.error(f"❌ {get_extraction_error_message(parsed_text)}")
                     else:
-                        st.warning("⚠️ 没有从文件中解析到可用单词。")
+                        unique_words = parse_unique_words(parsed_text)
+                        if unique_words:
+                            data_list = [(word, vocab_dict.get(word.lower(), 99999)) for word in unique_words]
+                            set_generated_words_state(data_list, len(unique_words), None)
+                            st.toast(f"✅ 已从 Anki 导出中提取 {len(unique_words)} 个单词", icon="🎉")
+                        else:
+                            st.warning("⚠️ 没有从文件中解析到可用单词。")
 
     else:
         result_step_title = "#### 查看与整理结果"
