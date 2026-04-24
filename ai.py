@@ -4,6 +4,7 @@ import logging
 import time
 from typing import Any, Callable, Dict, List, Optional
 
+import requests
 import streamlit as st
 
 import constants
@@ -12,12 +13,6 @@ from errors import ErrorHandler
 from resources import get_vocab_dict
 
 logger = logging.getLogger(__name__)
-
-try:
-    from openai import OpenAI
-except ImportError:
-    OpenAI = None
-    logger.warning("OpenAI library not available")
 
 
 def extract_lookup_headword(raw_content: str) -> str:
@@ -29,41 +24,60 @@ def extract_lookup_headword(raw_content: str) -> str:
     return ""
 
 
-def _get_configured_client(api_key: str, base_url: str, missing_key_message: str) -> Optional[Any]:
-    """Build an OpenAI-compatible client with shared validation and error handling."""
-    if not OpenAI:
-        st.error("❌ 未安装 OpenAI 库，无法使用内置 AI 功能。")
-        return None
-
+def _call_deepseek_chat_completion(
+    model_name: str,
+    messages: List[Dict[str, str]],
+    temperature: float,
+) -> Dict[str, Any]:
+    """Call DeepSeek's chat completions API directly."""
+    cfg = get_config()
+    api_key = cfg["deepseek_api_key"]
     if not api_key:
-        st.error(missing_key_message)
-        return None
+        st.error("❌ 未找到 DEEPSEEK_API_KEY。请在 .streamlit/secrets.toml 中配置。")
+        return {"error": "DeepSeek API key not available"}
 
     try:
-        return OpenAI(api_key=api_key, base_url=base_url)
+        response = requests.post(
+            f"{cfg['deepseek_base_url'].rstrip('/')}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model_name,
+                "messages": messages,
+                "temperature": temperature,
+            },
+            timeout=constants.DEEPSEEK_REQUEST_TIMEOUT_SECONDS,
+        )
+        try:
+            response_data = response.json()
+        except ValueError:
+            response_data = {}
+
+        if response.status_code >= 400:
+            error_detail = response_data.get("error", response.text)
+            return {"error": f"DeepSeek API {response.status_code}: {error_detail}"}
+
+        content = response_data["choices"][0]["message"]["content"]
+        return {
+            "content": content,
+            "model": response_data.get("model", model_name),
+            "base_url": cfg["deepseek_base_url"],
+        }
     except Exception as e:
-        ErrorHandler.handle(e, "Failed to initialize OpenAI client")
-        return None
+        logger.error("DeepSeek API request failed: %s", e)
+        return {"error": str(e)}
 
 
-def get_openai_client() -> Optional[Any]:
-    """Get configured OpenAI client with proper error handling."""
-    cfg = get_config()
-    return _get_configured_client(
-        cfg["openai_api_key"],
-        cfg["openai_base_url"],
-        "❌ 未找到 OPENAI_API_KEY。请在 .streamlit/secrets.toml 中配置。",
-    )
+def get_deepseek_model() -> str:
+    """Return the shared DeepSeek model used by lookup, topic lists, and cards."""
+    return str(get_config()["deepseek_model"]).strip()
 
 
-def get_deepseek_client() -> Optional[Any]:
-    """Get configured DeepSeek client through the OpenAI-compatible SDK."""
-    cfg = get_config()
-    return _get_configured_client(
-        cfg["deepseek_api_key"],
-        cfg["deepseek_base_url"],
-        "❌ 未找到 DEEPSEEK_API_KEY。请在 .streamlit/secrets.toml 中配置，或复用现有 OPENAI_API_KEY。",
-    )
+def get_deepseek_chat_model() -> str:
+    """Return the DeepSeek model used by the chat tab."""
+    return str(get_config()["deepseek_chat_model"]).strip()
 
 
 def _is_allowed_deepseek_chat_model(model_name: str) -> bool:
@@ -78,12 +92,7 @@ def _is_allowed_deepseek_chat_model(model_name: str) -> bool:
 def get_word_quick_definition(word: str) -> Dict[str, Any]:
     """Get ultra-concise word definition using AI, with rank info."""
     vocab_dict = get_vocab_dict()
-
-    client = get_openai_client()
-    if not client:
-        return {"error": "AI client not available"}
-
-    model_name = get_config()["openai_model"]
+    model_name = get_deepseek_model()
 
     system_prompt = """# Role
 Atomic Dictionary.
@@ -147,16 +156,18 @@ express
     user_prompt = word
 
     try:
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=[
+        response = _call_deepseek_chat_completion(
+            model_name,
+            [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.3
+            0.3
         )
+        if "error" in response:
+            return {"error": response["error"]}
 
-        content = response.choices[0].message.content
+        content = response.get("content", "")
         headword = extract_lookup_headword(content)
         rank = vocab_dict.get(headword, 99999)
         return {"result": content, "rank": rank, "headword": headword}
@@ -168,11 +179,7 @@ express
 
 def generate_topic_word_list(topic: str, count: int) -> Dict[str, Any]:
     """Generate a topic-based English word list from a topic and desired count."""
-    client = get_openai_client()
-    if not client:
-        return {"error": "AI client not available"}
-
-    model_name = get_config()["openai_model"]
+    model_name = get_deepseek_model()
     normalized_topic = " ".join(str(topic).split()).strip()
     if not normalized_topic:
         return {"error": "Topic is required"}
@@ -225,19 +232,21 @@ tour
 ```"""
 
     try:
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=[
+        response = _call_deepseek_chat_completion(
+            model_name,
+            [
                 {"role": "system", "content": system_prompt},
                 {
                     "role": "user",
                     "content": f"Topic: {normalized_topic}\nCount: {normalized_count}"
                 }
             ],
-            temperature=0.4
+            0.4
         )
+        if "error" in response:
+            return {"error": response["error"]}
 
-        content = response.choices[0].message.content
+        content = response.get("content", "")
         return {"result": content}
 
     except Exception as e:
@@ -247,12 +256,7 @@ tour
 
 def chat_with_deepseek(messages: List[Dict[str, str]]) -> Dict[str, Any]:
     """Send a multi-turn chat request to DeepSeek's chat model."""
-    client = get_deepseek_client()
-    if not client:
-        return {"error": "DeepSeek client not available"}
-
-    cfg = get_config()
-    model_name = str(cfg["deepseek_chat_model"]).strip()
+    model_name = get_deepseek_chat_model()
     if not _is_allowed_deepseek_chat_model(model_name):
         return {
             "error": (
@@ -285,15 +289,14 @@ def chat_with_deepseek(messages: List[Dict[str, str]]) -> Dict[str, Any]:
         )
 
     try:
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=normalized_messages,
-            temperature=0.7,
-        )
-        content = response.choices[0].message.content
+        response = _call_deepseek_chat_completion(model_name, normalized_messages, 0.7)
+        if "error" in response:
+            return {"error": response["error"], "model": model_name}
+
+        content = response.get("content", "")
         if not content:
             return {"error": "DeepSeek 返回了空内容"}
-        response_model = str(getattr(response, "model", "") or "").strip()
+        response_model = str(response.get("model", "") or "").strip()
         if response_model and not _is_allowed_deepseek_chat_model(response_model):
             return {
                 "error": (
@@ -307,7 +310,7 @@ def chat_with_deepseek(messages: List[Dict[str, str]]) -> Dict[str, Any]:
             "result": content,
             "model": model_name,
             "response_model": response_model or model_name,
-            "base_url": cfg["deepseek_base_url"],
+            "base_url": response.get("base_url", get_config()["deepseek_base_url"]),
         }
     except Exception as e:
         logger.error("Error chatting with DeepSeek: %s", e)
@@ -326,11 +329,7 @@ def process_ai_in_batches(
         min(int(example_count), constants.AI_CARD_EXAMPLE_COUNT_MAX)
     )
 
-    client = get_openai_client()
-    if not client:
-        return None
-
-    model_name = get_config()["openai_model"]
+    model_name = get_deepseek_model()
     total_words = len(words_list)
     full_results = []
 
@@ -392,15 +391,20 @@ Process the input list strictly.
 
         for attempt in range(constants.MAX_RETRIES):
             try:
-                response = client.chat.completions.create(
-                    model=model_name,
-                    messages=[
+                response = _call_deepseek_chat_completion(
+                    model_name,
+                    [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    temperature=0.4
+                    0.4
                 )
-                content = response.choices[0].message.content
+                if "error" in response:
+                    raise RuntimeError(response["error"])
+
+                content = response.get("content", "")
+                if not content:
+                    raise RuntimeError("DeepSeek 返回了空内容")
                 full_results.append(content)
 
                 if progress_callback:
