@@ -66,6 +66,15 @@ def get_deepseek_client() -> Optional[Any]:
     )
 
 
+def _is_allowed_deepseek_chat_model(model_name: str) -> bool:
+    """Only allow the configured DeepSeek chat model family for the chat tab."""
+    normalized_model = model_name.strip().lower()
+    return (
+        normalized_model.startswith(constants.DEEPSEEK_CHAT_MODEL_REQUIRED_PREFIX)
+        and constants.DEEPSEEK_CHAT_MODEL_BLOCKED_FRAGMENT not in normalized_model
+    )
+
+
 def get_word_quick_definition(word: str) -> Dict[str, Any]:
     """Get ultra-concise word definition using AI, with rank info."""
     vocab_dict = get_vocab_dict()
@@ -243,7 +252,15 @@ def chat_with_deepseek(messages: List[Dict[str, str]]) -> Dict[str, Any]:
         return {"error": "DeepSeek client not available"}
 
     cfg = get_config()
-    model_name = cfg["deepseek_chat_model"]
+    model_name = str(cfg["deepseek_chat_model"]).strip()
+    if not _is_allowed_deepseek_chat_model(model_name):
+        return {
+            "error": (
+                f"DeepSeek 聊天已锁定 {constants.DEEPSEEK_CHAT_MODEL_REQUIRED_PREFIX} 系列模型，"
+                f"当前配置是 {model_name or '空'}。请不要配置为 pro。"
+            ),
+            "model": model_name,
+        }
     normalized_messages: List[Dict[str, str]] = []
 
     for message in messages[-constants.DEEPSEEK_CHAT_HISTORY_LIMIT:]:
@@ -276,9 +293,20 @@ def chat_with_deepseek(messages: List[Dict[str, str]]) -> Dict[str, Any]:
         content = response.choices[0].message.content
         if not content:
             return {"error": "DeepSeek 返回了空内容"}
+        response_model = str(getattr(response, "model", "") or "").strip()
+        if response_model and not _is_allowed_deepseek_chat_model(response_model):
+            return {
+                "error": (
+                    f"DeepSeek 返回的实际模型是 {response_model}，不是 "
+                    f"{constants.DEEPSEEK_CHAT_MODEL_REQUIRED_PREFIX} 系列。请检查平台模型映射。"
+                ),
+                "model": model_name,
+                "response_model": response_model,
+            }
         return {
             "result": content,
             "model": model_name,
+            "response_model": response_model or model_name,
             "base_url": cfg["deepseek_base_url"],
         }
     except Exception as e:

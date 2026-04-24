@@ -1,7 +1,10 @@
 """DeepSeek chat tab rendering."""
 
+import html
+
 import streamlit as st
 
+import constants
 from ai import chat_with_deepseek
 from config import get_config
 
@@ -43,6 +46,10 @@ def _run_chat_turn(prompt: str) -> None:
             st.session_state["deepseek_chat_messages"].append(
                 {"role": "assistant", "content": assistant_message}
             )
+            st.session_state["deepseek_chat_last_model"] = {
+                "requested": result.get("model", ""),
+                "returned": result.get("response_model", ""),
+            }
         else:
             error_message = result.get("error", "未知错误") if result else "未知错误"
             st.error(f"❌ 回复失败：{error_message}")
@@ -52,6 +59,10 @@ def _run_chat_turn(prompt: str) -> None:
 def render_chat_tab() -> None:
     """Render the DeepSeek chat experience."""
     cfg = get_config()
+    configured_model = str(cfg["deepseek_chat_model"]).strip()
+    last_model = st.session_state.get("deepseek_chat_last_model") or {}
+    requested_model = str(last_model.get("requested") or configured_model)
+    returned_model = str(last_model.get("returned") or "等待首次返回")
 
     st.markdown(
         f"""
@@ -61,13 +72,22 @@ def render_chat_tab() -> None:
                 这里是独立的聊天入口，更适合追问、解释、对比和自由交流。
             </div>
             <div class="chatbox-meta-row">
-                <span class="chatbox-meta-pill">当前模型：{cfg['deepseek_chat_model']}</span>
-                <span class="chatbox-meta-pill">独立于查词 / 提词 / 制卡</span>
+                <span class="chatbox-meta-pill">锁定模型：{html.escape(configured_model)}</span>
+                <span class="chatbox-meta-pill">请求模型：{html.escape(requested_model)}</span>
+                <span class="chatbox-meta-pill">返回模型：{html.escape(returned_model)}</span>
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
+    if (
+        constants.DEEPSEEK_CHAT_MODEL_BLOCKED_FRAGMENT in configured_model.lower()
+        or not configured_model.lower().startswith(constants.DEEPSEEK_CHAT_MODEL_REQUIRED_PREFIX)
+    ):
+        st.error(
+            f"当前聊天模型配置为 `{configured_model}`，聊天板块只允许 "
+            f"`{constants.DEEPSEEK_CHAT_MODEL_REQUIRED_PREFIX}` 系列模型。"
+        )
     st.caption(
         "如需单独配置，请在 `.streamlit/secrets.toml` 中设置 "
         "`DEEPSEEK_API_KEY`、`DEEPSEEK_BASE_URL`、`DEEPSEEK_CHAT_MODEL`。"
@@ -79,6 +99,7 @@ def render_chat_tab() -> None:
     with col_clear:
         if st.button("清空对话", key="btn_clear_deepseek_chat", use_container_width=True):
             st.session_state["deepseek_chat_messages"] = []
+            st.session_state["deepseek_chat_last_model"] = {}
             st.rerun()
 
     prompt_to_send = ""
