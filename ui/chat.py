@@ -26,40 +26,52 @@ def _render_chat_history() -> None:
 
 
 def _run_chat_turn(prompt: str) -> None:
-    """Handle one user prompt and append the assistant response."""
+    """Handle one user prompt and append the assistant response to history."""
     user_message = prompt.strip()
     if not user_message:
         return
 
     st.session_state["deepseek_chat_messages"].append({"role": "user", "content": user_message})
 
-    with st.chat_message("user"):
-        st.markdown(user_message)
+    result = chat_with_deepseek(st.session_state["deepseek_chat_messages"])
+    if result and "error" not in result:
+        assistant_message = result["result"]
+        st.session_state["deepseek_chat_messages"].append(
+            {"role": "assistant", "content": assistant_message}
+        )
+        st.session_state["deepseek_chat_last_model"] = {
+            "requested": result.get("model", ""),
+            "returned": result.get("response_model", ""),
+        }
+        st.session_state["deepseek_chat_last_error"] = ""
+    else:
+        error_message = result.get("error", "未知错误") if result else "未知错误"
+        st.session_state["deepseek_chat_last_error"] = error_message
 
-    with st.chat_message("assistant"):
-        with st.spinner("DeepSeek 正在回复..."):
-            result = chat_with_deepseek(st.session_state["deepseek_chat_messages"])
 
-        if result and "error" not in result:
-            assistant_message = result["result"]
-            st.markdown(assistant_message)
-            st.session_state["deepseek_chat_messages"].append(
-                {"role": "assistant", "content": assistant_message}
-            )
-            st.session_state["deepseek_chat_last_model"] = {
-                "requested": result.get("model", ""),
-                "returned": result.get("response_model", ""),
-            }
-        else:
-            error_message = result.get("error", "未知错误") if result else "未知错误"
-            st.error(f"❌ 回复失败：{error_message}")
-            st.caption("如果这是首次使用，请先配置 `DEEPSEEK_API_KEY`，必要时再配置 `DEEPSEEK_BASE_URL`。")
+def _queue_chat_prompt(prompt: str) -> None:
+    """Store a prompt so the next rerun can process it before rendering history."""
+    cleaned_prompt = prompt.strip()
+    if cleaned_prompt:
+        st.session_state["deepseek_chat_pending_prompt"] = cleaned_prompt
+
+
+def _process_pending_chat_prompt() -> None:
+    """Process a queued prompt and keep the rendered chat window in sync."""
+    pending_prompt = st.session_state.get("deepseek_chat_pending_prompt", "").strip()
+    if not pending_prompt:
+        return
+
+    st.session_state["deepseek_chat_pending_prompt"] = ""
+    with st.spinner("DeepSeek 正在回复..."):
+        _run_chat_turn(pending_prompt)
 
 
 def render_chat_tab() -> None:
     """Render the DeepSeek chat experience."""
     cfg = get_config()
     configured_model = str(cfg["deepseek_chat_model"]).strip()
+    _process_pending_chat_prompt()
     history_count = len(st.session_state.get("deepseek_chat_messages", []))
     last_model = st.session_state.get("deepseek_chat_last_model") or {}
     requested_model = str(last_model.get("requested") or configured_model)
@@ -102,33 +114,48 @@ def render_chat_tab() -> None:
         if st.button("清空对话", key="btn_clear_deepseek_chat", use_container_width=True):
             st.session_state["deepseek_chat_messages"] = []
             st.session_state["deepseek_chat_last_model"] = {}
+            st.session_state["deepseek_chat_pending_prompt"] = ""
+            st.session_state["deepseek_chat_last_error"] = ""
             st.rerun()
 
-    prompt_to_send = ""
-    if not st.session_state.get("deepseek_chat_messages"):
-        st.markdown(
-            """
-            <div class="chatbox-empty">
-                <strong>像聊天框一样直接输入问题就行。</strong><br>
-                你也可以先点下面的示例问题开始。
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    with st.container(height=520, border=True):
+        st.markdown('<div class="chatbox-scroll-anchor"></div>', unsafe_allow_html=True)
+        if not st.session_state.get("deepseek_chat_messages"):
+            st.markdown(
+                """
+                <div class="chatbox-empty">
+                    <strong>像聊天框一样直接输入问题就行。</strong><br>
+                    你也可以先点下面的示例问题开始。
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-        starter_cols = st.columns(len(STARTER_PROMPTS))
-        for index, starter_prompt in enumerate(STARTER_PROMPTS):
-            with starter_cols[index]:
-                if st.button(starter_prompt, key=f"deepseek_starter_{index}", use_container_width=True):
-                    prompt_to_send = starter_prompt
+            starter_cols = st.columns(len(STARTER_PROMPTS))
+            for index, starter_prompt in enumerate(STARTER_PROMPTS):
+                with starter_cols[index]:
+                    if st.button(starter_prompt, key=f"deepseek_starter_{index}", use_container_width=True):
+                        _queue_chat_prompt(starter_prompt)
+                        st.rerun()
 
-    _render_chat_history()
+        _render_chat_history()
+        if st.session_state.get("deepseek_chat_last_error"):
+            st.error(f"❌ 回复失败：{st.session_state['deepseek_chat_last_error']}")
+            st.caption("如果这是首次使用，请先配置 `DEEPSEEK_API_KEY`，必要时再配置 `DEEPSEEK_BASE_URL`。")
 
-    chat_prompt = st.chat_input("输入你想和 DeepSeek 聊的内容", key="deepseek_chat_input")
-    if chat_prompt and chat_prompt.strip():
-        prompt_to_send = chat_prompt.strip()
+    st.markdown('<div class="chatbox-composer-anchor"></div>', unsafe_allow_html=True)
+    with st.form("deepseek_chat_composer", clear_on_submit=True):
+        col_input, col_send = st.columns([5, 1])
+        with col_input:
+            chat_prompt = st.text_input(
+                "输入你想和 DeepSeek 聊的内容",
+                placeholder="输入消息，按 Enter 或点击发送",
+                label_visibility="collapsed",
+                autocomplete="off",
+            )
+        with col_send:
+            submitted = st.form_submit_button("发送", type="primary", use_container_width=True)
 
-    st.caption("按 Enter 发送。这里适合自由聊天、追问、举例、对比和语法解释。")
-
-    if prompt_to_send:
-        _run_chat_turn(prompt_to_send)
+    if submitted and chat_prompt.strip():
+        _queue_chat_prompt(chat_prompt)
+        st.rerun()

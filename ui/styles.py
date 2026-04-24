@@ -497,6 +497,43 @@ GLOBAL_CSS = """
     .chatbox-empty strong {
         font-size: 1rem;
     }
+    .chatbox-scroll-anchor {
+        height: 0;
+    }
+    div[data-testid="stVerticalBlock"]:has(.chatbox-scroll-anchor) {
+        padding: 0.15rem 0.2rem 0.4rem;
+    }
+    .chatbox-composer-anchor {
+        height: 0;
+        margin-top: 0.65rem;
+    }
+    div[data-testid="stVerticalBlock"]:has(.chatbox-composer-anchor) .stForm {
+        margin-top: 0.55rem;
+        margin-bottom: 0;
+        padding: 0.75rem;
+        border-radius: 18px;
+        background: linear-gradient(135deg, var(--vf-surface-elevated) 0%, var(--vf-surface-soft) 100%);
+        border: 1px solid var(--vf-border);
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.1);
+    }
+    div[data-testid="stVerticalBlock"]:has(.chatbox-composer-anchor) .stTextInput > div > div > input {
+        min-height: 48px;
+        border-radius: 14px;
+        font-size: 16px;
+    }
+    div[data-testid="stVerticalBlock"]:has(.chatbox-composer-anchor) div[data-testid="stFormSubmitButton"] > button {
+        min-height: 48px;
+        margin-top: 0;
+        border: none;
+        color: #ffffff;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22);
+    }
+    div[data-testid="stVerticalBlock"]:has(.chatbox-composer-anchor) div[data-testid="stFormSubmitButton"] > button:hover {
+        color: #ffffff;
+        transform: translateY(-1px);
+        box-shadow: 0 14px 26px rgba(37, 99, 235, 0.3);
+    }
     div[data-testid="stVerticalBlock"]:has(.chatbox-empty) div[data-testid="stButton"] > button {
         min-height: 52px;
         padding: 0.75rem 0.95rem;
