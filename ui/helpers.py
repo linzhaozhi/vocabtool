@@ -27,6 +27,8 @@ def initialize_session_state() -> None:
             st.session_state[key] = default_value
     if "anki_cards_cache" not in st.session_state:
         st.session_state["anki_cards_cache"] = None
+    if "deepseek_chat_messages" not in st.session_state:
+        st.session_state["deepseek_chat_messages"] = []
 
 
 def set_anki_pkg(file_path: str, deck_name: str) -> None:

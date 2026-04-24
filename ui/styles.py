@@ -470,10 +470,10 @@ def render_app_header() -> None:
     """Render the static app header."""
     st.title("⚡️ 单词流 · 稳定版")
     st.caption(
-        f"把查词、提词、制卡分开处理。支持内置智能释义、词源与语音，默认词库来自 {constants.VOCAB_PROJECT_NAME}。"
+        f"把查词、提词、制卡、聊天分开处理。支持内置智能释义、词源、语音和 DeepSeek 聊天，默认词库来自 {constants.VOCAB_PROJECT_NAME}。"
     )
     st.markdown(
-        '<div class="workflow-banner">查词、提词、制卡三个步骤已经分开。先确认词，再整理词表，最后生成卡片，路径会更清楚。</div>',
+        '<div class="workflow-banner">查词、提词、制卡、聊天四个功能已经分开。先确认词，再整理词表，最后生成卡片；需要自由追问时，再进入 DeepSeek 聊天。</div>',
         unsafe_allow_html=True,
     )
 
@@ -492,6 +492,7 @@ def render_help_panel(vocab_available: bool) -> None:
     1. **查单词**：在“查单词”里快速获取释义、词源和双语例句。
     2. **提取单词**：在“提取单词”里从文章、文件、文本、单词表、Anki 导出或词频范围整理词表。
     3. **制作卡片**：在“制作卡片”里使用内置智能生成并下载 Anki 牌组。
+    4. **DeepSeek 聊天**：在“DeepSeek 聊天”里直接追问、解释、对比或自由讨论。
 
     **📚 当前词库**
     - 默认词库：NGSL 项目词表（`ngsl_31k.csv`）
@@ -505,7 +506,7 @@ def render_help_panel(vocab_available: bool) -> None:
     """
         )
 
-    st.caption("三个功能现在独立分区：先查词，再提词，最后制作卡片。")
+    st.caption("四个功能现在独立分区：先查词，再提词，再制作卡片；需要自由追问时，再去 DeepSeek 聊天。")
 
 
 def render_app_footer() -> None:

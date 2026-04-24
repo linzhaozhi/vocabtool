@@ -29,23 +29,41 @@ def extract_lookup_headword(raw_content: str) -> str:
     return ""
 
 
-def get_openai_client() -> Optional[Any]:
-    """Get configured OpenAI client with proper error handling."""
+def _get_configured_client(api_key: str, base_url: str, missing_key_message: str) -> Optional[Any]:
+    """Build an OpenAI-compatible client with shared validation and error handling."""
     if not OpenAI:
         st.error("❌ 未安装 OpenAI 库，无法使用内置 AI 功能。")
         return None
 
-    cfg = get_config()
-    api_key = cfg["openai_api_key"]
     if not api_key:
-        st.error("❌ 未找到 OPENAI_API_KEY。请在 .streamlit/secrets.toml 中配置。")
+        st.error(missing_key_message)
         return None
 
     try:
-        return OpenAI(api_key=api_key, base_url=cfg["openai_base_url"])
+        return OpenAI(api_key=api_key, base_url=base_url)
     except Exception as e:
         ErrorHandler.handle(e, "Failed to initialize OpenAI client")
         return None
+
+
+def get_openai_client() -> Optional[Any]:
+    """Get configured OpenAI client with proper error handling."""
+    cfg = get_config()
+    return _get_configured_client(
+        cfg["openai_api_key"],
+        cfg["openai_base_url"],
+        "❌ 未找到 OPENAI_API_KEY。请在 .streamlit/secrets.toml 中配置。",
+    )
+
+
+def get_deepseek_client() -> Optional[Any]:
+    """Get configured DeepSeek client through the OpenAI-compatible SDK."""
+    cfg = get_config()
+    return _get_configured_client(
+        cfg["deepseek_api_key"],
+        cfg["deepseek_base_url"],
+        "❌ 未找到 DEEPSEEK_API_KEY。请在 .streamlit/secrets.toml 中配置，或复用现有 OPENAI_API_KEY。",
+    )
 
 
 def get_word_quick_definition(word: str) -> Dict[str, Any]:
@@ -216,6 +234,56 @@ tour
     except Exception as e:
         logger.error("Error generating topic word list: %s", e)
         return {"error": str(e)}
+
+
+def chat_with_deepseek(messages: List[Dict[str, str]]) -> Dict[str, Any]:
+    """Send a multi-turn chat request to DeepSeek's chat model."""
+    client = get_deepseek_client()
+    if not client:
+        return {"error": "DeepSeek client not available"}
+
+    cfg = get_config()
+    model_name = cfg["deepseek_chat_model"]
+    normalized_messages: List[Dict[str, str]] = []
+
+    for message in messages[-constants.DEEPSEEK_CHAT_HISTORY_LIMIT:]:
+        role = str(message.get("role", "")).strip()
+        content = str(message.get("content", "")).strip()
+        if role in {"system", "user", "assistant"} and content:
+            normalized_messages.append({"role": role, "content": content})
+
+    if not normalized_messages:
+        return {"error": "No chat messages provided"}
+
+    if not any(message["role"] == "system" for message in normalized_messages):
+        normalized_messages.insert(
+            0,
+            {
+                "role": "system",
+                "content": (
+                    "你是 DeepSeek 聊天助手。回答时尽量清晰、直接、自然；"
+                    "用户用中文就优先用中文回答，需要时可以补充简短英文。"
+                ),
+            },
+        )
+
+    try:
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=normalized_messages,
+            temperature=0.7,
+        )
+        content = response.choices[0].message.content
+        if not content:
+            return {"error": "DeepSeek 返回了空内容"}
+        return {
+            "result": content,
+            "model": model_name,
+            "base_url": cfg["deepseek_base_url"],
+        }
+    except Exception as e:
+        logger.error("Error chatting with DeepSeek: %s", e)
+        return {"error": str(e), "model": model_name}
 
 
 def process_ai_in_batches(
