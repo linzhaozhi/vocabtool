@@ -263,7 +263,7 @@ def chat_with_deepseek(messages: List[Dict[str, str]]) -> Dict[str, Any]:
         }
     normalized_messages: List[Dict[str, str]] = []
 
-    for message in messages[-constants.DEEPSEEK_CHAT_HISTORY_LIMIT:]:
+    for message in messages:
         role = str(message.get("role", "")).strip()
         content = str(message.get("content", "")).strip()
         if role in {"system", "user", "assistant"} and content:

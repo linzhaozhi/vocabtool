@@ -60,6 +60,7 @@ def render_chat_tab() -> None:
     """Render the DeepSeek chat experience."""
     cfg = get_config()
     configured_model = str(cfg["deepseek_chat_model"]).strip()
+    history_count = len(st.session_state.get("deepseek_chat_messages", []))
     last_model = st.session_state.get("deepseek_chat_last_model") or {}
     requested_model = str(last_model.get("requested") or configured_model)
     returned_model = str(last_model.get("returned") or "等待首次返回")
@@ -75,6 +76,7 @@ def render_chat_tab() -> None:
                 <span class="chatbox-meta-pill">锁定模型：{html.escape(configured_model)}</span>
                 <span class="chatbox-meta-pill">请求模型：{html.escape(requested_model)}</span>
                 <span class="chatbox-meta-pill">返回模型：{html.escape(returned_model)}</span>
+                <span class="chatbox-meta-pill">上下文：全部会话（{history_count} 条）</span>
             </div>
         </div>
         """,
