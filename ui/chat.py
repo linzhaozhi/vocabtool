@@ -18,8 +18,7 @@ def _render_chat_history() -> None:
         role = message.get("role")
         if role not in {"user", "assistant"}:
             continue
-        avatar = "🙂" if role == "user" else "DS"
-        with st.chat_message(role, avatar=avatar):
+        with st.chat_message(role):
             st.markdown(message.get("content", ""))
 
 
@@ -31,10 +30,10 @@ def _run_chat_turn(prompt: str) -> None:
 
     st.session_state["deepseek_chat_messages"].append({"role": "user", "content": user_message})
 
-    with st.chat_message("user", avatar="🙂"):
+    with st.chat_message("user"):
         st.markdown(user_message)
 
-    with st.chat_message("assistant", avatar="DS"):
+    with st.chat_message("assistant"):
         with st.spinner("DeepSeek 正在回复..."):
             result = chat_with_deepseek(st.session_state["deepseek_chat_messages"])
 
