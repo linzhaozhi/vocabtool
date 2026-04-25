@@ -121,6 +121,37 @@ def sync_card_editor_to_extract() -> None:
     st.session_state["extract_word_editor"] = st.session_state.get("word_list_editor", "")
 
 
+def clear_quick_lookup_state() -> None:
+    """Clear quick lookup input and its rendered result."""
+    st.session_state["quick_lookup_word"] = ""
+    st.session_state["quick_lookup_last_query"] = ""
+    st.session_state["quick_lookup_last_result"] = None
+    st.session_state["quick_lookup_is_loading"] = False
+
+
+def clear_topic_wordlist_state() -> None:
+    """Clear topic word-list input and generated output."""
+    st.session_state["topic_word_topic"] = ""
+    st.session_state["topic_wordlist_result"] = ""
+    st.session_state["topic_wordlist_words"] = []
+
+
+def clear_url_input() -> None:
+    """Clear article URL input."""
+    st.session_state["url_input_key"] = ""
+
+
+def clear_paste_input() -> None:
+    """Clear pasted text input."""
+    st.session_state["paste_key"] = ""
+
+
+def clear_direct_wordlist_input(file_signature: str = "") -> None:
+    """Clear direct word-list text input."""
+    st.session_state["direct_wordlist_input"] = ""
+    st.session_state["direct_wordlist_file_signature"] = file_signature
+
+
 def normalize_lookup_query(raw_text: str) -> str:
     """Normalize lookup input by collapsing repeated whitespace."""
     return re.sub(r"\s+", " ", raw_text).strip()

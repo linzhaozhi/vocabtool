@@ -7,7 +7,13 @@ import streamlit as st
 import constants
 from ai import generate_topic_word_list, get_word_quick_definition
 from state import set_generated_words_state
-from ui.helpers import parse_topic_word_list, validate_lookup_query, validate_topic_label
+from ui.helpers import (
+    clear_quick_lookup_state,
+    clear_topic_wordlist_state,
+    parse_topic_word_list,
+    validate_lookup_query,
+    validate_topic_label,
+)
 from utils import render_copy_button
 
 
@@ -26,7 +32,7 @@ def _render_quick_lookup() -> None:
         st.session_state["quick_lookup_cache_keys"] = []
 
     with st.form("quick_lookup_form", clear_on_submit=False):
-        col_word, col_btn = st.columns([4, 1])
+        col_word, col_btn, col_clear = st.columns([4, 1, 1])
         with col_word:
             lookup_word = st.text_input(
                 "输入单词或短语",
@@ -41,6 +47,13 @@ def _render_quick_lookup() -> None:
                 type="primary",
                 use_container_width=True,
                 disabled=st.session_state["quick_lookup_is_loading"],
+            )
+        with col_clear:
+            st.form_submit_button(
+                "清空",
+                type="secondary",
+                use_container_width=True,
+                on_click=clear_quick_lookup_state,
             )
 
     if lookup_submit:
@@ -160,7 +173,7 @@ def render_lookup_tab(vocab_dict: dict[str, int]) -> None:
         st.session_state["topic_wordlist_words"] = []
 
     with st.form("topic_wordlist_form", clear_on_submit=False):
-        col_topic, col_count, col_submit = st.columns([3, 2, 1])
+        col_topic, col_count, col_submit, col_clear = st.columns([3, 2, 1, 1])
         with col_topic:
             topic_word_topic = st.text_input(
                 "输入主题",
@@ -181,6 +194,13 @@ def render_lookup_tab(vocab_dict: dict[str, int]) -> None:
             )
         with col_submit:
             topic_word_submit = st.form_submit_button("生成", type="primary", use_container_width=True)
+        with col_clear:
+            st.form_submit_button(
+                "清空",
+                type="secondary",
+                use_container_width=True,
+                on_click=clear_topic_wordlist_state,
+            )
 
     if topic_word_submit:
         is_valid_topic, normalized_topic, error_message = validate_topic_label(topic_word_topic)

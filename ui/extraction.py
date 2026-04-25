@@ -18,6 +18,9 @@ from state import set_generated_words_state
 from ui.helpers import (
     EXTRACT_SOURCE_OPTIONS,
     EXTRACT_SOURCE_WIDGET_KEY,
+    clear_direct_wordlist_input,
+    clear_paste_input,
+    clear_url_input,
     handle_extract_source_change,
     normalize_extract_source_mode,
     parse_unique_words,
@@ -134,11 +137,21 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
         if extract_source_mode == "文章 URL":
             st.markdown("#### 输入文章链接")
             st.caption("输入文章链接后自动抓取正文，再按词频范围提取目标词。")
-            input_url = st.text_input(
-                "🔗 输入文章链接",
-                placeholder="https://www.economist.com/...",
-                key="url_input_key",
-            )
+            col_url_input, col_url_clear = st.columns([5, 1])
+            with col_url_input:
+                input_url = st.text_input(
+                    "🔗 输入文章链接",
+                    placeholder="https://www.economist.com/...",
+                    key="url_input_key",
+                )
+            with col_url_clear:
+                st.button(
+                    "清空",
+                    type="secondary",
+                    key="btn_clear_url_input",
+                    on_click=clear_url_input,
+                    use_container_width=True,
+                )
             button_key = "btn_extract_url"
             missing_source_message = "⚠️ 请先输入文章链接。"
         elif extract_source_mode == "文件":
@@ -157,11 +170,23 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
         else:
             st.markdown("#### 粘贴文本")
             st.caption("适合直接粘贴文章、笔记或段落内容，再按词频范围提取目标词。")
+            col_text_label, col_text_clear = st.columns([5, 1])
+            with col_text_label:
+                st.markdown("输入文本内容")
+            with col_text_clear:
+                st.button(
+                    "清空",
+                    type="secondary",
+                    key="btn_clear_paste_input",
+                    on_click=clear_paste_input,
+                    use_container_width=True,
+                )
             pasted_text = st.text_area(
                 "粘贴文本内容",
                 height=180,
                 key="paste_key",
                 placeholder="支持直接粘贴文章内容...",
+                label_visibility="collapsed",
             )
             button_key = "btn_extract_text"
             missing_source_message = "⚠️ 请先输入要分析的文本内容。"
@@ -226,11 +251,36 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
                 elif prefilled_text:
                     st.success("✅ 已读取词表文件内容")
 
+        if "direct_wordlist_input" not in st.session_state:
+            st.session_state["direct_wordlist_input"] = ""
+
+        file_signature = ""
+        if word_list_file:
+            file_signature = f"{getattr(word_list_file, 'name', '')}:{getattr(word_list_file, 'size', '')}"
+
+        if word_list_file and prefilled_text:
+            if st.session_state.get("direct_wordlist_file_signature") != file_signature:
+                st.session_state["direct_wordlist_input"] = prefilled_text
+                st.session_state["direct_wordlist_file_signature"] = file_signature
+
+        col_wordlist_label, col_wordlist_clear = st.columns([5, 1])
+        with col_wordlist_label:
+            st.markdown("输入单词列表")
+        with col_wordlist_clear:
+            st.button(
+                "清空",
+                type="secondary",
+                key="btn_clear_direct_wordlist_input",
+                on_click=clear_direct_wordlist_input,
+                args=(file_signature,),
+                use_container_width=True,
+            )
         raw_input = st.text_area(
             "✍️ 粘贴单词列表（每行一个或逗号分隔）",
             height=220,
-            value=prefilled_text,
+            key="direct_wordlist_input",
             placeholder="altruism\nhectic\nserendipity",
+            label_visibility="collapsed",
         )
 
         if st.button("🚀 导入词表", key="btn_direct", type="primary"):
