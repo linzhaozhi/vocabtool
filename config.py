@@ -25,10 +25,10 @@ def _normalize_provider(raw_provider: str, secrets) -> str:
     if provider in {"openai", "deepseek"}:
         return provider
 
-    if _secret_value(secrets, "DEEPSEEK_API_KEY"):
-        return "deepseek"
     if _secret_value(secrets, "OPENAI_API_KEY"):
         return "openai"
+    if _secret_value(secrets, "DEEPSEEK_API_KEY"):
+        return "deepseek"
     return "deepseek"
 
 
