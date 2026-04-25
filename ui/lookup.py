@@ -20,7 +20,9 @@ from utils import render_copy_button
 
 def _format_lookup_question_answer(raw_content: str) -> str:
     """Render freeform vocabulary answers safely while supporting simple Markdown."""
-    text = re.sub(r"</?[^>]+>", "", raw_content)
+    text = html.unescape(raw_content)
+    text = re.sub(r"</?\s*[A-Za-z][A-Za-z0-9:-]*(?:\s+[^<>]*)?>", "", text)
+    text = re.sub(r"&lt;/?\s*[A-Za-z][A-Za-z0-9:-]*(?:\s+[^&<>]*)?&gt;", "", text, flags=re.IGNORECASE)
     text = text.strip()
     if not text:
         return ""
