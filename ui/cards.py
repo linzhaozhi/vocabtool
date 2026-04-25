@@ -48,25 +48,14 @@ def render_cards_tab() -> None:
     selected_voice_code = constants.VOICE_MAP[selected_voice_label]
     st.caption("支持美音和英音；音频只朗读英文单词和英文例句，卡片会显示对应的美音/英音音标。")
 
-    col_audio, col_example_count = st.columns([2, 2])
-    with col_audio:
-        enable_audio_auto = st.checkbox("生成单词和例句音频", value=True, key="chk_audio_cards")
-    with col_example_count:
-        basic_example_count = st.radio(
-            "🧾 例句数量",
-            options=[1, 2],
-            index=constants.AI_CARD_EXAMPLE_COUNT_DEFAULT - 1,
-            horizontal=True,
-            format_func=lambda value: f"{value} 句",
-            key="sel_example_count",
-        )
-    selected_example_count = basic_example_count
+    enable_audio_auto = st.checkbox("生成单词和例句音频", value=True, key="chk_audio_cards")
+    selected_example_count = constants.AI_CARD_EXAMPLE_COUNT_DEFAULT
     definition_language = "中文"
     translate_examples = True
 
     with st.expander("高级功能：自定义卡片", expanded=False):
         custom_cards_enabled = st.checkbox("启用自定义卡片设置", value=False, key="chk_custom_cards_enabled")
-        st.caption("默认模式适合快速制卡；启用后可以自定义例句数量、释义语言和是否生成例句翻译。")
+        st.caption("默认模式固定 1 个例句，适合快速制卡；启用后可以自定义例句数量、释义语言和是否生成例句翻译。")
         if custom_cards_enabled:
             col_adv_example, col_adv_meaning, col_adv_translation = st.columns([2, 2, 2])
             with col_adv_example:
