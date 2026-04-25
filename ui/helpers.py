@@ -1,5 +1,7 @@
 """Shared UI helpers for state, validation, and extraction-source handling."""
 
+from __future__ import annotations
+
 import logging
 import os
 import random
@@ -248,14 +250,108 @@ def is_chinese_gloss_query(query: str) -> bool:
     return not any(phrase in query for phrase in blocked_phrases)
 
 
+def is_vocabulary_lookup_question(query: str) -> bool:
+    """Allow short vocabulary questions without turning lookup into general chat."""
+    if len(query) > 120 or "\n" in query:
+        return False
+    if re.search(r"https?://|www\.|[`<>_=+*{}[\]|\\]", query, flags=re.IGNORECASE):
+        return False
+
+    compact = query.replace(" ", "")
+    if len(compact) < 2:
+        return False
+
+    lowered = query.lower()
+    blocked_phrases = (
+        "写一篇",
+        "写作文",
+        "写邮件",
+        "写代码",
+        "帮我写",
+        "总结",
+        "分析这篇",
+        "翻译这段",
+        "聊天",
+        "角色扮演",
+        "新闻",
+        "天气",
+        "股票",
+        "代码",
+        "编程",
+        "python",
+        "javascript",
+        "streamlit",
+        "write an essay",
+        "write code",
+        "summarize",
+        "news",
+        "weather",
+        "stock",
+        "roleplay",
+        "chat with me",
+    )
+    if any(phrase in lowered for phrase in blocked_phrases):
+        return False
+
+    vocab_markers = (
+        "区别",
+        "差别",
+        "不同",
+        "辨析",
+        "对比",
+        "比较",
+        "用法",
+        "怎么用",
+        "什么意思",
+        "意思",
+        "含义",
+        "例句",
+        "造句",
+        "近义",
+        "同义",
+        "反义",
+        "词源",
+        "音标",
+        "发音",
+        "搭配",
+        "vs",
+        " versus ",
+        "difference",
+        "different",
+        "compare",
+        "comparison",
+        "meaning",
+        "mean",
+        "usage",
+        "example",
+        "sentence",
+        "synonym",
+        "antonym",
+        "pronunciation",
+        "ipa",
+        "etymology",
+        "collocation",
+    )
+    has_vocab_marker = any(marker in lowered for marker in vocab_markers)
+    has_english = bool(re.search(r"[A-Za-z]", query))
+    has_chinese = bool(re.search(r"[\u4e00-\u9fff]", query))
+    if not has_vocab_marker:
+        return False
+    if has_english:
+        return len(re.findall(r"[A-Za-z]+(?:['-][A-Za-z]+)*", query)) <= 12
+    if has_chinese:
+        return len(compact) <= 40
+    return False
+
+
 def validate_lookup_query(raw_text: str) -> tuple[bool, str, str]:
     """Validate quick-lookup input and return (is_valid, normalized_query, error)."""
     query = normalize_lookup_query(raw_text)
     if not query:
-        return False, "", "⚠️ 请输入单词、短语或简短中文释义。"
-    if is_english_lookup_query(query) or is_chinese_gloss_query(query):
+        return False, "", "⚠️ 请输入单词、短语、简短中文释义或词汇问题。"
+    if is_english_lookup_query(query) or is_chinese_gloss_query(query) or is_vocabulary_lookup_question(query):
         return True, query, ""
-    return False, "", "⚠️ 这里只能查询英文单词/短语，或很短的中文释义词组；不支持提问、聊天或整句输入。"
+    return False, "", "⚠️ 这里只适合查询单词、短语、中文释义或简短词汇问题；不支持长文本、泛聊天或非词汇任务。"
 
 
 def extract_code_block_text(raw_text: str) -> str:

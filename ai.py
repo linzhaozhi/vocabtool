@@ -168,31 +168,67 @@ def _definition_instruction(definition_language: str) -> str:
     return "Concise Simplified Chinese only."
 
 
+def _is_lookup_question(query: str) -> bool:
+    """Detect short vocabulary questions so the UI can avoid showing a fake rank."""
+    lowered = query.lower()
+    markers = (
+        "区别",
+        "差别",
+        "不同",
+        "辨析",
+        "对比",
+        "比较",
+        "用法",
+        "怎么用",
+        "什么意思",
+        "例句",
+        "造句",
+        "近义",
+        "同义",
+        "反义",
+        "搭配",
+        "vs",
+        "versus",
+        "difference",
+        "compare",
+        "usage",
+        "meaning",
+        "example",
+        "synonym",
+        "antonym",
+        "collocation",
+    )
+    return any(marker in lowered for marker in markers)
+
+
 def get_word_quick_definition(word: str) -> Dict[str, Any]:
     """Get ultra-concise word definition using AI, with rank info."""
     vocab_dict = get_vocab_dict()
     model_name = get_ai_model()
+    is_question = _is_lookup_question(word)
 
-    system_prompt = """You are a strict English-Chinese dictionary generator.
+    system_prompt = """You are a strict English-Chinese vocabulary helper.
 
 Task:
-Return dictionary information for one English word or short English phrase.
+Return concise vocabulary help for one word, short phrase, short Chinese gloss, or short vocabulary question.
 The user input may be:
 - an English word
 - an English phrase
 - a short Chinese meaning
+- a short vocabulary question about meaning, usage, examples, synonyms, or differences between words
 
 Rules:
 - If the input is Chinese, infer the most natural and common English word or phrase first.
-- Explain only the most common sense.
+- If the input asks about differences, compare only the requested words or phrases.
+- Keep the answer focused on vocabulary learning.
 - Do not chat.
 - Do not explain your reasoning.
-- Include both US and UK IPA.
-- Examples must match the same sense.
-- Each example must include a Chinese translation.
-- Put etymology after the examples.
+- Do not answer non-vocabulary tasks.
+- Include US and UK IPA when explaining a specific English word or phrase.
+- Examples must include Chinese translations.
+- Prefer Simplified Chinese explanations with English examples.
 
-Output exactly in this format:
+For a single word, phrase, or Chinese gloss, output exactly:
 
 [word_or_phrase in lowercase]
 🔊 美 /US_IPA/；英 /UK_IPA/
@@ -200,6 +236,16 @@ Output exactly in this format:
 • [English example 1] ([Chinese translation])
 • [English example 2] ([Chinese translation])
 🌱 词源: [brief etymology in Simplified Chinese]
+
+For a comparison or usage question, output exactly:
+
+[short lowercase title]
+🔊 [word 1] 美 /US_IPA/；英 /UK_IPA/；[word 2] 美 /US_IPA/；英 /UK_IPA/  (only include words that need IPA)
+核心区别: [one concise Chinese sentence]
+• [word/phrase 1]: [Chinese explanation]
+• [word/phrase 2]: [Chinese explanation]
+• [English example showing the contrast] ([Chinese translation])
+使用建议: [one concise Chinese sentence]
 
 If IPA is uncertain, provide the most common pronunciation.
 Do not output anything else."""
@@ -220,8 +266,8 @@ Do not output anything else."""
 
         content = response.get("content", "")
         headword = extract_lookup_headword(content)
-        rank = vocab_dict.get(headword, 99999)
-        return {"result": content, "rank": rank, "headword": headword}
+        rank = None if is_question else vocab_dict.get(headword, 99999)
+        return {"result": content, "rank": rank, "headword": headword, "is_question": is_question}
 
     except Exception as e:
         logger.error("Error getting definition: %s", e)

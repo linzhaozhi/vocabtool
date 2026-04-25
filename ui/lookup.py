@@ -19,8 +19,8 @@ from utils import render_copy_button
 
 def _render_quick_lookup() -> None:
     st.markdown("### 🔍 极速查词")
-    st.caption("💡 只支持英文单词、短语，或很短的中文释义词组；不支持聊天式提问。查询结果显示美音/英音音标。")
-    st.markdown("例如：serendipity、take off、run into、偶然发现")
+    st.caption("💡 支持英文单词、短语、简短中文释义，也支持词汇问题，比如区别、用法、例句。")
+    st.markdown("例如：serendipity、take off、偶然发现、serendipity和luck的区别")
 
     if "quick_lookup_last_query" not in st.session_state:
         st.session_state["quick_lookup_last_query"] = ""
@@ -35,8 +35,8 @@ def _render_quick_lookup() -> None:
         col_word, col_btn, col_clear = st.columns([4, 1, 1])
         with col_word:
             lookup_word = st.text_input(
-                "输入单词或短语",
-                placeholder="输入英文单词、短语或中文释义",
+                "输入单词、短语或词汇问题",
+                placeholder="输入单词、短语、中文释义或词汇问题",
                 key="quick_lookup_word",
                 label_visibility="collapsed",
                 autocomplete="off",
@@ -112,23 +112,31 @@ def _render_quick_lookup() -> None:
 
         formatted_lines = head_lines + phonetic_lines + definition_lines + other_lines + example_lines + etymology_lines
         display_html = "".join(formatted_lines).replace("\n", "<br>")
-        rank = result.get("rank", 99999)
-
-        if rank <= 5000:
-            rank_color = "#10b981"
-            rank_label = "高频词"
-        elif rank <= 10000:
-            rank_color = "#3b82f6"
-            rank_label = "常用词"
-        elif rank <= 20000:
-            rank_color = "#f59e0b"
-            rank_label = "进阶词"
-        elif rank < 99999:
-            rank_color = "#ef4444"
-            rank_label = "专业词"
-        else:
-            rank_color = "#6b7280"
-            rank_label = "未收录"
+        rank = result.get("rank")
+        rank_badge_html = ""
+        if isinstance(rank, (int, float)):
+            if rank <= 5000:
+                rank_color = "#10b981"
+                rank_label = "高频词"
+            elif rank <= 10000:
+                rank_color = "#3b82f6"
+                rank_label = "常用词"
+            elif rank <= 20000:
+                rank_color = "#f59e0b"
+                rank_label = "进阶词"
+            elif rank < 99999:
+                rank_color = "#ef4444"
+                rank_label = "专业词"
+            else:
+                rank_color = "#6b7280"
+                rank_label = "未收录"
+            rank_badge_html = f"""
+                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--vf-border);">
+                    <span style="display: inline-block; background: {rank_color}; color: white; padding: 4px 12px; border-radius: 6px; font-size: 14px; font-weight: 600;">
+                        📊 {constants.VOCAB_PROJECT_NAME}词频排名：{rank}（{rank_label}）
+                    </span>
+                </div>
+            """
 
         st.markdown(
             f"""
@@ -137,11 +145,7 @@ def _render_quick_lookup() -> None:
                 <div class="quick-lookup-card">
                     {display_html}
                 </div>
-                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--vf-border);">
-                    <span style="display: inline-block; background: {rank_color}; color: white; padding: 4px 12px; border-radius: 6px; font-size: 14px; font-weight: 600;">
-                        📊 {constants.VOCAB_PROJECT_NAME}词频排名：{rank}（{rank_label}）
-                    </span>
-                </div>
+                {rank_badge_html}
             </div>
         </div>
         """,
