@@ -155,64 +155,36 @@ def get_word_quick_definition(word: str) -> Dict[str, Any]:
     vocab_dict = get_vocab_dict()
     model_name = get_ai_model()
 
-    system_prompt = """# Role
-Atomic Dictionary.
+    system_prompt = """You are a strict English-Chinese dictionary generator.
 
-# Goal
-Output ONE core meaning, US/UK phonetics, ONE etymology, and TWO matching examples.
+Task:
+Return dictionary information for one English word or short English phrase.
+The user input may be:
+- an English word
+- an English phrase
+- a short Chinese meaning
 
-# Input Understanding
-- The user input may be an English word/phrase OR a short Chinese gloss.
-- If the input is Chinese, infer the most natural English target word/phrase first.
-- Line 1 must ALWAYS be the final English word/phrase in lowercase.
-- Line 2 must ALWAYS contain both US and UK phonetics.
+Rules:
+- If the input is Chinese, infer the most natural and common English word or phrase first.
+- Explain only the most common sense.
+- Do not chat.
+- Do not explain your reasoning.
+- Include both US and UK IPA.
+- Examples must match the same sense.
+- Each example must include a Chinese translation.
+- Put etymology after the examples.
 
-# Critical Constraint: ATOMIC SINGLE SENSE
-- **Force Single Sense**: Regardless of how many meanings a word has, pick ONLY the #1 most common one.
-- **Strict Alignment**: The Definition, Etymology, and BOTH Examples must strictly support this single meaning.
-- **Format**: Follow the 6-line structure below perfectly.
+Output exactly in this format:
 
-# Output Format
-[word] (lowercase)
-🔊 美 /US IPA/；英 /UK IPA/
-[CN Meaning] | [Short EN Definition (<8 words)]
-🌱 词源: [root (CN) + affix (CN)] (Explain origin briefly)
-• [English Example 1] ([CN Trans])
-• [English Example 2] ([CN Trans])
+[word_or_phrase in lowercase]
+🔊 美 /US_IPA/；英 /UK_IPA/
+[Chinese meaning] | [English definition under 8 words]
+• [English example 1] ([Chinese translation])
+• [English example 2] ([Chinese translation])
+🌱 词源: [brief etymology in Simplified Chinese]
 
-# Few-Shot Examples (Demonstrating Selection)
-**User Input:**
-spring
-
-**Model Output:**
-spring
-🔊 美 /sprɪŋ/；英 /sprɪŋ/
-春天 | The season after winter
-🌱 词源: spring- (涌出/生长) → 万物复苏
-• Flowers bloom in spring. (花朵在春天绽放。)
-• I love the fresh air of spring. (我喜欢春天清新的空气。)
-
-**User Input:**
-date
-
-**Model Output:**
-date
-🔊 美 /deɪt/；英 /deɪt/
-日期 | Specific day of the month
-🌱 词源: dat- (给予/指定) + -e (名词后缀)
-• What is today's date? (今天是几号？)
-• Please sign and date the form. (请在表格上签名并注明日期的。)
-
-**User Input:**
-express
-
-**Model Output:**
-express
-🔊 美 /ɪkˈspres/；英 /ɪkˈspres/
-表达；表示 | Convey a thought or feeling
-🌱 词源: ex- (向外) + press (压/挤)
-• She expressed her thanks to us. (她向我们表达了谢意。)
-• Words cannot express my feelings. (言语无法表达我的感受。)"""
+If IPA is uncertain, provide the most common pronunciation.
+Do not output anything else."""
 
     user_prompt = word
 
@@ -247,49 +219,31 @@ def generate_topic_word_list(topic: str, count: int) -> Dict[str, Any]:
 
     normalized_count = max(1, min(int(count), constants.AI_TOPIC_WORDLIST_MAX))
 
-    system_prompt = f"""# Role
-Topic Vocabulary Curator.
+    system_prompt = f"""You are an English topic vocabulary generator.
 
-# Goal
-Create a practical English word list for the given topic.
+Task:
+Generate a common, practical, high-frequency English vocabulary list for the given topic.
 
-# Input
-- The topic may be in Chinese or English.
-- The target length is provided separately.
-- Never generate more than {constants.AI_TOPIC_WORDLIST_MAX} entries.
+Rules:
+- Generate no more than {constants.AI_TOPIC_WORDLIST_MAX} items.
+- Output only one ```text code block.
+- One English word or phrase per line.
+- Use lowercase only.
+- Do not number the lines.
+- Do not use bullet points.
+- Do not output Chinese.
+- Do not add explanations.
+- Do not add category headings.
+- Prefer common, useful, high-frequency vocabulary.
+- Prefer single words; use short phrases only when they are very common.
+- Do not repeat items.
 
-# Output Rules
-- Output strictly inside one ```text code block.
-- One entry per line.
-- English only.
-- lowercase only.
-- No numbering.
-- No bullets.
-- No Chinese.
-- No explanations, headings, labels, or categories.
-- Prefer single words; use very short phrases only when they are clearly common and useful.
+Output format:
 
-# Quality Standard
-- Choose common, practical, high-frequency vocabulary tied closely to the topic.
-- Avoid obscure, literary, or overly technical words unless the topic clearly requires them.
-
-# Example
-Topic: travel
-Count: 12
-Output:
 ```text
-travel
-trip
-ticket
-hotel
-flight
-passport
-luggage
-map
-train
-airport
-booking
-tour
+word
+short phrase
+another word
 ```"""
 
     try:
@@ -332,61 +286,53 @@ def process_ai_in_batches(
     full_results = []
     failed_batches: list[str] = []
 
-    system_prompt = "You are a helpful assistant for vocabulary learning."
-    example_demo = (
-        "hectic schedule ||| 美 /ˈhektɪk/；英 /ˈhektɪk/ ||| 忙乱的日程/非常忙碌 ||| "
-        "She has a hectic schedule with meetings all day. ||| "
-        "她的日程很忙，一整天都排满了会议。 ||| "
-        "hect- (持续/习惯 - 希腊语) + -ic (形容词后缀)"
-        if example_count == 1 else
-        "hectic schedule ||| 美 /ˈhektɪk/；英 /ˈhektɪk/ ||| 忙乱的日程/非常忙碌 ||| "
-        "She has a hectic schedule with meetings all day.<br>My week became hectic before the trip. ||| "
-        "她的日程很忙，一整天都排满了会议。<br>旅行前我的一周变得非常忙乱。 ||| "
-        "hect- (持续/习惯 - 希腊语) + -ic (形容词后缀)"
-    )
+    system_prompt = "You are a strict Anki vocabulary card generator."
 
     for i in range(0, total_words, constants.AI_BATCH_SIZE):
         batch = words_list[i:i + constants.AI_BATCH_SIZE]
         current_batch_str = "\n".join(batch)
 
-        user_prompt = f"""# Role
-You are an expert English Lexicographer.
-# Input Data
+        user_prompt = f"""Task:
+Convert the input word or phrase list into Anki card data.
+
+Input items:
 {current_batch_str}
 
-# Output Format Guidelines
-1. **Output Container**: Strictly inside a single ```text code block.
-2. **Layout**: One entry per line.
-3. **Separator**: Use `|||` as the delimiter.
-4. **Target Structure**:
-   `Word/Phrase` ||| `Pronunciation` ||| `Chinese Definition` ||| `English Example Sentence(s)` ||| `Chinese Translation(s)` ||| `Etymology (Chinese)`
+Output rules:
+- Output only one ```text code block.
+- One input item per line.
+- Each line must contain exactly 6 fields.
+- Fields must be separated only by |||.
+- Do not number the lines.
+- Do not add explanations.
+- Do not omit any input item.
+- Do not merge multiple input items.
+- Do not output anything outside the code block.
 
-# Field Constraints
-1. Field 1: Phrase - Output the target word OR a very short high-frequency collocation (1-3 words max).
-2. Field 2: Pronunciation - Output BOTH pronunciations in this exact format: `美 /.../；英 /.../`.
-3. Field 3: Definition - **Simplified Chinese Only**. Concise meaning corresponding to the phrase.
-4. Field 4: Example - Exactly {example_count} short authentic English sentence(s).
-   - If {example_count} is 1, output just 1 sentence.
-   - If {example_count} is 2, join the 2 sentences with `<br>`.
-5. Field 5: Example Translation - **Simplified Chinese Only**. Must faithfully translate Field 4 in matching order.
-   - If {example_count} is 1, output just 1 translation.
-   - If {example_count} is 2, join the 2 translations with `<br>`.
-6. Field 6: Etymology - **Simplified Chinese Only**. Format: `root (CN meaning) + affix (CN meaning)`.
+Field format:
+Word/Phrase ||| Pronunciation ||| Chinese Meaning ||| English Example(s) ||| Chinese Translation(s) ||| Etymology
 
-# Valid Example
-Input: hectic
-Output:
-{example_demo}
+Field requirements:
+1. Word/Phrase: English word or phrase, preferably lowercase.
+2. Pronunciation: must follow exactly this format: 美 /.../；英 /.../
+3. Chinese Meaning: concise Simplified Chinese.
+4. English Example(s): generate exactly {example_count} natural and short English example sentence(s).
+5. Chinese Translation(s): translate field 4 sentence by sentence into Simplified Chinese.
+6. Etymology: briefly explain root, affix, or origin in Simplified Chinese.
 
-# Task
-Process the input list strictly.
+If {example_count}=1:
+- Field 4 contains exactly 1 English sentence.
+- Field 5 contains exactly 1 Chinese translation.
 
-# Final Checks
-- Every line must contain exactly 6 fields separated by `|||`.
-- Field 2 must include both `美 /.../` and `英 /.../`.
-- Field 5 must translate Field 4, not the isolated word.
-- If {example_count} is 2, Field 4 and Field 5 must each contain exactly 2 items separated by `<br>` in matching order.
-- Do not omit any input item."""
+If {example_count}=2:
+- Field 4 joins the 2 English sentences with <br>.
+- Field 5 joins the 2 Chinese translations with <br>.
+- Translation order must match the English examples.
+
+Final check:
+Each line must contain exactly 5 occurrences of |||.
+Each line must contain both US and UK pronunciation.
+Output only the text code block."""
 
         for attempt in range(constants.MAX_RETRIES):
             try:
