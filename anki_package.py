@@ -122,6 +122,7 @@ def generate_anki_package(
     with tempfile_mod.TemporaryDirectory() as tmp_dir:
         notes_buffer = []
         audio_tasks = []
+        prepared_cards = []
 
         for idx, card in enumerate(cards_data):
             phrase = safe_str_clean(card.get('w', ''))
@@ -134,6 +135,21 @@ def generate_anki_package(
 
             audio_phrase_field = ""
             audio_example_field = ""
+            prepared_card = {
+                'phrase': phrase,
+                'phonetic': phonetic,
+                'meaning': meaning,
+                'example': example,
+                'example_translation': example_translation,
+                'etymology': etymology,
+                'note_id': note_id,
+                'audio_phrase_field': audio_phrase_field,
+                'audio_example_field': audio_example_field,
+                'phrase_audio_path': "",
+                'phrase_audio_filename': "",
+                'example_audio_path': "",
+                'example_audio_filename': "",
+            }
 
             if enable_tts and phrase:
                 safe_phrase = re.sub(r'[^a-zA-Z0-9]', '_', phrase)[:20]
@@ -146,8 +162,8 @@ def generate_anki_package(
                     'path': phrase_path,
                     'voice': tts_voice
                 })
-                media_files.append(phrase_path)
-                audio_phrase_field = f"[sound:{phrase_filename}]"
+                prepared_card['phrase_audio_path'] = phrase_path
+                prepared_card['phrase_audio_filename'] = phrase_filename
 
                 tts_example = re.sub(r'<br\s*/?>', '. ', example, flags=re.IGNORECASE)
                 tts_example = re.sub(r'\s+', ' ', tts_example).strip()
@@ -159,21 +175,10 @@ def generate_anki_package(
                         'path': example_path,
                         'voice': tts_voice
                     })
-                    media_files.append(example_path)
-                    audio_example_field = f"[sound:{example_filename}]"
+                    prepared_card['example_audio_path'] = example_path
+                    prepared_card['example_audio_filename'] = example_filename
 
-            if note_id:
-                note = genanki.Note(
-                    model=model,
-                    fields=[phrase, phonetic, meaning, example, example_translation, etymology, audio_phrase_field, audio_example_field],
-                    guid=note_id
-                )
-            else:
-                note = genanki.Note(
-                    model=model,
-                    fields=[phrase, phonetic, meaning, example, example_translation, etymology, audio_phrase_field, audio_example_field]
-                )
-            notes_buffer.append(note)
+            prepared_cards.append(prepared_card)
 
         if audio_tasks:
             if progress_callback:
@@ -184,8 +189,62 @@ def generate_anki_package(
                     progress_callback(ratio, f"🎙️ {msg}")
 
             run_async_batch(audio_tasks, concurrency=constants.TTS_CONCURRENCY, progress_callback=internal_progress)
+
+            successful_audio_count = 0
+            for prepared_card in prepared_cards:
+                phrase_audio_path = prepared_card.get('phrase_audio_path', '')
+                if (
+                    phrase_audio_path
+                    and os.path.exists(phrase_audio_path)
+                    and os.path.getsize(phrase_audio_path) > constants.MIN_AUDIO_FILE_SIZE
+                ):
+                    prepared_card['audio_phrase_field'] = f"[sound:{prepared_card['phrase_audio_filename']}]"
+                    media_files.append(phrase_audio_path)
+                    successful_audio_count += 1
+
+                example_audio_path = prepared_card.get('example_audio_path', '')
+                if (
+                    example_audio_path
+                    and os.path.exists(example_audio_path)
+                    and os.path.getsize(example_audio_path) > constants.MIN_AUDIO_FILE_SIZE
+                ):
+                    prepared_card['audio_example_field'] = f"[sound:{prepared_card['example_audio_filename']}]"
+                    media_files.append(example_audio_path)
+                    successful_audio_count += 1
+
+            if progress_callback:
+                if successful_audio_count:
+                    progress_callback(1.0, f"🎙️ 已生成 {successful_audio_count}/{len(audio_tasks)} 个音频，正在打包。")
+                else:
+                    progress_callback(1.0, "🎙️ 音频生成失败。")
+            if not successful_audio_count:
+                raise RuntimeError("语音生成失败，请检查网络连接，或关闭“生成单词和例句音频”后重试。")
         elif progress_callback:
             progress_callback(1.0, "🎙️ 未启用语音，已跳过音频生成。")
+
+        for prepared_card in prepared_cards:
+            fields = [
+                prepared_card['phrase'],
+                prepared_card['phonetic'],
+                prepared_card['meaning'],
+                prepared_card['example'],
+                prepared_card['example_translation'],
+                prepared_card['etymology'],
+                prepared_card['audio_phrase_field'],
+                prepared_card['audio_example_field'],
+            ]
+            if prepared_card['note_id']:
+                note = genanki.Note(
+                    model=model,
+                    fields=fields,
+                    guid=prepared_card['note_id']
+                )
+            else:
+                note = genanki.Note(
+                    model=model,
+                    fields=fields
+                )
+            notes_buffer.append(note)
 
         for note in notes_buffer:
             deck.add_note(note)

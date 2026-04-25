@@ -278,7 +278,9 @@ GLOBAL_CSS = """
         transform: translateY(-1px);
         box-shadow: 0 16px 28px rgba(37, 99, 235, 0.26);
     }
-    div[data-testid="stVerticalBlock"]:has(.card-generate-hint) div[data-testid="stButton"] > button {
+    .st-key-btn_generate_cards button,
+    [class*="st-key-btn_generate_cards"] button,
+    div[data-testid="stElementContainer"]:has(.card-generate-hint) + div[data-testid="stElementContainer"] div[data-testid="stButton"] > button {
         width: min(100%, 26rem);
         min-height: 78px;
         padding: 0.85rem 1.4rem;
@@ -286,22 +288,28 @@ GLOBAL_CSS = """
         font-size: 23px;
         font-weight: 700;
         letter-spacing: 0.01em;
-        color: #ffffff;
-        border: none;
-        background: linear-gradient(135deg, #ef4444 0%, #dc2626 38%, #b91c1c 72%, #7f1d1d 100%);
-        box-shadow: 0 18px 34px rgba(220, 38, 38, 0.34);
+        color: #ffffff !important;
+        border: none !important;
+        background: linear-gradient(135deg, #ef4444 0%, #dc2626 38%, #b91c1c 72%, #7f1d1d 100%) !important;
+        box-shadow: 0 18px 34px rgba(220, 38, 38, 0.34) !important;
         justify-content: flex-start;
         text-align: left;
     }
-    div[data-testid="stVerticalBlock"]:has(.card-generate-hint) div[data-testid="stButton"] > button:hover {
-        color: #ffffff;
+    .st-key-btn_generate_cards button:hover,
+    [class*="st-key-btn_generate_cards"] button:hover,
+    div[data-testid="stElementContainer"]:has(.card-generate-hint) + div[data-testid="stElementContainer"] div[data-testid="stButton"] > button:hover {
+        color: #ffffff !important;
         transform: translateY(-1px);
-        box-shadow: 0 22px 38px rgba(185, 28, 28, 0.42);
+        box-shadow: 0 22px 38px rgba(185, 28, 28, 0.42) !important;
     }
-    div[data-testid="stVerticalBlock"]:has(.card-generate-hint) div[data-testid="stButton"] > button:focus {
-        box-shadow: 0 0 0 2px rgba(254, 202, 202, 0.55), 0 18px 34px rgba(220, 38, 38, 0.34);
+    .st-key-btn_generate_cards button:focus,
+    [class*="st-key-btn_generate_cards"] button:focus,
+    div[data-testid="stElementContainer"]:has(.card-generate-hint) + div[data-testid="stElementContainer"] div[data-testid="stButton"] > button:focus {
+        box-shadow: 0 0 0 2px rgba(254, 202, 202, 0.55), 0 18px 34px rgba(220, 38, 38, 0.34) !important;
     }
-    div[data-testid="stVerticalBlock"]:has(.card-generate-hint) div[data-testid="stButton"] {
+    .st-key-btn_generate_cards,
+    [class*="st-key-btn_generate_cards"],
+    div[data-testid="stElementContainer"]:has(.card-generate-hint) + div[data-testid="stElementContainer"] div[data-testid="stButton"] {
         display: flex;
         justify-content: flex-start;
     }
