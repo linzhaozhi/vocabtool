@@ -86,32 +86,36 @@ def _render_quick_lookup() -> None:
     result = st.session_state.get("quick_lookup_last_result")
     if result and "error" not in result:
         raw_content = result["result"]
-        lines = [line.strip() for line in raw_content.split("\n") if line.strip()]
-        head_lines = []
-        phonetic_lines = []
-        definition_lines = []
-        example_lines = []
-        etymology_lines = []
-        other_lines = []
+        if result.get("is_question"):
+            safe_content = html.escape(raw_content).replace("\n", "<br>")
+            display_html = f'<div class="quick-lookup-line quick-lookup-cn">{safe_content}</div>'
+        else:
+            lines = [line.strip() for line in raw_content.split("\n") if line.strip()]
+            head_lines = []
+            phonetic_lines = []
+            definition_lines = []
+            example_lines = []
+            etymology_lines = []
+            other_lines = []
 
-        for idx, line in enumerate(lines):
-            safe_line = html.escape(line)
+            for idx, line in enumerate(lines):
+                safe_line = html.escape(line)
 
-            if line.startswith("🌱"):
-                etymology_lines.append(f'<div class="quick-lookup-line quick-lookup-ety">{safe_line}</div>')
-            elif line.startswith("🔊"):
-                phonetic_lines.append(f'<div class="quick-lookup-line quick-lookup-phon">{safe_line}</div>')
-            elif "|" in line and len(line) < 50:
-                definition_lines.append(f'<div class="quick-lookup-line quick-lookup-def">{safe_line}</div>')
-            elif line.startswith("•"):
-                example_lines.append(f'<div class="quick-lookup-line quick-lookup-ex">{safe_line}</div>')
-            elif idx == 0:
-                head_lines.append(f'<div class="quick-lookup-line quick-lookup-cn">{safe_line}</div>')
-            else:
-                other_lines.append(f'<div class="quick-lookup-line quick-lookup-cn">{safe_line}</div>')
+                if line.startswith("🌱"):
+                    etymology_lines.append(f'<div class="quick-lookup-line quick-lookup-ety">{safe_line}</div>')
+                elif line.startswith("🔊"):
+                    phonetic_lines.append(f'<div class="quick-lookup-line quick-lookup-phon">{safe_line}</div>')
+                elif "|" in line and len(line) < 50:
+                    definition_lines.append(f'<div class="quick-lookup-line quick-lookup-def">{safe_line}</div>')
+                elif line.startswith("•"):
+                    example_lines.append(f'<div class="quick-lookup-line quick-lookup-ex">{safe_line}</div>')
+                elif idx == 0:
+                    head_lines.append(f'<div class="quick-lookup-line quick-lookup-cn">{safe_line}</div>')
+                else:
+                    other_lines.append(f'<div class="quick-lookup-line quick-lookup-cn">{safe_line}</div>')
 
-        formatted_lines = head_lines + phonetic_lines + definition_lines + other_lines + example_lines + etymology_lines
-        display_html = "".join(formatted_lines).replace("\n", "<br>")
+            formatted_lines = head_lines + phonetic_lines + definition_lines + other_lines + example_lines + etymology_lines
+            display_html = "".join(formatted_lines).replace("\n", "<br>")
         rank = result.get("rank")
         rank_badge_html = ""
         if isinstance(rank, (int, float)):

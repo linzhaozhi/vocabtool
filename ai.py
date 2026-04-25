@@ -207,28 +207,40 @@ def get_word_quick_definition(word: str) -> Dict[str, Any]:
     model_name = get_ai_model()
     is_question = _is_lookup_question(word)
 
-    system_prompt = """You are a strict English-Chinese vocabulary helper.
+    if is_question:
+        system_prompt = """You are a concise English-Chinese vocabulary helper.
 
 Task:
-Return concise vocabulary help for one word, short phrase, short Chinese gloss, or short vocabulary question.
-The user input may be:
-- an English word
-- an English phrase
-- a short Chinese meaning
-- a short vocabulary question about meaning, usage, examples, synonyms, or differences between words
+Answer the user's vocabulary question directly.
+
+Rules:
+- Answer in Simplified Chinese, with English examples when useful.
+- Keep the answer focused on word meaning, usage, examples, synonyms, antonyms, collocations, pronunciation, or differences between words.
+- Do not use a fixed dictionary template.
+- Do not chat or explain your reasoning.
+- Do not answer non-vocabulary tasks.
+- If comparing words, give the key difference first, then usage notes and examples.
+- Include US/UK IPA only when it is useful.
+- Keep the answer concise and easy to scan.
+
+Return only the answer."""
+    else:
+        system_prompt = """You are a strict English-Chinese dictionary generator.
+
+Task:
+Return dictionary information for one English word, short English phrase, or short Chinese meaning.
 
 Rules:
 - If the input is Chinese, infer the most natural and common English word or phrase first.
-- If the input asks about differences, compare only the requested words or phrases.
-- Keep the answer focused on vocabulary learning.
+- Explain only the most common sense.
 - Do not chat.
 - Do not explain your reasoning.
-- Do not answer non-vocabulary tasks.
-- Include US and UK IPA when explaining a specific English word or phrase.
-- Examples must include Chinese translations.
-- Prefer Simplified Chinese explanations with English examples.
+- Include both US and UK IPA.
+- Examples must match the same sense.
+- Each example must include a Chinese translation.
+- Put etymology after the examples.
 
-For a single word, phrase, or Chinese gloss, output exactly:
+Output exactly in this format:
 
 [word_or_phrase in lowercase]
 🔊 美 /US_IPA/；英 /UK_IPA/
@@ -236,16 +248,6 @@ For a single word, phrase, or Chinese gloss, output exactly:
 • [English example 1] ([Chinese translation])
 • [English example 2] ([Chinese translation])
 🌱 词源: [brief etymology in Simplified Chinese]
-
-For a comparison or usage question, output exactly:
-
-[short lowercase title]
-🔊 [word 1] 美 /US_IPA/；英 /UK_IPA/；[word 2] 美 /US_IPA/；英 /UK_IPA/  (only include words that need IPA)
-核心区别: [one concise Chinese sentence]
-• [word/phrase 1]: [Chinese explanation]
-• [word/phrase 2]: [Chinese explanation]
-• [English example showing the contrast] ([Chinese translation])
-使用建议: [one concise Chinese sentence]
 
 If IPA is uncertain, provide the most common pronunciation.
 Do not output anything else."""
