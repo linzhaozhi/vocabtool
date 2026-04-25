@@ -455,6 +455,26 @@ GLOBAL_CSS = """
         color: var(--vf-text-muted);
         margin-bottom: 8px;
     }
+    .quick-lookup-answer {
+        color: var(--vf-text);
+        line-height: 1.75;
+    }
+    .quick-lookup-answer strong {
+        color: var(--vf-text);
+        font-weight: 750;
+    }
+    .quick-lookup-answer-line {
+        margin: 0.25rem 0;
+    }
+    .quick-lookup-answer-bullet {
+        margin: 0.35rem 0 0.35rem 1rem;
+        padding-left: 0.7rem;
+        border-left: 3px solid rgba(96, 165, 250, 0.42);
+        color: var(--vf-text);
+    }
+    .quick-lookup-gap {
+        height: 0.45rem;
+    }
 </style>
 """
 

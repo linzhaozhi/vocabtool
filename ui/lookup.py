@@ -1,6 +1,7 @@
 """Lookup tab rendering."""
 
 import html
+import re
 
 import streamlit as st
 
@@ -15,6 +16,31 @@ from ui.helpers import (
     validate_topic_label,
 )
 from utils import render_copy_button
+
+
+def _format_lookup_question_answer(raw_content: str) -> str:
+    """Render freeform vocabulary answers safely while supporting simple Markdown."""
+    text = re.sub(r"</?[^>]+>", "", raw_content)
+    text = text.strip()
+    if not text:
+        return ""
+
+    rendered_lines = []
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line:
+            rendered_lines.append('<div class="quick-lookup-gap"></div>')
+            continue
+
+        safe_line = html.escape(line)
+        safe_line = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", safe_line)
+
+        if safe_line.startswith(("- ", "• ")):
+            rendered_lines.append(f'<div class="quick-lookup-answer-bullet">{safe_line[2:].strip()}</div>')
+        else:
+            rendered_lines.append(f'<div class="quick-lookup-answer-line">{safe_line}</div>')
+
+    return '<div class="quick-lookup-answer">' + "".join(rendered_lines) + "</div>"
 
 
 def _render_quick_lookup() -> None:
@@ -87,8 +113,7 @@ def _render_quick_lookup() -> None:
     if result and "error" not in result:
         raw_content = result["result"]
         if result.get("is_question"):
-            safe_content = html.escape(raw_content).replace("\n", "<br>")
-            display_html = f'<div class="quick-lookup-line quick-lookup-cn">{safe_content}</div>'
+            display_html = _format_lookup_question_answer(raw_content)
         else:
             lines = [line.strip() for line in raw_content.split("\n") if line.strip()]
             head_lines = []
