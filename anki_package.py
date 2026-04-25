@@ -176,11 +176,16 @@ def generate_anki_package(
             notes_buffer.append(note)
 
         if audio_tasks:
+            if progress_callback:
+                progress_callback(0.0, f"🎙️ 正在准备 {len(audio_tasks)} 个音频任务...")
+
             def internal_progress(ratio: float, msg: str) -> None:
                 if progress_callback:
-                    progress_callback(ratio, msg)
+                    progress_callback(ratio, f"🎙️ {msg}")
 
             run_async_batch(audio_tasks, concurrency=constants.TTS_CONCURRENCY, progress_callback=internal_progress)
+        elif progress_callback:
+            progress_callback(1.0, "🎙️ 未启用语音，已跳过音频生成。")
 
         for note in notes_buffer:
             deck.add_note(note)

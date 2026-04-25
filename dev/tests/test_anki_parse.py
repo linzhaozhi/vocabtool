@@ -106,3 +106,15 @@ def test_parse_anki_data_six_fields_with_phonetics():
     assert result[0]["p"] == "美 /ˈhektɪk/；英 /ˈhektɪk/"
     assert result[0]["e"] == "She has a hectic day.<br>My week is hectic."
     assert result[0]["ec"] == "她今天很忙乱。<br>我的一周很忙乱。"
+
+
+def test_parse_anki_data_supports_three_examples_without_translation():
+    raw = (
+        "word ||| 美 /wɜːrd/；英 /wɜːd/ ||| a unit of language ||| "
+        "One word is enough.<br>This word is common.<br>I wrote the word. |||  ||| 来自古英语 word"
+    )
+    result = parse_anki_data(raw)
+    assert len(result) == 1
+    assert result[0]["m"] == "a unit of language"
+    assert result[0]["e"].count("<br>") == 2
+    assert result[0]["ec"] == ""

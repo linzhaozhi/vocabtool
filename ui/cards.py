@@ -52,7 +52,7 @@ def render_cards_tab() -> None:
     with col_audio:
         enable_audio_auto = st.checkbox("生成单词和例句音频", value=True, key="chk_audio_cards")
     with col_example_count:
-        selected_example_count = st.radio(
+        basic_example_count = st.radio(
             "🧾 例句数量",
             options=[1, 2],
             index=constants.AI_CARD_EXAMPLE_COUNT_DEFAULT - 1,
@@ -60,6 +60,33 @@ def render_cards_tab() -> None:
             format_func=lambda value: f"{value} 句",
             key="sel_example_count",
         )
+    selected_example_count = basic_example_count
+    definition_language = "中文"
+    translate_examples = True
+
+    with st.expander("高级功能：自定义卡片", expanded=False):
+        custom_cards_enabled = st.checkbox("启用自定义卡片设置", value=False, key="chk_custom_cards_enabled")
+        st.caption("默认模式适合快速制卡；启用后可以自定义例句数量、释义语言和是否生成例句翻译。")
+        if custom_cards_enabled:
+            col_adv_example, col_adv_meaning, col_adv_translation = st.columns([2, 2, 2])
+            with col_adv_example:
+                selected_example_count = st.radio(
+                    "例句数量",
+                    options=list(range(constants.AI_CARD_EXAMPLE_COUNT_MIN, constants.AI_CARD_EXAMPLE_COUNT_MAX + 1)),
+                    index=constants.AI_CARD_EXAMPLE_COUNT_DEFAULT - 1,
+                    horizontal=True,
+                    format_func=lambda value: f"{value} 句",
+                    key="sel_custom_example_count",
+                )
+            with col_adv_meaning:
+                definition_language = st.radio(
+                    "释义语言",
+                    options=["中文", "英文", "中英"],
+                    horizontal=True,
+                    key="sel_definition_language",
+                )
+            with col_adv_translation:
+                translate_examples = st.checkbox("生成例句翻译", value=True, key="chk_translate_examples")
 
     col_title, col_copy_btn = st.columns([5, 1])
     with col_title:
@@ -105,33 +132,41 @@ def render_cards_tab() -> None:
         if not words_for_generation:
             st.warning("⚠️ 当前没有可用于制卡的单词。")
         else:
-            progress_bar = st.progress(0)
-            status_text = st.empty()
+            st.markdown("#### 生成进度")
+            content_status = st.empty()
+            content_progress_bar = st.progress(0)
+            voice_status = st.empty()
+            voice_progress_bar = st.progress(0)
 
             def update_ai_progress(current: int, total: int) -> None:
                 ratio = current / total if total > 0 else 0
-                progress_bar.progress(ratio)
-                status_text.text(f"正在处理 ({current}/{total})")
+                content_progress_bar.progress(ratio)
+                content_status.text(f"🧠 内容生成进度：{current}/{total}")
 
-            status_text.text("🧠 正在请求智能生成...")
+            content_status.text("🧠 正在请求智能生成...")
+            voice_status.text("🎙️ 语音进度：等待内容生成完成")
             ai_result = process_ai_in_batches(
                 words_for_generation,
                 example_count=int(selected_example_count),
+                definition_language=definition_language,
+                translate_examples=bool(translate_examples),
                 progress_callback=update_ai_progress,
             )
 
             if ai_result:
-                status_text.text("✅ 内容生成完成，正在解析...")
+                content_progress_bar.progress(1.0)
+                content_status.text("✅ 内容生成完成，正在解析...")
                 parsed_data = parse_anki_data(ai_result)
 
                 if parsed_data:
                     try:
-                        status_text.text("📦 正在生成 Anki 包...")
+                        voice_status.text("🎙️ 正在准备语音和 Anki 包...")
+                        voice_progress_bar.progress(0.0)
                         final_deck_name = deck_name.strip() or default_deck_name
 
                         def update_pkg_progress(ratio: float, text: str) -> None:
-                            progress_bar.progress(ratio)
-                            status_text.text(text)
+                            voice_progress_bar.progress(ratio)
+                            voice_status.text(text)
 
                         file_path = generate_anki_package(
                             parsed_data,
@@ -144,7 +179,9 @@ def render_cards_tab() -> None:
                         st.session_state["anki_cards_cache"] = parsed_data
                         set_anki_pkg(file_path, final_deck_name)
 
-                        status_text.markdown(f"✅ **处理完成！共生成 {len(parsed_data)} 张卡片**")
+                        voice_progress_bar.progress(1.0)
+                        voice_status.text("✅ 语音和打包完成")
+                        content_status.markdown(f"✅ **处理完成！共生成 {len(parsed_data)} 张卡片**")
                         st.balloons()
                         run_gc()
                     except Exception as exc:

@@ -150,6 +150,24 @@ def _count_parseable_cards(raw_text: str) -> int:
     return len(parse_anki_data(raw_text))
 
 
+def _normalize_definition_language(value: str) -> str:
+    """Normalize card definition-language options from UI."""
+    if value in {"英文", "english", "en"}:
+        return "英文"
+    if value in {"中英", "bilingual", "both"}:
+        return "中英"
+    return "中文"
+
+
+def _definition_instruction(definition_language: str) -> str:
+    """Build the prompt rule for the card meaning field."""
+    if definition_language == "英文":
+        return "English only, concise, under 10 words. Do not include Chinese."
+    if definition_language == "中英":
+        return "Simplified Chinese + short English definition, format: 中文释义 | English definition under 8 words."
+    return "Concise Simplified Chinese only."
+
+
 def get_word_quick_definition(word: str) -> Dict[str, Any]:
     """Get ultra-concise word definition using AI, with rank info."""
     vocab_dict = get_vocab_dict()
@@ -272,6 +290,8 @@ another word
 def process_ai_in_batches(
     words_list: List[str],
     example_count: int = constants.AI_CARD_EXAMPLE_COUNT_DEFAULT,
+    definition_language: str = "中文",
+    translate_examples: bool = True,
     progress_callback: Optional[Callable[[int, int], None]] = None
 ) -> Optional[str]:
     """Process words in batches using AI with progress reporting."""
@@ -279,6 +299,18 @@ def process_ai_in_batches(
     example_count = max(
         constants.AI_CARD_EXAMPLE_COUNT_MIN,
         min(int(example_count), constants.AI_CARD_EXAMPLE_COUNT_MAX)
+    )
+    definition_language = _normalize_definition_language(definition_language)
+    definition_rule = _definition_instruction(definition_language)
+    translation_rule = (
+        "Translate field 4 sentence by sentence into Simplified Chinese."
+        if translate_examples
+        else "Leave this field empty. Keep the field separator, but write no text in this field."
+    )
+    translation_count_rule = (
+        f"Field 5 contains exactly {example_count} Chinese translation(s), matching field 4 in order."
+        if translate_examples
+        else "Field 5 is empty."
     )
 
     model_name = get_ai_model()
@@ -310,28 +342,30 @@ Output rules:
 - Do not output anything outside the code block.
 
 Field format:
-Word/Phrase ||| Pronunciation ||| Chinese Meaning ||| English Example(s) ||| Chinese Translation(s) ||| Etymology
+Word/Phrase ||| Pronunciation ||| Meaning ||| English Example(s) ||| Example Translation(s) ||| Etymology
 
 Field requirements:
 1. Word/Phrase: English word or phrase, preferably lowercase.
 2. Pronunciation: must follow exactly this format: 美 /.../；英 /.../
-3. Chinese Meaning: concise Simplified Chinese.
+3. Meaning: {definition_rule}
 4. English Example(s): generate exactly {example_count} natural and short English example sentence(s).
-5. Chinese Translation(s): translate field 4 sentence by sentence into Simplified Chinese.
+5. Example Translation(s): {translation_rule}
 6. Etymology: briefly explain root, affix, or origin in Simplified Chinese.
 
 If {example_count}=1:
 - Field 4 contains exactly 1 English sentence.
-- Field 5 contains exactly 1 Chinese translation.
+- {translation_count_rule}
 
-If {example_count}=2:
-- Field 4 joins the 2 English sentences with <br>.
-- Field 5 joins the 2 Chinese translations with <br>.
-- Translation order must match the English examples.
+If {example_count}>1:
+- Field 4 joins the English sentences with <br>.
+- If translations are enabled, field 5 joins the Chinese translations with <br>.
+- Translation order must match the English examples when field 5 is not empty.
 
 Final check:
 Each line must contain exactly 5 occurrences of |||.
 Each line must contain both US and UK pronunciation.
+Field 4 must contain exactly {example_count} English example sentence(s).
+{translation_count_rule}
 Output only the text code block."""
 
         for attempt in range(constants.MAX_RETRIES):
