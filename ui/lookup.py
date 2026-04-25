@@ -18,11 +18,27 @@ from ui.helpers import (
 from utils import render_copy_button
 
 
+def _strip_lookup_html_fragments(raw_content: str) -> str:
+    """Remove model-leaked HTML fragments before any lookup rendering."""
+    text = str(raw_content or "")
+    for _ in range(3):
+        unescaped = html.unescape(text)
+        if unescaped == text:
+            break
+        text = unescaped
+
+    html_fragment_pattern = r"</?\s*[A-Za-z][A-Za-z0-9:-]*(?:\s+[^<>]*)?>"
+    escaped_fragment_pattern = r"&lt;/?\s*[A-Za-z][A-Za-z0-9:-]*(?:\s+[^&<>]*)?&gt;"
+    text = re.sub(html_fragment_pattern, "", text)
+    text = re.sub(escaped_fragment_pattern, "", text, flags=re.IGNORECASE)
+    text = re.sub(r"(?i)&(?:amp;)*lt;\s*/?\s*(?:div|span|p|br)\s*(?:&(?:amp;)*gt;|>)", "", text)
+    text = re.sub(r"(?i)(?:</?\s*(?:div|span|p|br)\s*>|&lt;/?\s*(?:div|span|p|br)\s*&gt;)", "", text)
+    return text.replace("</div>", "").replace("<div>", "")
+
+
 def _format_lookup_question_answer(raw_content: str) -> str:
     """Render freeform vocabulary answers safely while supporting simple Markdown."""
-    text = html.unescape(raw_content)
-    text = re.sub(r"</?\s*[A-Za-z][A-Za-z0-9:-]*(?:\s+[^<>]*)?>", "", text)
-    text = re.sub(r"&lt;/?\s*[A-Za-z][A-Za-z0-9:-]*(?:\s+[^&<>]*)?&gt;", "", text, flags=re.IGNORECASE)
+    text = _strip_lookup_html_fragments(raw_content)
     text = text.strip()
     if not text:
         return ""
@@ -58,6 +74,13 @@ def _render_quick_lookup() -> None:
         st.session_state["quick_lookup_is_loading"] = False
     if "quick_lookup_cache_keys" not in st.session_state:
         st.session_state["quick_lookup_cache_keys"] = []
+    if st.session_state.get("quick_lookup_cache_version") != constants.QUICK_LOOKUP_CACHE_VERSION:
+        for key in list(st.session_state.keys()):
+            if str(key).startswith("lookup_cache_"):
+                del st.session_state[key]
+        st.session_state["quick_lookup_cache_keys"] = []
+        st.session_state["quick_lookup_last_result"] = None
+        st.session_state["quick_lookup_cache_version"] = constants.QUICK_LOOKUP_CACHE_VERSION
 
     with st.form("quick_lookup_form", clear_on_submit=False):
         col_word, col_btn, col_clear = st.columns([4, 1, 1])
@@ -95,7 +118,7 @@ def _render_quick_lookup() -> None:
         else:
             st.session_state["quick_lookup_is_loading"] = True
             try:
-                cache_key = f"lookup_cache_{query_word.lower()}"
+                cache_key = f"lookup_cache_{constants.QUICK_LOOKUP_CACHE_VERSION}_{query_word.lower()}"
                 if cache_key not in st.session_state:
                     with st.spinner("🔍 查询中..."):
                         st.session_state[cache_key] = get_word_quick_definition(query_word)
@@ -113,8 +136,8 @@ def _render_quick_lookup() -> None:
 
     result = st.session_state.get("quick_lookup_last_result")
     if result and "error" not in result:
-        raw_content = result["result"]
-        if result.get("is_question"):
+        raw_content = _strip_lookup_html_fragments(result["result"])
+        if result.get("is_question") or result.get("rank") is None:
             display_html = _format_lookup_question_answer(raw_content)
         else:
             lines = [line.strip() for line in raw_content.split("\n") if line.strip()]

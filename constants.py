@@ -11,6 +11,7 @@ BEIJING_TIMEZONE_OFFSET = 8
 MAX_UPLOAD_MB = 200
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 QUICK_LOOKUP_CACHE_MAX = 100
+QUICK_LOOKUP_CACHE_VERSION = "v4"
 
 # Temp .apkg files: subdir under system temp, cleanup files older than this
 APKG_TEMP_SUBDIR = "vocabflow_apkg"
