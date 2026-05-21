@@ -38,7 +38,24 @@ TTS_RETRY_ATTEMPTS = 3
 MIN_AUDIO_FILE_SIZE = 100
 
 ANKI_MODEL_ID = 1842957302
+ANKI_MODEL_ID_BASE = 1842957600
 ANKI_ETYMOLOGY_FONT_SIZE_PX = 18
+
+DEFAULT_CARD_TEMPLATE = "word_front"
+CARD_TEMPLATES = {
+    "word_front": {
+        "label": "1. 正面单词",
+        "description": "正面显示单词；反面显示中英释义、中英例句。",
+    },
+    "example_front": {
+        "label": "2. 正面例句（单词加粗）",
+        "description": "正面显示英文例句并加粗目标词；反面显示中英释义、中英例句。",
+    },
+    "definition_front": {
+        "label": "3. 英文释义 + 词性 + 首字母提示",
+        "description": "正面显示英文释义、词性和首字母提示；反面显示单词、中文释义和例句。",
+    },
+}
 
 ENCODING_PRIORITY = ['utf-8', 'gb18030', 'latin-1']
 VOCAB_PROJECT_NAME = "NGSL 项目"

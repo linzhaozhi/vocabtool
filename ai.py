@@ -341,7 +341,8 @@ def process_ai_in_batches(
     example_count: int = constants.AI_CARD_EXAMPLE_COUNT_DEFAULT,
     definition_language: str = "中文",
     translate_examples: bool = True,
-    progress_callback: Optional[Callable[[int, int], None]] = None
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+    card_template: str = constants.DEFAULT_CARD_TEMPLATE,
 ) -> Optional[str]:
     """Process words in batches using AI with progress reporting."""
     words_list = words_list[:constants.MAX_AUTO_LIMIT]
@@ -351,6 +352,11 @@ def process_ai_in_batches(
     )
     definition_language = _normalize_definition_language(definition_language)
     definition_rule = _definition_instruction(definition_language)
+    if card_template == "definition_front":
+        definition_rule = (
+            "Use exactly this format: part of speech | Simplified Chinese meaning | "
+            "short English definition under 12 words. Example: adjective | 忙乱的；忙碌的 | full of hurried activity."
+        )
     translation_rule = (
         "Translate field 4 sentence by sentence into Simplified Chinese."
         if translate_examples
@@ -375,6 +381,7 @@ def process_ai_in_batches(
 
         user_prompt = f"""Task:
 Convert the input word or phrase list into Anki card data.
+The selected card template is: {constants.CARD_TEMPLATES.get(card_template, constants.CARD_TEMPLATES[constants.DEFAULT_CARD_TEMPLATE])["label"]}.
 
 Input items:
 {current_batch_str}
@@ -388,6 +395,7 @@ Output rules:
 - Do not add explanations.
 - Do not omit any input item.
 - Do not merge multiple input items.
+- Preserve the input order.
 - Do not output anything outside the code block.
 
 Field format:

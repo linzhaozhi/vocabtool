@@ -1,5 +1,6 @@
 # Anki package (.apkg) generation with optional TTS.
 
+import html
 import os
 import random
 import tempfile
@@ -15,6 +16,118 @@ from tts import run_async_batch
 from utils import safe_str_clean
 
 APKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), constants.APKG_TEMP_SUBDIR)
+
+CARD_TEMPLATE_MODEL_OFFSETS = {
+    "word_front": 1,
+    "example_front": 2,
+    "definition_front": 3,
+}
+
+
+def _normalize_card_template(card_template: str) -> str:
+    if card_template in constants.CARD_TEMPLATES:
+        return card_template
+    return constants.DEFAULT_CARD_TEMPLATE
+
+
+def _first_letter_hint(phrase: str) -> str:
+    tokens = re.findall(r"[A-Za-z]+", phrase)
+    return " ".join(
+        token[0].lower() + "_" * (len(token) - 1) if len(token) > 1 else token.lower()
+        for token in tokens
+    )
+
+
+def _split_structured_meaning(meaning: str) -> tuple[str, str, str]:
+    parts = [part.strip() for part in meaning.split("|")]
+    if len(parts) >= 3 and re.search(r"[A-Za-z]", parts[0]):
+        return parts[0], parts[1], " | ".join(parts[2:])
+    if len(parts) >= 2:
+        return "", parts[0], " | ".join(parts[1:])
+    return "", meaning, ""
+
+
+def _highlight_target_in_example(example: str, phrase: str) -> str:
+    first_example = re.split(r"<br\s*/?>", example, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+    if not first_example:
+        return html.escape(phrase)
+    if not phrase:
+        return html.escape(first_example)
+
+    pattern = re.compile(rf"(?<![A-Za-z])({re.escape(phrase)})(?![A-Za-z])", re.IGNORECASE)
+    match = pattern.search(first_example)
+    if not match:
+        return html.escape(first_example)
+    return (
+        html.escape(first_example[:match.start()])
+        + f"<strong>{html.escape(match.group(0))}</strong>"
+        + html.escape(first_example[match.end():])
+    )
+
+
+def _get_template(card_template: str) -> Dict[str, str]:
+    templates = {
+        "word_front": {
+            "name": "1. Word Front",
+            "qfmt": '''
+                <div class="phrase">{{Phrase}}</div>
+                <div>{{Audio_Phrase}}</div>
+            ''',
+            "afmt": '''
+            {{FrontSide}}
+            <hr>
+            {{#Phonetic}}<div class="phonetic">{{Phonetic}}</div>{{/Phonetic}}
+            <div class="meaning">{{Meaning}}</div>
+            {{#EnglishDefinition}}<div class="definition">{{EnglishDefinition}}</div>{{/EnglishDefinition}}
+            <div class="example">
+                <div>{{Example}}</div>
+                {{#Example_Translation}}<div class="example-translation">译：{{Example_Translation}}</div>{{/Example_Translation}}
+            </div>
+            <div>{{Audio_Example}}</div>
+            {{#Etymology}}<div class="etymology">🌱 词源: {{Etymology}}</div>{{/Etymology}}
+            ''',
+        },
+        "example_front": {
+            "name": "2. Example Front",
+            "qfmt": '''
+                <div class="front-example">{{ExampleFront}}</div>
+                <div>{{Audio_Example}}</div>
+            ''',
+            "afmt": '''
+            {{FrontSide}}
+            <hr>
+            <div class="phrase">{{Phrase}}</div>
+            {{#Phonetic}}<div class="phonetic">{{Phonetic}}</div>{{/Phonetic}}
+            <div class="meaning">{{Meaning}}</div>
+            {{#EnglishDefinition}}<div class="definition">{{EnglishDefinition}}</div>{{/EnglishDefinition}}
+            <div class="example">
+                <div>{{Example}}</div>
+                {{#Example_Translation}}<div class="example-translation">译：{{Example_Translation}}</div>{{/Example_Translation}}
+            </div>
+            ''',
+        },
+        "definition_front": {
+            "name": "3. Definition Front",
+            "qfmt": '''
+                <div class="front-definition">{{EnglishDefinition}}</div>
+                {{#PartOfSpeech}}<div class="meta">{{PartOfSpeech}}</div>{{/PartOfSpeech}}
+                {{#Hint}}<div class="hint">Hint: {{Hint}}</div>{{/Hint}}
+            ''',
+            "afmt": '''
+            {{FrontSide}}
+            <hr>
+            <div class="phrase">{{Phrase}}</div>
+            {{#Phonetic}}<div class="phonetic">{{Phonetic}}</div>{{/Phonetic}}
+            <div class="meaning">{{ChineseMeaning}}</div>
+            <div class="example">
+                <div>{{Example}}</div>
+                {{#Example_Translation}}<div class="example-translation">译：{{Example_Translation}}</div>{{/Example_Translation}}
+            </div>
+            <div>{{Audio_Phrase}}</div>
+            ''',
+        },
+    }
+    return templates[_normalize_card_template(card_template)]
 
 
 def cleanup_old_apkg_files(max_age_seconds: int = constants.APKG_CLEANUP_MAX_AGE_SECONDS) -> None:
@@ -41,11 +154,13 @@ def generate_anki_package(
     deck_name: str,
     enable_tts: bool = False,
     tts_voice: str = "en-US-JennyNeural",
-    progress_callback: Optional[ProgressCallback] = None
+    progress_callback: Optional[ProgressCallback] = None,
+    card_template: str = constants.DEFAULT_CARD_TEMPLATE,
 ) -> str:
     """Generate Anki package (.apkg) file with optional TTS audio."""
     genanki, tempfile_mod = get_genanki()
     media_files = []
+    card_template = _normalize_card_template(card_template)
 
     CSS = """
     .card { font-family: 'Arial', sans-serif; font-size: 20px; text-align: center; color: #333; background-color: white; padding: 20px; }
@@ -76,45 +191,36 @@ def generate_anki_package(
         font-style: normal;
     }
     .nightMode .example-translation { color: #e5e7eb; }
+    .front-example { font-size: 25px; line-height: 1.55; text-align: left; color: #243041; }
+    .front-example strong { color: #0f766e; font-weight: 800; }
+    .front-definition { font-size: 25px; line-height: 1.45; color: #243041; margin-bottom: 12px; }
+    .meta { display: inline-block; font-size: 15px; color: #526071; background: #eef6f8; border: 1px solid #cfe4ea; border-radius: 999px; padding: 3px 10px; margin: 4px 0 10px; }
+    .hint { display: inline-block; font-size: 18px; letter-spacing: 1px; color: #0f766e; background: #eefbf7; border: 1px solid #b7ead8; border-radius: 8px; padding: 6px 12px; margin-top: 8px; }
+    .definition { font-size: 19px; color: #435060; margin-bottom: 14px; text-align: left; }
     .etymology { display: block; font-size: """ + str(constants.ANKI_ETYMOLOGY_FONT_SIZE_PX) + """px; line-height: 1.6; color: #555; background-color: #fffdf5; padding: 10px; border-radius: 6px; margin-bottom: 5px; border: 1px solid #fef3c7; }
     .nightMode .etymology { background-color: #333; color: #aaa; border-color: #444; }
+    .nightMode .front-example, .nightMode .front-definition { color: #e5e7eb; }
+    .nightMode .definition { color: #cbd5e1; }
+    .nightMode .meta { background: #263241; color: #cbd5e1; border-color: #3f4f63; }
+    .nightMode .hint { background: #12312f; color: #99f6e4; border-color: #1f5f58; }
     """
 
     DECK_ID = zlib.adler32(deck_name.encode('utf-8'))
+    model_id = constants.ANKI_MODEL_ID_BASE + CARD_TEMPLATE_MODEL_OFFSETS[card_template]
+    model_label = constants.CARD_TEMPLATES[card_template]["label"]
 
     model = genanki.Model(
-        constants.ANKI_MODEL_ID,
-        'VocabFlow Unified Model',
+        model_id,
+        f'VocabFlow {model_label}',
         fields=[
             {'name': 'Phrase'}, {'name': 'Phonetic'}, {'name': 'Meaning'},
             {'name': 'Example'}, {'name': 'Example_Translation'}, {'name': 'Etymology'},
+            {'name': 'PartOfSpeech'}, {'name': 'ChineseMeaning'},
+            {'name': 'EnglishDefinition'}, {'name': 'Hint'}, {'name': 'ExampleFront'},
             {'name': 'Audio_Phrase'}, {'name': 'Audio_Example'}
         ],
-        templates=[{
-            'name': 'Vocab Card',
-            'qfmt': '''
-                <div class="phrase">{{Phrase}}</div>
-                <div>{{Audio_Phrase}}</div>
-            ''',
-            'afmt': '''
-            {{FrontSide}}
-            <hr>
-            {{#Phonetic}}
-            <div class="phonetic">{{Phonetic}}</div>
-            {{/Phonetic}}
-            <div class="meaning">{{Meaning}}</div>
-            <div class="example">
-                <div>🗣️ {{Example}}</div>
-                {{#Example_Translation}}
-                <div class="example-translation">译：{{Example_Translation}}</div>
-                {{/Example_Translation}}
-            </div>
-            <div>{{Audio_Example}}</div>
-            {{#Etymology}}
-            <div class="etymology">🌱 词源: {{Etymology}}</div>
-            {{/Etymology}}
-            ''',
-        }], css=CSS
+        templates=[_get_template(card_template)],
+        css=CSS
     )
 
     deck = genanki.Deck(DECK_ID, deck_name)
@@ -132,6 +238,13 @@ def generate_anki_package(
             example_translation = safe_str_clean(card.get('ec', ''))
             etymology = safe_str_clean(card.get('r', ''))
             note_id = card.get('id')
+            part_of_speech, chinese_meaning, english_definition = _split_structured_meaning(meaning)
+            if not chinese_meaning:
+                chinese_meaning = meaning
+            if not english_definition:
+                english_definition = meaning if not re.search(r"[\u4e00-\u9fff]", meaning) else ""
+            hint = _first_letter_hint(phrase)
+            example_front = _highlight_target_in_example(example, phrase)
 
             audio_phrase_field = ""
             audio_example_field = ""
@@ -142,6 +255,11 @@ def generate_anki_package(
                 'example': example,
                 'example_translation': example_translation,
                 'etymology': etymology,
+                'part_of_speech': part_of_speech,
+                'chinese_meaning': chinese_meaning,
+                'english_definition': english_definition,
+                'hint': hint,
+                'example_front': example_front,
                 'note_id': note_id,
                 'audio_phrase_field': audio_phrase_field,
                 'audio_example_field': audio_example_field,
@@ -230,6 +348,11 @@ def generate_anki_package(
                 prepared_card['example'],
                 prepared_card['example_translation'],
                 prepared_card['etymology'],
+                prepared_card['part_of_speech'],
+                prepared_card['chinese_meaning'],
+                prepared_card['english_definition'],
+                prepared_card['hint'],
+                prepared_card['example_front'],
                 prepared_card['audio_phrase_field'],
                 prepared_card['audio_example_field'],
             ]

@@ -18,11 +18,24 @@ from ui.helpers import (
 from utils import get_beijing_time_str, render_copy_button, run_gc
 
 
+def _select_card_template() -> str:
+    label_to_key = {template["label"]: key for key, template in constants.CARD_TEMPLATES.items()}
+    selected_label = st.radio(
+        "🧩 制作卡片模板（三选一）",
+        options=list(label_to_key.keys()),
+        key="sel_card_template_cards",
+    )
+    selected_key = label_to_key[selected_label]
+    st.caption(constants.CARD_TEMPLATES[selected_key]["description"])
+    return selected_key
+
+
 def render_cards_tab() -> None:
     """Render the card-generation tab."""
     st.markdown("### 📦 制作卡片")
     st.caption("使用内置智能能力，把准备好的词表直接生成 Anki 卡片。")
     ai_provider_label = get_config().get("ai_provider_label", "智能模型")
+    card_template = _select_card_template()
 
     current_words_text = st.session_state.get("word_list_editor", "").strip()
     if not current_words_text:
@@ -145,6 +158,7 @@ def render_cards_tab() -> None:
                 definition_language=definition_language,
                 translate_examples=bool(translate_examples),
                 progress_callback=update_ai_progress,
+                card_template=card_template,
             )
 
             if ai_result:
@@ -168,6 +182,7 @@ def render_cards_tab() -> None:
                             enable_tts=enable_audio_auto,
                             tts_voice=selected_voice_code,
                             progress_callback=update_pkg_progress,
+                            card_template=card_template,
                         )
 
                         st.session_state["anki_cards_cache"] = parsed_data
