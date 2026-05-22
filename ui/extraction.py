@@ -16,13 +16,9 @@ from extraction import (
 )
 from state import set_generated_words_state
 from ui.helpers import (
-    EXTRACT_SOURCE_OPTIONS,
-    EXTRACT_SOURCE_WIDGET_KEY,
     clear_direct_wordlist_input,
     clear_paste_input,
     clear_url_input,
-    handle_extract_source_change,
-    normalize_extract_source_mode,
     parse_unique_words,
     reset_extraction_state,
     set_extract_source_mode,
@@ -30,6 +26,21 @@ from ui.helpers import (
 )
 from utils import render_copy_button, run_gc
 from vocab import analyze_logic
+
+SOURCE_BLOCK_OPTIONS = ("用户语料", "单词表", "词库")
+SOURCE_BLOCK_MODES = {
+    "用户语料": ("文件", "文本", "文章 URL"),
+    "单词表": ("单词表", "Anki"),
+    "词库": ("词库",),
+}
+
+
+def _source_block_for_mode(source_mode: str) -> str:
+    """Return the top-level source block for a detailed source mode."""
+    for block_name, source_modes in SOURCE_BLOCK_MODES.items():
+        if source_mode in source_modes:
+            return block_name
+    return "用户语料"
 
 
 def _render_generated_words_result() -> None:
@@ -91,30 +102,53 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
     """Render the extraction tab."""
     st.markdown("### 🧩 提取单词")
     st.caption(
-        f"来源已拆成 6 个入口：文章 URL、文件、文本、单词表、Anki、词库；其中“词库”使用 {constants.VOCAB_PROJECT_NAME} 词表。整理后的结果会自动同步到“制作卡片”。"
+        f"来源分为 3 个板块：用户语料、单词表、词库。用户语料会用内置词库筛选；词表和词库会直接整理成待制卡词表。"
     )
 
     saved_extract_source_mode = set_extract_source_mode(st.session_state.get("extract_source_mode"))
-    if EXTRACT_SOURCE_WIDGET_KEY not in st.session_state:
-        st.session_state[EXTRACT_SOURCE_WIDGET_KEY] = saved_extract_source_mode
-    else:
-        widget_extract_source_mode = normalize_extract_source_mode(st.session_state.get(EXTRACT_SOURCE_WIDGET_KEY))
-        if widget_extract_source_mode != saved_extract_source_mode:
-            st.session_state[EXTRACT_SOURCE_WIDGET_KEY] = saved_extract_source_mode
+    default_source_block = _source_block_for_mode(saved_extract_source_mode)
+    if st.session_state.get("extract_source_block") not in SOURCE_BLOCK_OPTIONS:
+        st.session_state["extract_source_block"] = default_source_block
 
-    st.markdown("#### 第一步：选择来源")
-    extract_source_mode = st.radio(
-        "提取来源",
-        EXTRACT_SOURCE_OPTIONS,
+    st.markdown("#### 第一步：选择来源板块")
+    source_block = st.radio(
+        "来源板块",
+        SOURCE_BLOCK_OPTIONS,
         horizontal=True,
-        label_visibility="collapsed",
-        key=EXTRACT_SOURCE_WIDGET_KEY,
-        on_change=handle_extract_source_change,
+        key="extract_source_block",
     )
-    extract_source_mode = normalize_extract_source_mode(extract_source_mode)
+
+    if source_block == "用户语料":
+        corpus_sources = SOURCE_BLOCK_MODES["用户语料"]
+        if st.session_state.get("extract_corpus_source") not in corpus_sources:
+            st.session_state["extract_corpus_source"] = (
+                saved_extract_source_mode if saved_extract_source_mode in corpus_sources else corpus_sources[0]
+            )
+        extract_source_mode = st.radio(
+            "用户语料类型",
+            corpus_sources,
+            horizontal=True,
+            key="extract_corpus_source",
+        )
+    elif source_block == "单词表":
+        wordlist_sources = SOURCE_BLOCK_MODES["单词表"]
+        if st.session_state.get("extract_wordlist_source") not in wordlist_sources:
+            st.session_state["extract_wordlist_source"] = (
+                saved_extract_source_mode if saved_extract_source_mode in wordlist_sources else wordlist_sources[0]
+            )
+        extract_source_mode = st.radio(
+            "单词表类型",
+            wordlist_sources,
+            horizontal=True,
+            key="extract_wordlist_source",
+        )
+    else:
+        extract_source_mode = "词库"
+        st.caption(f"使用内置 {constants.VOCAB_PROJECT_NAME} 词库按词频范围选词。")
+
     if extract_source_mode != st.session_state.get("extract_source_mode"):
         extract_source_mode = set_extract_source_mode(extract_source_mode)
-    st.caption(f"当前来源：{extract_source_mode}")
+    st.caption(f"当前来源：{source_block} / {extract_source_mode}")
 
     result_step_title = "#### 查看与整理结果"
     next_step_title = "#### 下一步"

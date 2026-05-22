@@ -13,8 +13,7 @@ import constants
 
 logger = logging.getLogger(__name__)
 
-EXTRACT_SOURCE_OPTIONS = ["文章 URL", "文件", "文本", "单词表", "Anki", "词库"]
-EXTRACT_SOURCE_WIDGET_KEY = "extract_source_mode_widget"
+EXTRACT_SOURCE_OPTIONS = ["文件", "文本", "文章 URL", "单词表", "Anki", "词库"]
 EXTRACT_SOURCE_LEGACY_MAP = {
     "文章 / 文件": "文章 URL",
     "单词列表 / Anki": "单词表",
@@ -448,7 +447,3 @@ def set_extract_source_mode(mode: str | None) -> str:
         refresh_extract_source_inputs(current_mode)
     return current_mode
 
-
-def handle_extract_source_change() -> None:
-    """Handle source changes from the UI widget."""
-    set_extract_source_mode(st.session_state.get(EXTRACT_SOURCE_WIDGET_KEY))

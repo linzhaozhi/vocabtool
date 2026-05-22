@@ -298,6 +298,8 @@ def render_lookup_tab(vocab_dict: dict[str, int]) -> None:
                 words = st.session_state["topic_wordlist_words"]
                 data_list = [(word, vocab_dict.get(word.lower(), 99999)) for word in words]
                 set_generated_words_state(data_list, len(words), None)
+                st.session_state["extract_source_block"] = "单词表"
+                st.session_state["extract_wordlist_source"] = "单词表"
                 st.session_state["extract_source_mode"] = "单词表"
                 st.success("✅ 已导入到“提取单词”，现在可以继续整理或直接去制作卡片。")
 
