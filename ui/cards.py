@@ -59,36 +59,12 @@ def render_cards_tab() -> None:
             key="sel_voice_cards",
         )
     selected_voice_code = constants.VOICE_MAP[selected_voice_label]
-    st.caption("支持美音和英音；音频只朗读英文单词和英文例句，卡片会显示对应的美音/英音音标。")
+    st.caption("支持美音和英音；会生成英文单词和英文例句音频，卡片会显示对应的美音/英音音标。")
 
     enable_audio_auto = st.checkbox("生成单词和例句音频", value=True, key="chk_audio_cards")
     selected_example_count = constants.AI_CARD_EXAMPLE_COUNT_DEFAULT
     definition_language = "中文"
     translate_examples = True
-
-    with st.expander("高级功能：自定义卡片", expanded=False):
-        custom_cards_enabled = st.checkbox("启用自定义卡片设置", value=False, key="chk_custom_cards_enabled")
-        st.caption("默认模式固定 1 个例句，适合快速制卡；启用后可以自定义例句数量、释义语言和是否生成例句翻译。")
-        if custom_cards_enabled:
-            col_adv_example, col_adv_meaning, col_adv_translation = st.columns([2, 2, 2])
-            with col_adv_example:
-                selected_example_count = st.radio(
-                    "例句数量",
-                    options=list(range(constants.AI_CARD_EXAMPLE_COUNT_MIN, constants.AI_CARD_EXAMPLE_COUNT_MAX + 1)),
-                    index=constants.AI_CARD_EXAMPLE_COUNT_DEFAULT - 1,
-                    horizontal=True,
-                    format_func=lambda value: f"{value} 句",
-                    key="sel_custom_example_count",
-                )
-            with col_adv_meaning:
-                definition_language = st.radio(
-                    "释义语言",
-                    options=["中文", "英文", "中英"],
-                    horizontal=True,
-                    key="sel_definition_language",
-                )
-            with col_adv_translation:
-                translate_examples = st.checkbox("生成例句翻译", value=True, key="chk_translate_examples")
 
     col_title, col_copy_btn = st.columns([5, 1])
     with col_title:

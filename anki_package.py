@@ -123,6 +123,7 @@ def _get_template(card_template: str) -> Dict[str, str]:
                 <div>{{Example}}</div>
                 {{#Example_Translation}}<div class="example-translation">译：{{Example_Translation}}</div>{{/Example_Translation}}
             </div>
+            <div>{{Audio_Example}}</div>
             <div>{{Audio_Phrase}}</div>
             ''',
         },

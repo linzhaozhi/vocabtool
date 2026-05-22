@@ -26,6 +26,9 @@ def extract_lookup_headword(raw_content: str) -> str:
     for line in raw_content.splitlines():
         cleaned = line.strip().strip("`")
         if cleaned:
+            match = re.match(r"([A-Za-z][A-Za-z' -]*?)(?:\s+/|\s+\(|$)", cleaned)
+            if match:
+                return re.sub(r"\s+", " ", match.group(1)).strip().lower()
             return cleaned.lower()
     return ""
 
@@ -236,21 +239,30 @@ Rules:
 - Explain only the most common sense.
 - Do not chat.
 - Do not explain your reasoning.
-- Include both US and UK IPA.
+- Include one common IPA pronunciation after the headword.
 - Examples must match the same sense.
 - Each example must include a Chinese translation.
-- Put etymology after the examples.
+- Put etymology before the examples.
 
 Output exactly in this format:
 
-[word_or_phrase in lowercase]
-🔊 美 /US_IPA/；英 /UK_IPA/
+[word_or_phrase in lowercase] /IPA/ ([part_of_speech_abbrev] [Chinese part of speech])
 [Chinese meaning] | [English definition under 8 words]
+🌱 词源: [brief etymology in Simplified Chinese]
 • [English example 1] ([Chinese translation])
 • [English example 2] ([Chinese translation])
-🌱 词源: [brief etymology in Simplified Chinese]
+• [English example 3] ([Chinese translation])
+
+Example:
+vitality /vaɪˈtæləti/ (n 名词)
+活力；生命力 | Energy and strong life force
+🌱 词源: 来自 vital（生命的、重要的）+ -ity（名词后缀）→ 指充满生命能量的状态
+• Exercise improves vitality. (运动能增强活力。)
+• She radiates vitality and confidence. (她散发着活力与自信。)
+• The city is full of vitality. (这座城市充满活力。)
 
 If IPA is uncertain, provide the most common pronunciation.
+Use exactly 3 example sentences.
 Do not output anything else."""
 
     user_prompt = word
