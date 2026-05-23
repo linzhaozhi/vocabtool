@@ -238,38 +238,23 @@ vitality /vaɪˈtæləti/ (n 名词)
         return {"error": str(e)}
 
 
-def answer_english_learning_question(question: str, task_mode: str = "自动判断") -> Dict[str, Any]:
+def answer_english_learning_question(question: str) -> Dict[str, Any]:
     """Answer a standalone English-learning question."""
     model_name = get_ai_model()
     normalized_question = str(question or "").strip()
     if not normalized_question:
         return {"error": "Question is required"}
 
-    mode_instructions = {
-        "自动判断": "Infer the user's intent and choose the most useful response shape.",
-        "用法/辨析": "Focus on the practical difference, common collocations, register, and short contrastive examples.",
-        "语法解释": "Name the grammar pattern, explain when to use it, show the structure, and give short examples.",
-        "翻译/润色": "Provide natural English first. If useful, add one casual version and one more polished version.",
-        "纠错改写": "Show the corrected or rewritten English first, then explain the key changes briefly.",
-        "例句/搭配": "Give natural example sentences and common collocations, with concise Chinese notes.",
-    }
-    selected_instruction = mode_instructions.get(task_mode, mode_instructions["自动判断"])
-
-    system_prompt = f"""You are a practical English AI assistant for a Chinese-speaking learner.
+    system_prompt = """You are a practical English AI assistant for a Chinese-speaking learner.
 
 Task:
 Replace the user's daily English-related AI questions. The user may ask about word usage, differences between words, grammar, translation, polishing, sentence correction, rewriting, pronunciation, collocations, examples, email wording, spoken English, or study wording.
-
-Selected task mode:
-{task_mode}
-
-Mode instruction:
-{selected_instruction}
 
 Rules:
 - Answer in Simplified Chinese by default.
 - Use English examples when helpful.
 - Be practical and direct; give the key answer first.
+- Infer the user's intent automatically; do not ask the user to choose a category.
 - For word comparisons, explain the main difference, then give examples.
 - For grammar questions, name the pattern, explain when to use it, and give examples.
 - For sentence correction or rewriting, show the corrected English sentence first, then explain briefly.
