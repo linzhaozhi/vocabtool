@@ -141,31 +141,25 @@ def _render_quick_lookup() -> None:
             display_html = _format_lookup_question_answer(raw_content)
         else:
             lines = [line.strip() for line in raw_content.split("\n") if line.strip()]
-            head_lines = []
-            phonetic_lines = []
-            definition_lines = []
-            example_lines = []
-            etymology_lines = []
-            other_lines = []
+            rendered_lines = []
 
             for idx, line in enumerate(lines):
                 safe_line = html.escape(line)
 
-                if line.startswith("🌱"):
-                    etymology_lines.append(f'<div class="quick-lookup-line quick-lookup-ety">{safe_line}</div>')
+                if idx == 0:
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-head">{safe_line}</div>')
+                elif line.startswith("🌱"):
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-ety">{safe_line}</div>')
                 elif line.startswith("🔊"):
-                    phonetic_lines.append(f'<div class="quick-lookup-line quick-lookup-phon">{safe_line}</div>')
-                elif "|" in line and len(line) < 50:
-                    definition_lines.append(f'<div class="quick-lookup-line quick-lookup-def">{safe_line}</div>')
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-phon">{safe_line}</div>')
+                elif "|" in line:
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-def">{safe_line}</div>')
                 elif line.startswith("•"):
-                    example_lines.append(f'<div class="quick-lookup-line quick-lookup-ex">{safe_line}</div>')
-                elif idx == 0:
-                    head_lines.append(f'<div class="quick-lookup-line quick-lookup-cn">{safe_line}</div>')
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-ex">{safe_line}</div>')
                 else:
-                    other_lines.append(f'<div class="quick-lookup-line quick-lookup-cn">{safe_line}</div>')
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-cn">{safe_line}</div>')
 
-            formatted_lines = head_lines + phonetic_lines + definition_lines + other_lines + example_lines + etymology_lines
-            display_html = "".join(formatted_lines).replace("\n", "<br>")
+            display_html = "".join(rendered_lines).replace("\n", "<br>")
 
         st.markdown(
             f"""

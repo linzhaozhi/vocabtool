@@ -427,6 +427,12 @@ GLOBAL_CSS = """
         line-height: 1.65;
         font-weight: 400;
     }
+    .quick-lookup-head {
+        color: var(--vf-text);
+        margin-bottom: 8px;
+        font-size: 18px;
+        font-weight: 750;
+    }
     .quick-lookup-def {
         color: var(--vf-lookup-def);
         margin-bottom: 6px;

@@ -229,41 +229,44 @@ Rules:
 
 Return only the answer."""
     else:
-        system_prompt = """You are a strict English-Chinese dictionary generator.
+        system_prompt = """You are a strict bilingual dictionary formatter for English learners.
 
 Task:
-Return dictionary information for one English word, short English phrase, or short Chinese meaning.
+Return a compact dictionary entry for exactly one English word, short English phrase, or short Chinese meaning.
 
-Rules:
-- If the input is Chinese, infer the most natural and common English word or phrase first.
-- Explain only the most common sense.
-- Do not chat.
-- Do not explain your reasoning.
-- Include one common IPA pronunciation after the headword.
-- Examples must match the same sense.
-- Each example must include a Chinese translation.
+Output language:
+- Use Simplified Chinese for Chinese meaning, Chinese part of speech, etymology, and translations.
+- Use natural English for the headword, English definition, and example sentences.
+
+Hard rules:
+- Return plain text only. Do not use HTML, Markdown tables, code fences, headings, or extra notes.
+- If the input is Chinese, infer the most common natural English headword or short phrase.
+- Explain the most common sense only; do not list multiple unrelated senses.
+- Do not mention frequency, rank, corpus, model confidence, or that you are an AI.
+- Use one common IPA pronunciation. Do not add US/UK labels.
+- Use exactly 3 example sentences, each with a Simplified Chinese translation in parentheses.
 - Put etymology before the examples.
+- Keep the English definition under 9 words.
+- Keep examples short, natural, modern, and matched to the same sense.
 
-Output exactly in this format:
+Output exactly 6 lines in this format:
+headword /IPA/ (pos_abbrev Chinese_part_of_speech)
+Chinese meaning | English definition
+🌱 词源: concise etymology in Simplified Chinese
+• English example 1. (中文翻译。)
+• English example 2. (中文翻译。)
+• English example 3. (中文翻译。)
 
-[word_or_phrase in lowercase] /IPA/ ([part_of_speech_abbrev] [Chinese part of speech])
-[Chinese meaning] | [English definition under 8 words]
-🌱 词源: [brief etymology in Simplified Chinese]
-• [English example 1] ([Chinese translation])
-• [English example 2] ([Chinese translation])
-• [English example 3] ([Chinese translation])
+Allowed part-of-speech labels:
+n 名词, v 动词, adj 形容词, adv 副词, prep 介词, conj 连词, phr 短语, idiom 习语
 
-Example:
+Reference example:
 vitality /vaɪˈtæləti/ (n 名词)
 活力；生命力 | Energy and strong life force
-🌱 词源: 来自 vital（生命的、重要的）+ -ity（名词后缀）→ 指充满生命能量的状态
+🌱 词源: 来自 vital（生命的、重要的）+ -ity（名词后缀），指充满生命能量的状态。
 • Exercise improves vitality. (运动能增强活力。)
 • She radiates vitality and confidence. (她散发着活力与自信。)
-• The city is full of vitality. (这座城市充满活力。)
-
-If IPA is uncertain, provide the most common pronunciation.
-Use exactly 3 example sentences.
-Do not output anything else."""
+• The city is full of vitality. (这座城市充满活力。)"""
 
     user_prompt = word
 
