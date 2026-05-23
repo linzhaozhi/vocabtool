@@ -116,15 +116,17 @@ def _get_template(card_template: str) -> Dict[str, str]:
             "afmt": '''
             {{FrontSide}}
             <hr>
-            <div class="phrase">{{Phrase}}</div>
+            <div class="phrase-row">
+                <span class="phrase">{{Phrase}}</span>
+                <span class="phrase-audio">{{Audio_Phrase}}</span>
+            </div>
             {{#Phonetic}}<div class="phonetic">{{Phonetic}}</div>{{/Phonetic}}
             <div class="meaning">{{ChineseMeaning}}</div>
             <div class="example">
                 <div>{{Example}}</div>
                 {{#Example_Translation}}<div class="example-translation">译：{{Example_Translation}}</div>{{/Example_Translation}}
             </div>
-            <div>{{Audio_Example}}</div>
-            <div>{{Audio_Phrase}}</div>
+            <div class="example-audio">{{Audio_Example}}</div>
             ''',
         },
     }
@@ -167,6 +169,9 @@ def generate_anki_package(
     .card { font-family: 'Arial', sans-serif; font-size: 20px; text-align: center; color: #333; background-color: white; padding: 20px; }
     .phrase { font-size: 28px; font-weight: 700; color: #0056b3; margin-bottom: 20px; }
     .nightMode .phrase { color: #66b0ff; }
+    .phrase-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 16px; }
+    .phrase-row .phrase { margin-bottom: 0; }
+    .phrase-audio { display: inline-flex; align-items: center; }
     .phonetic { font-size: 18px; color: #475569; margin-bottom: 14px; text-align: left; }
     .nightMode .phonetic { color: #cbd5e1; }
     hr { border: 0; height: 1px; background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0)); margin-bottom: 15px; }
@@ -184,6 +189,7 @@ def generate_anki_package(
         text-align: left;
         margin-bottom: 15px;
     }
+    .example-audio { margin-top: -6px; margin-bottom: 12px; text-align: left; }
     .nightMode .example { background: #383838; color: #ccc; border-left-color: #66b0ff; }
     .example-translation {
         margin-top: 10px;
