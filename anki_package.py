@@ -32,7 +32,11 @@ def _normalize_card_template(card_template: str) -> str:
 
 def _first_letter_hint(phrase: str) -> str:
     tokens = re.findall(r"[A-Za-z]+", phrase)
-    return " ".join(f"{token[0].lower()}______" for token in tokens if token)
+    return " ".join(
+        f'<span class="hint-token"><span class="hint-letter">{html.escape(token[0].lower())}</span><span class="hint-line"></span></span>'
+        for token in tokens
+        if token
+    )
 
 
 def _split_structured_meaning(meaning: str) -> tuple[str, str, str]:
@@ -199,7 +203,10 @@ def generate_anki_package(
     .front-example strong { color: #0f766e; font-weight: 800; }
     .front-definition { font-size: 25px; line-height: 1.45; color: #243041; margin-bottom: 12px; }
     .meta { display: inline-block; font-size: 15px; color: #526071; background: #eef6f8; border: 1px solid #cfe4ea; border-radius: 999px; padding: 3px 10px; margin: 4px 0 10px; }
-    .hint { display: inline-block; font-size: 18px; letter-spacing: 1px; color: #0f766e; background: #eefbf7; border: 1px solid #b7ead8; border-radius: 8px; padding: 6px 12px; margin-top: 8px; }
+    .hint { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 18px; letter-spacing: 0; color: #0f766e; background: #eefbf7; border: 1px solid #b7ead8; border-radius: 8px; padding: 6px 12px; margin-top: 8px; }
+    .hint-token { display: inline-flex; align-items: baseline; gap: 3px; }
+    .hint-letter { font-weight: 700; }
+    .hint-line { display: inline-block; width: 4.6em; border-bottom: 2px solid currentColor; transform: translateY(-0.12em); }
     .definition { font-size: 19px; color: #435060; margin-bottom: 14px; text-align: left; }
     .etymology { display: block; font-size: """ + str(constants.ANKI_ETYMOLOGY_FONT_SIZE_PX) + """px; line-height: 1.6; color: #555; background-color: #fffdf5; padding: 10px; border-radius: 6px; margin-bottom: 5px; border: 1px solid #fef3c7; }
     .nightMode .etymology { background-color: #333; color: #aaa; border-color: #444; }
