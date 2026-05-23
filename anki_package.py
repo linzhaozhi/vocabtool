@@ -32,10 +32,7 @@ def _normalize_card_template(card_template: str) -> str:
 
 def _first_letter_hint(phrase: str) -> str:
     tokens = re.findall(r"[A-Za-z]+", phrase)
-    return " ".join(
-        token[0].lower() + "_" * (len(token) - 1) if len(token) > 1 else token.lower()
-        for token in tokens
-    )
+    return " ".join(token[0].lower() for token in tokens if token)
 
 
 def _split_structured_meaning(meaning: str) -> tuple[str, str, str]:
