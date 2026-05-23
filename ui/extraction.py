@@ -6,6 +6,7 @@ from typing import Any
 import streamlit as st
 
 import constants
+from ai import select_priority_words
 from extraction import (
     extract_text_from_file,
     extract_text_from_url,
@@ -19,6 +20,7 @@ from ui.helpers import (
     clear_direct_wordlist_input,
     clear_paste_input,
     clear_url_input,
+    parse_wordlist_candidates,
     parse_unique_words,
     reset_extraction_state,
     set_extract_source_mode,
@@ -316,16 +318,89 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
             placeholder="altruism\nhectic\nserendipity",
             label_visibility="collapsed",
         )
+        if st.session_state.get("direct_wordlist_last_input") != raw_input:
+            st.session_state["direct_wordlist_last_input"] = raw_input
+            st.session_state["ai_word_selection_selected"] = ""
+            st.session_state["ai_word_selection_remaining"] = ""
 
-        if st.button("🚀 导入词表", key="btn_direct", type="primary"):
+        candidate_words = parse_wordlist_candidates(raw_input)
+        if candidate_words:
+            st.caption(f"已识别 {len(candidate_words)} 个候选词/短语。可以导入全部，也可以让 AI 筛出最值得先学的词。")
+
+        col_all_import, col_ai_count, col_ai_select = st.columns([1, 1, 2])
+        with col_all_import:
+            import_all = st.button("🚀 导入全部", key="btn_direct", type="primary", use_container_width=True)
+        with col_ai_count:
+            ai_select_count = st.number_input(
+                "AI 筛选数量",
+                min_value=1,
+                max_value=constants.AI_WORD_SELECTION_MAX_OUTPUT,
+                value=30,
+                step=1,
+                key="ai_word_selection_count",
+            )
+        with col_ai_select:
+            ai_select = st.button("✨ AI 筛选值得学的词", key="btn_ai_select_words", use_container_width=True)
+
+        if import_all:
             with st.spinner("正在解析列表..."):
-                unique_words = parse_unique_words(raw_input)
+                unique_words = candidate_words
                 if unique_words:
                     data_list = [(word, vocab_dict.get(word.lower(), 99999)) for word in unique_words]
                     set_generated_words_state(data_list, len(unique_words), None)
                     st.toast(f"✅ 已加载 {len(unique_words)} 个单词", icon="🎉")
                 else:
                     st.warning("⚠️ 内容为空。")
+
+        if ai_select:
+            if not candidate_words:
+                st.warning("⚠️ 请先输入单词列表。")
+            else:
+                candidates_for_ai = candidate_words[: constants.AI_WORD_SELECTION_INPUT_LIMIT]
+                if len(candidate_words) > constants.AI_WORD_SELECTION_INPUT_LIMIT:
+                    st.warning(
+                        f"⚠️ 候选词超过 {constants.AI_WORD_SELECTION_INPUT_LIMIT} 个，本次只处理前 {constants.AI_WORD_SELECTION_INPUT_LIMIT} 个。"
+                    )
+                target_count = min(int(ai_select_count), len(candidates_for_ai))
+                with st.spinner("AI 正在按优先级筛选..."):
+                    selection_result = select_priority_words(candidates_for_ai, target_count)
+                if selection_result and "error" not in selection_result:
+                    selected_words = selection_result.get("selected", [])
+                    remaining_words = selection_result.get("remaining", [])
+                    selected_text = "\n".join(selected_words)
+                    remaining_text = "\n".join(remaining_words)
+
+                    st.session_state["ai_word_selection_selected"] = selected_text
+                    st.session_state["ai_word_selection_remaining"] = remaining_text
+
+                    if selected_words:
+                        data_list = [(word, vocab_dict.get(word.lower(), 99999)) for word in selected_words]
+                        set_generated_words_state(data_list, len(candidates_for_ai), None)
+                        st.toast(f"✅ 已筛出 {len(selected_words)} 个词，并同步到制卡词表", icon="🎉")
+                    else:
+                        st.warning("⚠️ AI 没有返回可用筛选结果。")
+                else:
+                    error_message = selection_result.get("error", "未知错误") if selection_result else "未知错误"
+                    st.error(f"❌ AI 筛选失败：{error_message}")
+
+        if st.session_state.get("ai_word_selection_selected") or st.session_state.get("ai_word_selection_remaining"):
+            st.markdown("#### AI 筛选结果")
+            selected_text = st.session_state.get("ai_word_selection_selected", "")
+            remaining_text = st.session_state.get("ai_word_selection_remaining", "")
+
+            col_selected_title, col_selected_copy = st.columns([5, 1])
+            with col_selected_title:
+                st.markdown("筛选出的单词")
+            with col_selected_copy:
+                render_copy_button(selected_text, key="copy_ai_selected_words")
+            st.code(selected_text or "", language="text")
+
+            col_remaining_title, col_remaining_copy = st.columns([5, 1])
+            with col_remaining_title:
+                st.markdown("剩余单词")
+            with col_remaining_copy:
+                render_copy_button(remaining_text, key="copy_ai_remaining_words")
+            st.code(remaining_text or "", language="text")
 
     elif extract_source_mode == "Anki":
         result_step_title = "#### 查看与整理结果"

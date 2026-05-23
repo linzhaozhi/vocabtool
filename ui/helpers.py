@@ -112,6 +112,34 @@ def parse_unique_words(raw_text: str) -> list[str]:
     return words
 
 
+def parse_wordlist_candidates(raw_text: str) -> list[str]:
+    """Parse a messy user word list while preserving useful phrases."""
+    words: list[str] = []
+    seen_words = set()
+    for raw_item in re.split(r"[,\n\t]+", str(raw_text or "")):
+        cleaned = raw_item.strip()
+        cleaned = re.sub(r"^[\s>*•◆◇●○\-–—]+", "", cleaned).strip()
+        cleaned = re.sub(r"^\d+[.)]\s*", "", cleaned).strip()
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        cleaned = cleaned.strip(" \r\n,;:，。；：.!?！？\"“”‘’")
+        cleaned = re.sub(r"\s*\([^)]*\)\s*$", "", cleaned).strip()
+
+        if not cleaned:
+            continue
+        if re.fullmatch(r"(?i)chapter\s+\d+", cleaned):
+            continue
+        if len(cleaned) > 70:
+            continue
+        if not re.search(r"[A-Za-z]", cleaned):
+            continue
+
+        normalized = re.sub(r"\s+", " ", cleaned).lower()
+        if normalized not in seen_words:
+            seen_words.add(normalized)
+            words.append(cleaned)
+    return words
+
+
 def sync_extract_editor_to_cards() -> None:
     """Keep the card creation editor in sync with extraction edits."""
     st.session_state["word_list_editor"] = st.session_state.get("extract_word_editor", "")
@@ -159,6 +187,8 @@ def clear_direct_wordlist_input(file_signature: str = "") -> None:
     """Clear direct word-list text input."""
     st.session_state["direct_wordlist_input"] = ""
     st.session_state["direct_wordlist_file_signature"] = file_signature
+    st.session_state["ai_word_selection_selected"] = ""
+    st.session_state["ai_word_selection_remaining"] = ""
 
 
 def normalize_lookup_query(raw_text: str) -> str:

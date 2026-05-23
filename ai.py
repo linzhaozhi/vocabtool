@@ -341,6 +341,124 @@ another word
         return {"error": str(e)}
 
 
+def _normalize_selection_item(value: str) -> str:
+    """Normalize a vocabulary candidate for matching AI output back to input."""
+    text = re.sub(r"^[\s>*•◆◇●○\-–—]+", "", str(value or "")).strip()
+    text = re.sub(r"^\d+[.)]\s*", "", text).strip()
+    text = re.sub(r"\s+", " ", text)
+    text = text.strip(" \r\n,;:，。；：.!?！？\"“”‘’")
+    text = re.sub(r"\s*\([^)]*\)\s*$", "", text).strip()
+    return text.lower()
+
+
+def _parse_ai_word_block(raw_text: str) -> List[str]:
+    """Parse one AI-returned word code block into clean lines."""
+    words = []
+    for raw_line in str(raw_text or "").splitlines():
+        cleaned = re.sub(r"^[\s>*•◆◇●○\-–—]+", "", raw_line).strip()
+        cleaned = re.sub(r"^\d+[.)]\s*", "", cleaned).strip()
+        cleaned = cleaned.strip(" \r\n,;:，。；：.!?！？\"“”‘’")
+        if cleaned and not re.fullmatch(r"(?i)(selected|remaining|rest|筛选|剩余)[:：]?", cleaned):
+            words.append(cleaned)
+    return words
+
+
+def select_priority_words(candidates: List[str], target_count: int) -> Dict[str, Any]:
+    """Use AI to select the most worthwhile words to learn first."""
+    normalized_candidates = []
+    seen_candidates = set()
+    for candidate in candidates:
+        cleaned = str(candidate or "").strip()
+        normalized = _normalize_selection_item(cleaned)
+        if cleaned and normalized and normalized not in seen_candidates:
+            seen_candidates.add(normalized)
+            normalized_candidates.append(cleaned)
+
+    if not normalized_candidates:
+        return {"error": "No candidate words"}
+
+    target_count = max(1, min(int(target_count), len(normalized_candidates), constants.AI_WORD_SELECTION_MAX_OUTPUT))
+    model_name = get_ai_model()
+    candidate_text = "\n".join(f"{idx + 1}. {word}" for idx, word in enumerate(normalized_candidates))
+
+    system_prompt = """You are a strict English vocabulary prioritizer for a Chinese-speaking learner.
+
+Task:
+From a messy list of English words and phrases, select the target number of items that are most worth learning first.
+
+Priority rules:
+- Higher priority: common, general-purpose, useful, reusable, easy or concrete words and phrases.
+- Simpler and more common items should rank higher than rare or specialized items.
+- Medium priority: useful academic, workplace, health, news, or daily-life words.
+- Lower priority: proper nouns, brands, organizations, acronyms, sports-only terms, very technical terms, very rare words, chapter headings, duplicates, misspellings, and noisy fragments.
+- Keep multi-word phrases only when they are genuinely useful expressions.
+- Preserve the exact candidate wording when possible.
+
+Output rules:
+- Output exactly two fenced ```text code blocks.
+- The first code block contains the selected items, one per line.
+- The second code block contains the remaining valid items, one per line.
+- Do not number the lines.
+- Do not use bullets.
+- Do not add explanations.
+- Do not output anything except the two code blocks."""
+
+    user_prompt = f"""Target selected count: {target_count}
+
+Candidate list:
+{candidate_text}"""
+
+    try:
+        response = _call_ai_chat_completion(
+            model_name,
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            0.2,
+        )
+        if "error" in response:
+            return {"error": response["error"]}
+
+        content = response.get("content", "")
+        code_blocks = re.findall(r"```(?:text)?\s*(.*?)```", content, flags=re.IGNORECASE | re.DOTALL)
+        selected_lines = _parse_ai_word_block(code_blocks[0] if code_blocks else content)
+
+        candidate_by_norm = {_normalize_selection_item(word): word for word in normalized_candidates}
+        selected = []
+        selected_norms = set()
+        for line in selected_lines:
+            normalized = _normalize_selection_item(line)
+            if normalized in candidate_by_norm and normalized not in selected_norms:
+                selected_norms.add(normalized)
+                selected.append(candidate_by_norm[normalized])
+            if len(selected) >= target_count:
+                break
+
+        for candidate in normalized_candidates:
+            normalized = _normalize_selection_item(candidate)
+            if len(selected) >= target_count:
+                break
+            if normalized not in selected_norms:
+                selected_norms.add(normalized)
+                selected.append(candidate)
+
+        remaining = [
+            candidate
+            for candidate in normalized_candidates
+            if _normalize_selection_item(candidate) not in selected_norms
+        ]
+
+        return {
+            "result": content,
+            "selected": selected,
+            "remaining": remaining,
+        }
+    except Exception as e:
+        logger.error("Error selecting priority words: %s", e)
+        return {"error": str(e)}
+
+
 def process_ai_in_batches(
     words_list: List[str],
     example_count: int = constants.AI_CARD_EXAMPLE_COUNT_DEFAULT,
