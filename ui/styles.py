@@ -506,10 +506,6 @@ def render_app_header() -> None:
     st.caption(
         f"把日常英语助手、提词、制卡分开处理。支持内置智能释义、词源与语音，默认词库来自 {constants.VOCAB_PROJECT_NAME}。"
     )
-    st.markdown(
-        '<div class="workflow-banner">首页代替日常 AI 英语提问：查词、语法、辨析、翻译、润色、纠错都在一起；再整理词表，最后生成卡片。</div>',
-        unsafe_allow_html=True,
-    )
 
 
 def render_help_panel(vocab_available: bool) -> None:
