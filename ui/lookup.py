@@ -166,31 +166,6 @@ def _render_quick_lookup() -> None:
 
             formatted_lines = head_lines + phonetic_lines + definition_lines + other_lines + example_lines + etymology_lines
             display_html = "".join(formatted_lines).replace("\n", "<br>")
-        rank = result.get("rank")
-        rank_badge_html = ""
-        if isinstance(rank, (int, float)):
-            if rank <= 5000:
-                rank_color = "#10b981"
-                rank_label = "高频词"
-            elif rank <= 10000:
-                rank_color = "#3b82f6"
-                rank_label = "常用词"
-            elif rank <= 20000:
-                rank_color = "#f59e0b"
-                rank_label = "进阶词"
-            elif rank < 99999:
-                rank_color = "#ef4444"
-                rank_label = "专业词"
-            else:
-                rank_color = "#6b7280"
-                rank_label = "未收录"
-            rank_badge_html = f"""
-                <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--vf-border);">
-                    <span style="display: inline-block; background: {rank_color}; color: white; padding: 4px 12px; border-radius: 6px; font-size: 14px; font-weight: 600;">
-                        📊 {constants.VOCAB_PROJECT_NAME}词频排名：{rank}（{rank_label}）
-                    </span>
-                </div>
-            """
 
         st.markdown(
             f"""
@@ -199,7 +174,6 @@ def _render_quick_lookup() -> None:
                 <div class="quick-lookup-card">
                     {display_html}
                 </div>
-                {rank_badge_html}
             </div>
         </div>
         """,
