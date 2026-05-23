@@ -19,6 +19,24 @@ from ui.helpers import (
 )
 from utils import render_copy_button
 
+ENGLISH_ASSISTANT_MODES = (
+    "自动判断",
+    "用法/辨析",
+    "语法解释",
+    "翻译/润色",
+    "纠错改写",
+    "例句/搭配",
+)
+
+ENGLISH_ASSISTANT_PLACEHOLDERS = {
+    "自动判断": "例如：这个表达自然吗？affect 和 effect 有什么区别？",
+    "用法/辨析": "例如：affect 和 effect 有什么区别？分别怎么用？",
+    "语法解释": "例如：为什么这里用 present perfect？",
+    "翻译/润色": "例如：帮我把“我想确认一下会议时间”翻成自然英文。",
+    "纠错改写": "例如：I very like this idea. 这句怎么改自然？",
+    "例句/搭配": "例如：给我 5 个 use up 的常用例句和搭配。",
+}
+
 
 def _strip_lookup_html_fragments(raw_content: str) -> str:
     """Remove model-leaked HTML fragments before any lookup rendering."""
@@ -188,8 +206,8 @@ else:
 
 
 def _render_english_questions() -> None:
-    st.markdown("### 💬 英语问答")
-    st.caption("这里可以问用法、语法、辨析、改句子、翻译、搭配、发音等英语学习问题。")
+    st.markdown("### 💬 英语助手")
+    st.caption("把平时会问 AI 的英语问题放这里：用法、语法、辨析、翻译、润色、纠错、搭配、发音都可以。")
     st.markdown("例如：affect 和 effect 有什么区别？这句话语法对吗？帮我把这句英文写自然一点。")
 
     if "english_question_last_query" not in st.session_state:
@@ -200,11 +218,17 @@ def _render_english_questions() -> None:
         st.session_state["english_question_is_loading"] = False
 
     with st.form("english_question_form", clear_on_submit=False):
+        task_mode = st.radio(
+            "任务类型",
+            ENGLISH_ASSISTANT_MODES,
+            horizontal=True,
+            key="english_question_mode",
+        )
         question_text = st.text_area(
             "输入英语学习问题",
             height=120,
             key="english_question_input",
-            placeholder="例如：affect 和 effect 有什么区别？",
+            placeholder=ENGLISH_ASSISTANT_PLACEHOLDERS.get(task_mode, ENGLISH_ASSISTANT_PLACEHOLDERS["自动判断"]),
             label_visibility="collapsed",
         )
         col_submit, col_clear = st.columns([1, 1])
@@ -236,7 +260,8 @@ def _render_english_questions() -> None:
             try:
                 with st.spinner("💬 正在回答..."):
                     st.session_state["english_question_last_result"] = answer_english_learning_question(
-                        normalized_question
+                        normalized_question,
+                        task_mode,
                     )
                 st.session_state["english_question_last_query"] = normalized_question
             finally:

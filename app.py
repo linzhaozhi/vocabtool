@@ -44,7 +44,7 @@ render_app_header()
 render_help_panel(bool(VOCAB_DICT))
 
 tab_lookup, tab_extract, tab_cards = st.tabs([
-    "1️⃣ 查词问答",
+    "1️⃣ 英语助手",
     "2️⃣ 提取单词",
     "3️⃣ 制作卡片",
 ])
