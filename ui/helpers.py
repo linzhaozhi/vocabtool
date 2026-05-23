@@ -264,7 +264,7 @@ def validate_lookup_query(raw_text: str) -> tuple[bool, str, str]:
         return False, "", "⚠️ 请输入一个英文单词、短语或简短中文释义。"
     if is_english_lookup_query(query) or is_chinese_gloss_query(query):
         return True, query, ""
-    return False, "", "⚠️ 查单词页只支持单词、短语或简短中文释义；用法、语法、辨析等问题请到“英语问答”。"
+    return False, "", "⚠️ 查单词只支持单词、短语或简短中文释义；用法、语法、辨析等问题请用下方“英语问答”。"
 
 
 def validate_english_question(raw_text: str) -> tuple[bool, str, str]:

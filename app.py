@@ -43,17 +43,14 @@ apply_global_styles()
 render_app_header()
 render_help_panel(bool(VOCAB_DICT))
 
-tab_lookup, tab_english, tab_extract, tab_cards = st.tabs([
-    "1️⃣ 查单词",
-    "2️⃣ 英语问答",
-    "3️⃣ 提取单词",
-    "4️⃣ 制作卡片",
+tab_lookup, tab_extract, tab_cards = st.tabs([
+    "1️⃣ 查词问答",
+    "2️⃣ 提取单词",
+    "3️⃣ 制作卡片",
 ])
 
 with tab_lookup:
     render_lookup_tab(VOCAB_DICT)
-
-with tab_english:
     render_english_questions_tab(VOCAB_DICT)
 
 with tab_extract:

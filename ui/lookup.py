@@ -65,7 +65,7 @@ def _format_lookup_question_answer(raw_content: str) -> str:
 
 def _render_quick_lookup() -> None:
     st.markdown("### 🔍 极速查词")
-    st.caption("💡 查单词页只支持英文单词、短语或简短中文释义；用法、语法、辨析等问题请到“英语问答”。")
+    st.caption("💡 查单词只支持英文单词、短语或简短中文释义；用法、语法、辨析等问题请用下方“英语问答”。")
     st.markdown("例如：serendipity、take off、偶然发现")
 
     if "quick_lookup_last_query" not in st.session_state:

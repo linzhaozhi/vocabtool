@@ -92,7 +92,7 @@ def _render_generated_words_result() -> None:
         st.button("清空提取结果", type="secondary", on_click=reset_extraction_state, use_container_width=True)
 
     st.markdown(
-        '<div class="flow-next-panel"><strong>下一步：去制作卡片</strong>词表已经同步到 <strong>4️⃣ 制作卡片</strong>，切换过去就能直接生成。</div>',
+        '<div class="flow-next-panel"><strong>下一步：去制作卡片</strong>词表已经同步到 <strong>3️⃣ 制作卡片</strong>，切换过去就能直接生成。</div>',
         unsafe_allow_html=True,
     )
     st.success("➡️ 词表已同步到“制作卡片”标签，切换后可直接生成。")

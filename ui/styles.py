@@ -504,10 +504,10 @@ def render_app_header() -> None:
     """Render the static app header."""
     st.title("⚡️ 单词流 · 稳定版")
     st.caption(
-        f"把查词、英语问答、提词、制卡分开处理。支持内置智能释义、词源与语音，默认词库来自 {constants.VOCAB_PROJECT_NAME}。"
+        f"把查词问答、提词、制卡分开处理。支持内置智能释义、词源与语音，默认词库来自 {constants.VOCAB_PROJECT_NAME}。"
     )
     st.markdown(
-        '<div class="workflow-banner">查词只查单词；英语问答单独处理用法、语法和辨析；再整理词表，最后生成卡片。</div>',
+        '<div class="workflow-banner">查词和英语问答放在同一页；先解决词义和用法，再整理词表，最后生成卡片。</div>',
         unsafe_allow_html=True,
     )
 
@@ -523,10 +523,9 @@ def render_help_panel(vocab_available: bool) -> None:
         st.markdown(
             """
     **🚀 极速工作流**
-    1. **查单词**：只查单词、短语或简短中文释义。
-    2. **英语问答**：询问用法、语法、辨析、翻译、改句子等英语学习问题。
-    3. **提取单词**：来源分为用户语料、单词表、词库三个板块，整理后的词表会自动同步到制卡。
-    4. **制作卡片**：在“制作卡片”里使用内置智能生成并下载 Anki 牌组。
+    1. **查词问答**：上半部分只查单词、短语或简短中文释义；下半部分询问用法、语法、辨析、翻译、改句子等英语学习问题。
+    2. **提取单词**：来源分为用户语料、单词表、词库三个板块，整理后的词表会自动同步到制卡。
+    3. **制作卡片**：在“制作卡片”里使用内置智能生成并下载 Anki 牌组。
 
     **📚 当前词库**
     - 默认词库：NGSL 项目词表（`ngsl_31k.csv`）
@@ -540,7 +539,7 @@ def render_help_panel(vocab_available: bool) -> None:
     """
         )
 
-    st.caption("功能现在独立分区：查词、问英语、提词、制卡分开处理。")
+    st.caption("功能现在独立分区：查词问答、提词、制卡分开处理。")
 
 
 def render_app_footer() -> None:
