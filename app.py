@@ -5,7 +5,14 @@ constants, resources, extraction, vocab, ai, anki_parse, tts,
 anki_package, and state.
 """
 
+import sys
+from pathlib import Path
+
 import streamlit as st
+
+APP_DIR = Path(__file__).resolve().parent
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
 
 import resources
 from anki_package import cleanup_old_apkg_files

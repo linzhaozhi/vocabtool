@@ -25,7 +25,7 @@ from ui.helpers import (
     sync_extract_editor_to_cards,
 )
 from utils import render_copy_button, run_gc
-from vocab import analyze_logic
+from vocab_logic import analyze_logic
 
 SOURCE_BLOCK_OPTIONS = ("用户语料", "单词表", "词库")
 SOURCE_BLOCK_MODES = {
