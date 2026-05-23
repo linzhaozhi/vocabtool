@@ -171,65 +171,11 @@ def _definition_instruction(definition_language: str) -> str:
     return "Concise Simplified Chinese only."
 
 
-def _is_lookup_question(query: str) -> bool:
-    """Detect short vocabulary questions so the UI can avoid showing a fake rank."""
-    lowered = query.lower()
-    markers = (
-        "区别",
-        "差别",
-        "不同",
-        "辨析",
-        "对比",
-        "比较",
-        "用法",
-        "怎么用",
-        "什么意思",
-        "例句",
-        "造句",
-        "近义",
-        "同义",
-        "反义",
-        "搭配",
-        "vs",
-        "versus",
-        "difference",
-        "compare",
-        "usage",
-        "meaning",
-        "example",
-        "synonym",
-        "antonym",
-        "collocation",
-    )
-    return any(marker in lowered for marker in markers)
-
-
 def get_word_quick_definition(word: str) -> Dict[str, Any]:
-    """Get ultra-concise word definition using AI, with rank info."""
+    """Get a compact bilingual dictionary entry for one word or phrase."""
     vocab_dict = get_vocab_dict()
     model_name = get_ai_model()
-    is_question = _is_lookup_question(word)
-
-    if is_question:
-        system_prompt = """You are a concise English-Chinese vocabulary helper.
-
-Task:
-Answer the user's vocabulary question directly.
-
-Rules:
-- Answer in Simplified Chinese, with English examples when useful.
-- Keep the answer focused on word meaning, usage, examples, synonyms, antonyms, collocations, pronunciation, or differences between words.
-- Do not use a fixed dictionary template.
-- Do not chat or explain your reasoning.
-- Do not answer non-vocabulary tasks.
-- Do not output HTML tags such as <div>, </div>, <br>, or escaped HTML.
-- If comparing words, give the key difference first, then usage notes and examples.
-- Include US/UK IPA only when it is useful.
-- Keep the answer concise and easy to scan.
-
-Return only the answer."""
-    else:
-        system_prompt = """You are a strict bilingual dictionary formatter for English learners.
+    system_prompt = """You are a strict bilingual dictionary formatter for English learners.
 
 Task:
 Return a compact dictionary entry for exactly one English word, short English phrase, or short Chinese meaning.
@@ -284,11 +230,52 @@ vitality /vaɪˈtæləti/ (n 名词)
 
         content = response.get("content", "")
         headword = extract_lookup_headword(content)
-        rank = None if is_question else vocab_dict.get(headword, 99999)
-        return {"result": content, "rank": rank, "headword": headword, "is_question": is_question}
+        rank = vocab_dict.get(headword, 99999)
+        return {"result": content, "rank": rank, "headword": headword, "is_question": False}
 
     except Exception as e:
         logger.error("Error getting definition: %s", e)
+        return {"error": str(e)}
+
+
+def answer_english_learning_question(question: str) -> Dict[str, Any]:
+    """Answer a standalone English-learning question."""
+    model_name = get_ai_model()
+    normalized_question = str(question or "").strip()
+    if not normalized_question:
+        return {"error": "Question is required"}
+
+    system_prompt = """You are a concise English learning tutor for Chinese-speaking learners.
+
+Task:
+Answer the user's English-learning question. The user may ask about grammar, word usage, differences between words, sentence correction, rewriting, translation, pronunciation, collocations, or examples.
+
+Rules:
+- Answer in Simplified Chinese by default.
+- Use English examples when helpful.
+- Be practical and direct; give the key answer first.
+- For word comparisons, explain the main difference, then give examples.
+- For grammar questions, name the pattern, explain when to use it, and give examples.
+- For sentence correction or rewriting, show the corrected English sentence first, then explain briefly.
+- For translation requests, provide natural English and mention a more formal or casual option only if useful.
+- Do not answer non-English-learning tasks.
+- Do not output HTML, Markdown tables, code fences, or long essays.
+- Keep the answer concise and easy to scan."""
+
+    try:
+        response = _call_ai_chat_completion(
+            model_name,
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": normalized_question},
+            ],
+            0.3,
+        )
+        if "error" in response:
+            return {"error": response["error"]}
+        return {"result": response.get("content", "")}
+    except Exception as e:
+        logger.error("Error answering English question: %s", e)
         return {"error": str(e)}
 
 

@@ -6,12 +6,14 @@ import re
 import streamlit as st
 
 import constants
-from ai import generate_topic_word_list, get_word_quick_definition
+from ai import answer_english_learning_question, generate_topic_word_list, get_word_quick_definition
 from state import set_generated_words_state
 from ui.helpers import (
+    clear_english_question_state,
     clear_quick_lookup_state,
     clear_topic_wordlist_state,
     parse_topic_word_list,
+    validate_english_question,
     validate_lookup_query,
     validate_topic_label,
 )
@@ -63,8 +65,8 @@ def _format_lookup_question_answer(raw_content: str) -> str:
 
 def _render_quick_lookup() -> None:
     st.markdown("### 🔍 极速查词")
-    st.caption("💡 支持英文单词、短语、简短中文释义，也支持词汇问题，比如区别、用法、例句。")
-    st.markdown("例如：serendipity、take off、偶然发现、serendipity和luck的区别")
+    st.caption("💡 查单词页只支持英文单词、短语或简短中文释义；用法、语法、辨析等问题请到“英语问答”。")
+    st.markdown("例如：serendipity、take off、偶然发现")
 
     if "quick_lookup_last_query" not in st.session_state:
         st.session_state["quick_lookup_last_query"] = ""
@@ -86,8 +88,8 @@ def _render_quick_lookup() -> None:
         col_word, col_btn, col_clear = st.columns([4, 1, 1])
         with col_word:
             lookup_word = st.text_input(
-                "输入单词、短语或词汇问题",
-                placeholder="输入单词、短语、中文释义或词汇问题",
+                "输入单词、短语或简短中文释义",
+                placeholder="输入单词、短语或简短中文释义",
                 key="quick_lookup_word",
                 label_visibility="collapsed",
                 autocomplete="off",
@@ -185,9 +187,94 @@ else:
     render_quick_lookup = _render_quick_lookup
 
 
-def render_lookup_tab(vocab_dict: dict[str, int]) -> None:
-    """Render the complete lookup tab."""
+def _render_english_questions() -> None:
+    st.markdown("### 💬 英语问答")
+    st.caption("这里可以问用法、语法、辨析、改句子、翻译、搭配、发音等英语学习问题。")
+    st.markdown("例如：affect 和 effect 有什么区别？这句话语法对吗？帮我把这句英文写自然一点。")
+
+    if "english_question_last_query" not in st.session_state:
+        st.session_state["english_question_last_query"] = ""
+    if "english_question_last_result" not in st.session_state:
+        st.session_state["english_question_last_result"] = None
+    if "english_question_is_loading" not in st.session_state:
+        st.session_state["english_question_is_loading"] = False
+
+    with st.form("english_question_form", clear_on_submit=False):
+        question_text = st.text_area(
+            "输入英语学习问题",
+            height=120,
+            key="english_question_input",
+            placeholder="例如：affect 和 effect 有什么区别？",
+            label_visibility="collapsed",
+        )
+        col_submit, col_clear = st.columns([1, 1])
+        with col_submit:
+            question_submit = st.form_submit_button(
+                "回答中..." if st.session_state["english_question_is_loading"] else "提问",
+                type="primary",
+                use_container_width=True,
+                disabled=st.session_state["english_question_is_loading"],
+            )
+        with col_clear:
+            st.form_submit_button(
+                "清空",
+                type="secondary",
+                use_container_width=True,
+                on_click=clear_english_question_state,
+            )
+
+    if question_submit:
+        is_valid_question, normalized_question, error_message = validate_english_question(question_text)
+        if not is_valid_question:
+            st.session_state["english_question_last_query"] = ""
+            st.session_state["english_question_last_result"] = None
+            st.warning(error_message)
+        elif st.session_state["english_question_is_loading"]:
+            st.info("⏳ 回答进行中，请稍候。")
+        else:
+            st.session_state["english_question_is_loading"] = True
+            try:
+                with st.spinner("💬 正在回答..."):
+                    st.session_state["english_question_last_result"] = answer_english_learning_question(
+                        normalized_question
+                    )
+                st.session_state["english_question_last_query"] = normalized_question
+            finally:
+                st.session_state["english_question_is_loading"] = False
+
+    result = st.session_state.get("english_question_last_result")
+    if result and "error" not in result:
+        display_html = _format_lookup_question_answer(result.get("result", ""))
+        st.markdown(
+            f"""
+        <div style="background: var(--vf-accent-gradient); padding: 3px; border-radius: 14px; margin: 15px 0; box-shadow: var(--vf-shadow-soft);">
+            <div style="background: var(--vf-surface-elevated); border: 1px solid var(--vf-border); padding: 25px; border-radius: 12px;">
+                {display_html}
+            </div>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+    elif result and "error" in result:
+        st.error(f"❌ 回答失败：{result.get('error', '未知错误')}")
+
+    st.markdown("---")
+
+
+if hasattr(st, "fragment"):
+    render_english_questions = st.fragment(_render_english_questions)
+else:
+    render_english_questions = _render_english_questions
+
+
+def render_lookup_tab(_: dict[str, int]) -> None:
+    """Render the word-only lookup tab."""
     render_quick_lookup()
+
+
+def render_english_questions_tab(vocab_dict: dict[str, int]) -> None:
+    """Render English Q&A and topic word-list tools."""
+    render_english_questions()
 
     st.markdown("### 🧠 主题词表生成")
     st.caption(f"💡 只要选择主题和个数即可。单次最多生成 {constants.AI_TOPIC_WORDLIST_MAX} 个常见词。")

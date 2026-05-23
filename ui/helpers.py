@@ -130,6 +130,14 @@ def clear_quick_lookup_state() -> None:
     st.session_state["quick_lookup_is_loading"] = False
 
 
+def clear_english_question_state() -> None:
+    """Clear English Q&A input and rendered answer."""
+    st.session_state["english_question_input"] = ""
+    st.session_state["english_question_last_query"] = ""
+    st.session_state["english_question_last_result"] = None
+    st.session_state["english_question_is_loading"] = False
+
+
 def clear_topic_wordlist_state() -> None:
     """Clear topic word-list input and generated output."""
     st.session_state["topic_word_topic"] = ""
@@ -249,108 +257,70 @@ def is_chinese_gloss_query(query: str) -> bool:
     return not any(phrase in query for phrase in blocked_phrases)
 
 
-def is_vocabulary_lookup_question(query: str) -> bool:
-    """Allow short vocabulary questions without turning lookup into general chat."""
-    if len(query) > 120 or "\n" in query:
-        return False
-    if re.search(r"https?://|www\.|[`<>_=+*{}[\]|\\]", query, flags=re.IGNORECASE):
-        return False
-
-    compact = query.replace(" ", "")
-    if len(compact) < 2:
-        return False
-
-    lowered = query.lower()
-    blocked_phrases = (
-        "写一篇",
-        "写作文",
-        "写邮件",
-        "写代码",
-        "帮我写",
-        "总结",
-        "分析这篇",
-        "翻译这段",
-        "聊天",
-        "角色扮演",
-        "新闻",
-        "天气",
-        "股票",
-        "代码",
-        "编程",
-        "python",
-        "javascript",
-        "streamlit",
-        "write an essay",
-        "write code",
-        "summarize",
-        "news",
-        "weather",
-        "stock",
-        "roleplay",
-        "chat with me",
-    )
-    if any(phrase in lowered for phrase in blocked_phrases):
-        return False
-
-    vocab_markers = (
-        "区别",
-        "差别",
-        "不同",
-        "辨析",
-        "对比",
-        "比较",
-        "用法",
-        "怎么用",
-        "什么意思",
-        "意思",
-        "含义",
-        "例句",
-        "造句",
-        "近义",
-        "同义",
-        "反义",
-        "词源",
-        "音标",
-        "发音",
-        "搭配",
-        "vs",
-        " versus ",
-        "difference",
-        "different",
-        "compare",
-        "comparison",
-        "meaning",
-        "mean",
-        "usage",
-        "example",
-        "sentence",
-        "synonym",
-        "antonym",
-        "pronunciation",
-        "ipa",
-        "etymology",
-        "collocation",
-    )
-    has_vocab_marker = any(marker in lowered for marker in vocab_markers)
-    has_english = bool(re.search(r"[A-Za-z]", query))
-    has_chinese = bool(re.search(r"[\u4e00-\u9fff]", query))
-    if not has_vocab_marker:
-        return False
-    if has_english:
-        return len(re.findall(r"[A-Za-z]+(?:['-][A-Za-z]+)*", query)) <= 12
-    if has_chinese:
-        return len(compact) <= 40
-    return False
-
-
 def validate_lookup_query(raw_text: str) -> tuple[bool, str, str]:
     """Validate quick-lookup input and return (is_valid, normalized_query, error)."""
     query = normalize_lookup_query(raw_text)
     if not query:
-        return False, "", "⚠️ 请输入单词、短语、简短中文释义或词汇问题。"
-    if is_english_lookup_query(query) or is_chinese_gloss_query(query) or is_vocabulary_lookup_question(query):
+        return False, "", "⚠️ 请输入一个英文单词、短语或简短中文释义。"
+    if is_english_lookup_query(query) or is_chinese_gloss_query(query):
         return True, query, ""
-    return False, "", "⚠️ 这里只适合查询单词、短语、中文释义或简短词汇问题；不支持长文本、泛聊天或非词汇任务。"
+    return False, "", "⚠️ 查单词页只支持单词、短语或简短中文释义；用法、语法、辨析等问题请到“英语问答”。"
+
+
+def validate_english_question(raw_text: str) -> tuple[bool, str, str]:
+    """Validate English-learning questions for the standalone Q&A tab."""
+    question = raw_text.strip()
+    if not question:
+        return False, "", "⚠️ 请输入一个英语学习问题。"
+    if len(question) > 800:
+        return False, "", "⚠️ 问题太长了，请控制在 800 个字符以内。"
+    if re.search(r"https?://|www\.|[`<>_=+*{}[\]|\\]", question, flags=re.IGNORECASE):
+        return False, "", "⚠️ 暂不支持链接、代码或复杂格式内容。"
+
+    lowered = question.lower()
+    allowed_markers = (
+        "区别",
+        "差别",
+        "不同",
+        "辨析",
+        "用法",
+        "语法",
+        "时态",
+        "例句",
+        "造句",
+        "翻译",
+        "改写",
+        "润色",
+        "纠正",
+        "发音",
+        "搭配",
+        "作文",
+        "句子",
+        "单词",
+        "短语",
+        "英语",
+        "英文",
+        "meaning",
+        "mean",
+        "difference",
+        "grammar",
+        "usage",
+        "example",
+        "sentence",
+        "translate",
+        "rewrite",
+        "correct",
+        "polish",
+        "pronunciation",
+        "collocation",
+        "tense",
+        "word",
+        "phrase",
+        "english",
+    )
+    if any(marker in lowered for marker in allowed_markers) or re.search(r"[A-Za-z]", question):
+        return True, question, ""
+    return False, "", "⚠️ 这里只回答英语学习相关问题。"
 
 
 def extract_code_block_text(raw_text: str) -> str:
@@ -446,4 +416,3 @@ def set_extract_source_mode(mode: str | None) -> str:
     if previous_mode != current_mode:
         refresh_extract_source_inputs(current_mode)
     return current_mode
-

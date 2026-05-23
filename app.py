@@ -19,7 +19,7 @@ from anki_package import cleanup_old_apkg_files
 from ui.cards import render_cards_tab
 from ui.extraction import render_extraction_tab
 from ui.helpers import initialize_session_state
-from ui.lookup import render_lookup_tab
+from ui.lookup import render_english_questions_tab, render_lookup_tab
 from ui.styles import (
     apply_global_styles,
     configure_page,
@@ -43,14 +43,18 @@ apply_global_styles()
 render_app_header()
 render_help_panel(bool(VOCAB_DICT))
 
-tab_lookup, tab_extract, tab_cards = st.tabs([
+tab_lookup, tab_english, tab_extract, tab_cards = st.tabs([
     "1️⃣ 查单词",
-    "2️⃣ 提取单词",
-    "3️⃣ 制作卡片",
+    "2️⃣ 英语问答",
+    "3️⃣ 提取单词",
+    "4️⃣ 制作卡片",
 ])
 
 with tab_lookup:
     render_lookup_tab(VOCAB_DICT)
+
+with tab_english:
+    render_english_questions_tab(VOCAB_DICT)
 
 with tab_extract:
     render_extraction_tab(VOCAB_DICT, FULL_DF)
