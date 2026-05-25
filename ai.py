@@ -475,11 +475,24 @@ def process_ai_in_batches(
     )
     definition_language = _normalize_definition_language(definition_language)
     definition_rule = _definition_instruction(definition_language)
+    template_specific_rules = ""
     if card_template == "definition_front":
         definition_rule = (
-            "Use exactly this format: part of speech | Simplified Chinese meaning | "
-            "short English definition under 12 words. Example: adjective | 忙乱的；忙碌的 | full of hurried activity."
+            "Use exactly this inner format: English part of speech | Simplified Chinese meaning | "
+            "English-only definition under 12 words. The third inner part is shown on the card front, "
+            "so it must be English only and must contain no Chinese characters. "
+            "Use English part-of-speech names only, such as noun, verb, adjective, adverb, or phrase. "
+            "Example: noun | 活力；生命力 | energy and strong life force."
         )
+        template_specific_rules = """
+Template 3 strict rules:
+- Field 3 must contain exactly three inner parts separated by two single | characters:
+  English part of speech | Simplified Chinese meaning | English-only definition
+- The card front uses the third inner part, so the third inner part must be English only.
+- Never put Chinese text, Chinese punctuation, or Chinese translation in the third inner part.
+- Never use Chinese part-of-speech labels such as 名词 or 动词; use noun, verb, adjective, adverb, phrase, etc.
+- If unsure, write a simple English definition instead of a Chinese explanation.
+"""
     translation_rule = (
         "Translate field 4 sentence by sentence into Simplified Chinese."
         if translate_examples
@@ -546,6 +559,7 @@ Each line must contain exactly 5 occurrences of |||.
 Each line must contain both US and UK pronunciation.
 Field 4 must contain exactly {example_count} English example sentence(s).
 {translation_count_rule}
+{template_specific_rules}
 Output only the text code block."""
 
         for attempt in range(constants.MAX_RETRIES):

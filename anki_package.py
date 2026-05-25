@@ -39,12 +39,55 @@ def _first_letter_hint(phrase: str) -> str:
     )
 
 
+def _contains_cjk(text: str) -> bool:
+    return bool(re.search(r"[\u4e00-\u9fff]", text))
+
+
+def _looks_like_part_of_speech(text: str) -> bool:
+    normalized = text.strip().lower().replace(".", "")
+    english_pos = (
+        "noun", "n", "verb", "v", "adjective", "adj", "adverb", "adv",
+        "preposition", "prep", "conjunction", "conj", "pronoun", "pron",
+        "interjection", "phrase", "phrasal verb", "idiom",
+    )
+    chinese_pos = ("名词", "动词", "形容词", "副词", "介词", "连词", "代词", "感叹词", "短语", "习语")
+    return any(pos == normalized for pos in english_pos) or any(pos in text for pos in chinese_pos)
+
+
+def _english_only_fragment(text: str) -> str:
+    if not re.search(r"[A-Za-z]", text):
+        return ""
+    cleaned = re.sub(r"[\u4e00-\u9fff]+", " ", text)
+    cleaned = re.sub(r"[（）()；;，,、。]+", " ", cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip(" -|")
+
+
+def _pick_meaning_parts(parts: list[str]) -> tuple[str, str]:
+    chinese_meaning = ""
+    english_definition = ""
+
+    for part in parts:
+        if not chinese_meaning and _contains_cjk(part):
+            chinese_meaning = part
+        if not english_definition:
+            english_candidate = _english_only_fragment(part)
+            if english_candidate and not _looks_like_part_of_speech(english_candidate):
+                english_definition = english_candidate
+
+    if not chinese_meaning and parts:
+        chinese_meaning = parts[0]
+
+    return chinese_meaning, english_definition
+
+
 def _split_structured_meaning(meaning: str) -> tuple[str, str, str]:
-    parts = [part.strip() for part in meaning.split("|")]
-    if len(parts) >= 3 and re.search(r"[A-Za-z]", parts[0]):
-        return parts[0], parts[1], " | ".join(parts[2:])
+    parts = [part.strip() for part in meaning.split("|") if part.strip()]
+    if len(parts) >= 2 and _looks_like_part_of_speech(parts[0]):
+        chinese_meaning, english_definition = _pick_meaning_parts(parts[1:])
+        return parts[0], chinese_meaning, english_definition
     if len(parts) >= 2:
-        return "", parts[0], " | ".join(parts[1:])
+        chinese_meaning, english_definition = _pick_meaning_parts(parts)
+        return "", chinese_meaning, english_definition
     return "", meaning, ""
 
 
@@ -256,7 +299,11 @@ def generate_anki_package(
             if not chinese_meaning:
                 chinese_meaning = meaning
             if not english_definition:
+                if card_template == "definition_front":
+                    raise RuntimeError(f"第三种卡片格式错误：{phrase} 缺少英文正面释义，请重新生成。")
                 english_definition = meaning if not re.search(r"[\u4e00-\u9fff]", meaning) else ""
+            if card_template == "definition_front" and _contains_cjk(english_definition):
+                raise RuntimeError(f"第三种卡片格式错误：{phrase} 的正面释义包含中文，请重新生成。")
             hint = _first_letter_hint(phrase)
             example_front = _highlight_target_in_example(example, phrase)
 
