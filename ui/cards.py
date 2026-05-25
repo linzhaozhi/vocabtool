@@ -73,7 +73,7 @@ def render_cards_tab() -> None:
     enable_audio_auto = selected_audio_mode != "none"
     st.caption(
         f"{constants.CARD_AUDIO_MODES[selected_audio_mode]['description']} "
-        "音频请求会自动超时，失败时仍会继续打包卡片。"
+        "生成时会校验所有请求的音频，缺少任何一个都会停止并提示重试。"
     )
     selected_example_count = constants.AI_CARD_EXAMPLE_COUNT_DEFAULT
     definition_language = "中文"
@@ -179,7 +179,7 @@ def render_cards_tab() -> None:
                         set_anki_pkg(file_path, final_deck_name)
 
                         voice_progress_bar.progress(1.0)
-                        voice_status.text("✅ 打包完成")
+                        voice_status.text("✅ 音频和打包完成")
                         content_status.markdown(f"✅ **处理完成！共生成 {len(parsed_data)} 张卡片**")
                         st.balloons()
                         run_gc()

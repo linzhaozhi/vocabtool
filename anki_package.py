@@ -346,10 +346,14 @@ def generate_anki_package(
                     successful_audio_count += 1
 
             if progress_callback:
-                if successful_audio_count:
-                    progress_callback(1.0, f"🎙️ 已生成 {successful_audio_count}/{len(audio_tasks)} 个音频，正在打包。")
-                else:
-                    progress_callback(1.0, "🎙️ 音频未成功生成，已继续打包无音频卡片。")
+                progress_callback(1.0, f"🎙️ 已生成 {successful_audio_count}/{len(audio_tasks)} 个音频。")
+            if successful_audio_count != len(audio_tasks):
+                missing_audio_count = len(audio_tasks) - successful_audio_count
+                raise RuntimeError(
+                    f"语音生成不完整：缺少 {missing_audio_count} 个音频。请稍后重试，或减少本次单词数量。"
+                )
+            if progress_callback:
+                progress_callback(1.0, "🎙️ 音频全部生成完成，正在打包。")
         elif progress_callback:
             progress_callback(1.0, "🎙️ 未启用语音，已跳过音频生成。")
 

@@ -21,22 +21,14 @@ async def _generate_audio_batch(
 ) -> None:
     """Generate audio files concurrently with retry logic."""
     semaphore = asyncio.Semaphore(concurrency)
-    failure_lock = asyncio.Lock()
     total_files = len(tasks)
     completed_files = 0
-    consecutive_failures = 0
 
     async def worker(task: Dict[str, str]) -> None:
-        nonlocal completed_files, consecutive_failures
+        nonlocal completed_files
         success = False
-        skipped_due_to_failures = False
         try:
             async with semaphore:
-                async with failure_lock:
-                    if consecutive_failures >= constants.TTS_MAX_CONSECUTIVE_FAILURES:
-                        skipped_due_to_failures = True
-                        return
-
                 await asyncio.sleep(random.uniform(0.1, 0.8))
 
                 error_msg = ""
@@ -75,12 +67,6 @@ async def _generate_audio_batch(
         except Exception as e:
             logger.error("TTS worker failed for: %s | Error: %s", task.get('text', ''), e)
         finally:
-            async with failure_lock:
-                if not skipped_due_to_failures:
-                    if success:
-                        consecutive_failures = 0
-                    else:
-                        consecutive_failures += 1
             completed_files += 1
             if progress_callback:
                 progress_callback(
