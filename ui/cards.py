@@ -59,9 +59,22 @@ def render_cards_tab() -> None:
             key="sel_voice_cards",
         )
     selected_voice_code = constants.VOICE_MAP[selected_voice_label]
-    st.caption("支持美音和英音；会生成英文单词和英文例句音频，卡片会显示对应的美音/英音音标。")
 
-    enable_audio_auto = st.checkbox("生成单词和例句音频", value=True, key="chk_audio_cards")
+    audio_label_to_key = {mode["label"]: key for key, mode in constants.CARD_AUDIO_MODES.items()}
+    default_audio_label = constants.CARD_AUDIO_MODES[constants.DEFAULT_CARD_AUDIO_MODE]["label"]
+    selected_audio_label = st.radio(
+        "🎚️ 音频内容",
+        options=list(audio_label_to_key.keys()),
+        index=list(audio_label_to_key.keys()).index(default_audio_label),
+        horizontal=True,
+        key="sel_audio_mode_cards",
+    )
+    selected_audio_mode = audio_label_to_key[selected_audio_label]
+    enable_audio_auto = selected_audio_mode != "none"
+    st.caption(
+        f"{constants.CARD_AUDIO_MODES[selected_audio_mode]['description']} "
+        "音频请求会自动超时，失败时仍会继续打包卡片。"
+    )
     selected_example_count = constants.AI_CARD_EXAMPLE_COUNT_DEFAULT
     definition_language = "中文"
     translate_examples = True
@@ -159,13 +172,14 @@ def render_cards_tab() -> None:
                             tts_voice=selected_voice_code,
                             progress_callback=update_pkg_progress,
                             card_template=card_template,
+                            tts_mode=selected_audio_mode,
                         )
 
                         st.session_state["anki_cards_cache"] = parsed_data
                         set_anki_pkg(file_path, final_deck_name)
 
                         voice_progress_bar.progress(1.0)
-                        voice_status.text("✅ 语音和打包完成")
+                        voice_status.text("✅ 打包完成")
                         content_status.markdown(f"✅ **处理完成！共生成 {len(parsed_data)} 张卡片**")
                         st.balloons()
                         run_gc()

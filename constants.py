@@ -36,7 +36,10 @@ MAX_RETRIES = 3
 EXTRACTION_ERROR_PREFIX = "__VOCABFLOW_EXTRACTION_ERROR__:"
 
 TTS_CONCURRENCY = 3
-TTS_RETRY_ATTEMPTS = 3
+TTS_RETRY_ATTEMPTS = 1
+TTS_TASK_TIMEOUT_SECONDS = 12
+TTS_MAX_CONSECUTIVE_FAILURES = 6
+TTS_TEXT_MAX_CHARS = 240
 MIN_AUDIO_FILE_SIZE = 100
 
 ANKI_MODEL_ID = 1842957302
@@ -44,6 +47,21 @@ ANKI_MODEL_ID_BASE = 1842957600
 ANKI_ETYMOLOGY_FONT_SIZE_PX = 18
 
 DEFAULT_CARD_TEMPLATE = "word_front"
+DEFAULT_CARD_AUDIO_MODE = "word_and_example"
+CARD_AUDIO_MODES = {
+    "none": {
+        "label": "不生成音频",
+        "description": "最快，只生成文字卡片。",
+    },
+    "word": {
+        "label": "只生成单词音频",
+        "description": "速度更快，适合大量单词。",
+    },
+    "word_and_example": {
+        "label": "单词 + 例句音频",
+        "description": "信息最完整，但大量单词会更慢。",
+    },
+}
 CARD_TEMPLATES = {
     "word_front": {
         "label": "1. 正面单词",

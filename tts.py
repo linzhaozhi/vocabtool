@@ -21,45 +21,71 @@ async def _generate_audio_batch(
 ) -> None:
     """Generate audio files concurrently with retry logic."""
     semaphore = asyncio.Semaphore(concurrency)
+    failure_lock = asyncio.Lock()
     total_files = len(tasks)
     completed_files = 0
+    consecutive_failures = 0
 
     async def worker(task: Dict[str, str]) -> None:
-        nonlocal completed_files
-        async with semaphore:
-            await asyncio.sleep(random.uniform(0.1, 0.8))
+        nonlocal completed_files, consecutive_failures
+        success = False
+        skipped_due_to_failures = False
+        try:
+            async with semaphore:
+                async with failure_lock:
+                    if consecutive_failures >= constants.TTS_MAX_CONSECUTIVE_FAILURES:
+                        skipped_due_to_failures = True
+                        return
 
-            success = False
-            error_msg = ""
+                await asyncio.sleep(random.uniform(0.1, 0.8))
 
-            for attempt in range(constants.TTS_RETRY_ATTEMPTS):
-                try:
-                    if not os.path.exists(task['path']):
-                        comm = edge_tts.Communicate(task['text'], task['voice'])
-                        await comm.save(task['path'])
+                error_msg = ""
 
-                        if os.path.exists(task['path']) and os.path.getsize(task['path']) > constants.MIN_AUDIO_FILE_SIZE:
+                for attempt in range(constants.TTS_RETRY_ATTEMPTS):
+                    try:
+                        if not os.path.exists(task['path']):
+                            text = str(task['text']).strip()[:constants.TTS_TEXT_MAX_CHARS]
+                            comm = edge_tts.Communicate(text, task['voice'])
+                            await asyncio.wait_for(
+                                comm.save(task['path']),
+                                timeout=constants.TTS_TASK_TIMEOUT_SECONDS,
+                            )
+
+                            if os.path.exists(task['path']) and os.path.getsize(task['path']) > constants.MIN_AUDIO_FILE_SIZE:
+                                success = True
+                                break
+                            else:
+                                if os.path.exists(task['path']):
+                                    os.remove(task['path'])
+                                raise Exception("File size too small")
+                        else:
                             success = True
                             break
-                        else:
-                            if os.path.exists(task['path']):
+                    except Exception as e:
+                        error_msg = str(e)
+                        if os.path.exists(task['path']):
+                            try:
                                 os.remove(task['path'])
-                            raise Exception("File size too small")
+                            except OSError:
+                                pass
+                        await asyncio.sleep(1.0 * (attempt + 1))
+
+                if not success:
+                    logger.error("TTS failed for: %s | Error: %s", task['text'], error_msg)
+        except Exception as e:
+            logger.error("TTS worker failed for: %s | Error: %s", task.get('text', ''), e)
+        finally:
+            async with failure_lock:
+                if not skipped_due_to_failures:
+                    if success:
+                        consecutive_failures = 0
                     else:
-                        success = True
-                        break
-                except Exception as e:
-                    error_msg = str(e)
-                    await asyncio.sleep(1.5 * (attempt + 1))
-
-            if not success:
-                logger.error("TTS failed for: %s | Error: %s", task['text'], error_msg)
-
+                        consecutive_failures += 1
             completed_files += 1
             if progress_callback:
                 progress_callback(
                     completed_files / total_files,
-                    f"正在生成 ({completed_files}/{total_files})"
+                    f"正在生成音频 ({completed_files}/{total_files})"
                 )
 
     jobs = [worker(task) for task in tasks]
@@ -75,10 +101,12 @@ def run_async_batch(
     if not tasks:
         return
 
+    loop = asyncio.new_event_loop()
     try:
-        loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         loop.run_until_complete(_generate_audio_batch(tasks, concurrency, progress_callback))
-        loop.close()
     except Exception as e:
         logger.error("Async loop error: %s", e)
+    finally:
+        asyncio.set_event_loop(None)
+        loop.close()

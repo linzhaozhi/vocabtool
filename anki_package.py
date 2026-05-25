@@ -160,11 +160,14 @@ def generate_anki_package(
     tts_voice: str = "en-US-JennyNeural",
     progress_callback: Optional[ProgressCallback] = None,
     card_template: str = constants.DEFAULT_CARD_TEMPLATE,
+    tts_mode: str = constants.DEFAULT_CARD_AUDIO_MODE,
 ) -> str:
     """Generate Anki package (.apkg) file with optional TTS audio."""
     genanki, tempfile_mod = get_genanki()
     media_files = []
     card_template = _normalize_card_template(card_template)
+    if tts_mode not in constants.CARD_AUDIO_MODES:
+        tts_mode = constants.DEFAULT_CARD_AUDIO_MODE
 
     CSS = """
     .card { font-family: 'Arial', sans-serif; font-size: 20px; text-align: center; color: #333; background-color: white; padding: 20px; }
@@ -280,7 +283,7 @@ def generate_anki_package(
                 'example_audio_filename': "",
             }
 
-            if enable_tts and phrase:
+            if enable_tts and tts_mode != "none" and phrase:
                 safe_phrase = re.sub(r'[^a-zA-Z0-9]', '_', phrase)[:20]
                 unique_id = int(time.time() * 1000) + random.randint(0, 9999)
 
@@ -295,8 +298,9 @@ def generate_anki_package(
                 prepared_card['phrase_audio_filename'] = phrase_filename
 
                 tts_example = re.sub(r'<br\s*/?>', '. ', example, flags=re.IGNORECASE)
+                tts_example = re.sub(r'<[^>]+>', '', tts_example)
                 tts_example = re.sub(r'\s+', ' ', tts_example).strip()
-                if tts_example and len(tts_example) > 3:
+                if tts_mode == "word_and_example" and tts_example and len(tts_example) > 3:
                     example_filename = f"tts_{safe_phrase}_{unique_id}_e.mp3"
                     example_path = os.path.join(tmp_dir, example_filename)
                     audio_tasks.append({
@@ -345,9 +349,7 @@ def generate_anki_package(
                 if successful_audio_count:
                     progress_callback(1.0, f"🎙️ 已生成 {successful_audio_count}/{len(audio_tasks)} 个音频，正在打包。")
                 else:
-                    progress_callback(1.0, "🎙️ 音频生成失败。")
-            if not successful_audio_count:
-                raise RuntimeError("语音生成失败，请检查网络连接，或关闭“生成单词和例句音频”后重试。")
+                    progress_callback(1.0, "🎙️ 音频未成功生成，已继续打包无音频卡片。")
         elif progress_callback:
             progress_callback(1.0, "🎙️ 未启用语音，已跳过音频生成。")
 
