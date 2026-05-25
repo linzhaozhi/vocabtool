@@ -203,10 +203,10 @@ def generate_anki_package(
     .front-example strong { color: #0f766e; font-weight: 800; }
     .front-definition { font-size: 25px; line-height: 1.45; color: #243041; margin-bottom: 12px; }
     .meta { display: inline-block; font-size: 15px; color: #526071; background: #eef6f8; border: 1px solid #cfe4ea; border-radius: 999px; padding: 3px 10px; margin: 4px 0 10px; }
-    .hint { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 18px; letter-spacing: 0; color: #0f766e; background: #eefbf7; border: 1px solid #b7ead8; border-radius: 8px; padding: 6px 12px; margin-top: 8px; }
-    .hint-token { display: inline-flex; align-items: baseline; gap: 3px; }
+    .hint { display: inline-block; font-size: 18px; line-height: 1.35; letter-spacing: 0; color: #0f766e; background: #eefbf7; border: 1px solid #b7ead8; border-radius: 8px; padding: 6px 12px; margin-top: 8px; }
+    .hint-token { display: inline-block; margin-right: 0.65em; white-space: nowrap; }
     .hint-letter { font-weight: 700; }
-    .hint-line { display: inline-block; width: 4.6em; border-bottom: 2px solid currentColor; transform: translateY(-0.12em); }
+    .hint-line { display: inline-block; width: 2.6em; height: 0.72em; margin-left: 2px; border-bottom: 2px solid currentColor; vertical-align: baseline; }
     .definition { font-size: 19px; color: #435060; margin-bottom: 14px; text-align: left; }
     .etymology { display: block; font-size: """ + str(constants.ANKI_ETYMOLOGY_FONT_SIZE_PX) + """px; line-height: 1.6; color: #555; background-color: #fffdf5; padding: 10px; border-radius: 6px; margin-bottom: 5px; border: 1px solid #fef3c7; }
     .nightMode .etymology { background-color: #333; color: #aaa; border-color: #444; }
