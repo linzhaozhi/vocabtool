@@ -45,6 +45,50 @@ def _source_block_for_mode(source_mode: str) -> str:
     return "用户语料"
 
 
+def _rank_interval_options() -> list[tuple[str, int, int]]:
+    intervals: list[tuple[str, int, int]] = []
+    start_rank = 1
+    for cutoff in constants.VOCAB_BASE_RANK_CUTOFFS:
+        intervals.append((f"{start_rank}-{cutoff}", start_rank, cutoff))
+        start_rank = cutoff + 1
+    return intervals
+
+
+def _render_rank_interval_selector(key_prefix: str) -> tuple[int, int]:
+    intervals = _rank_interval_options()
+    interval_map = {label: (start, end) for label, start, end in intervals}
+    custom_label = "自定义"
+    selected_label = st.selectbox(
+        "词频区间",
+        [*interval_map.keys(), custom_label],
+        key=f"{key_prefix}_rank_interval",
+    )
+
+    if selected_label == custom_label:
+        col_start, col_end = st.columns(2)
+        start_rank = col_start.number_input(
+            "起始排名",
+            1,
+            constants.VOCAB_PROJECT_MAX_RANK,
+            8000,
+            step=100,
+            key=f"{key_prefix}_rank_start_custom",
+        )
+        end_rank = col_end.number_input(
+            "结束排名",
+            1,
+            constants.VOCAB_PROJECT_MAX_RANK,
+            10000,
+            step=100,
+            key=f"{key_prefix}_rank_end_custom",
+        )
+        return int(start_rank), int(end_rank)
+
+    start_rank, end_rank = interval_map[selected_label]
+    st.caption(f"当前区间：{start_rank}-{end_rank}")
+    return start_rank, end_rank
+
+
 def _render_generated_words_result() -> None:
     """Render the shared extracted-word result block."""
     data = st.session_state["gen_words_data"]
@@ -157,9 +201,7 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
 
     if extract_source_mode in ("文章 URL", "文件", "文本"):
         st.markdown("#### 第二步：设置提取规则")
-        col1, col2 = st.columns(2)
-        current_rank = col1.number_input("跳过前 N 个高频词", 1, constants.VOCAB_PROJECT_MAX_RANK, 6000, step=100)
-        target_rank = col2.number_input("保留到第 N 名词频", 2000, constants.VOCAB_PROJECT_MAX_RANK, 10000, step=500)
+        current_rank, target_rank = _render_rank_interval_selector("corpus")
 
         if target_rank < current_rank:
             st.warning("⚠️ 结束词频排名必须大于等于起始词频排名。")
@@ -435,32 +477,37 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
         next_step_title = "#### 下一步"
         st.markdown("#### 从词库生成词表")
         st.caption(f"按 {constants.VOCAB_PROJECT_NAME} 词频范围直接选词，适合快速扩充词表。")
+        min_rank, max_rank = _render_rank_interval_selector("bank")
         gen_type = st.radio("生成模式", ["🔢 顺序生成", "🔀 随机抽取"], horizontal=True, key="rank_gen_type")
 
+        if max_rank < min_rank:
+            st.warning("⚠️ 结束排名必须大于等于起始排名")
+
         if "顺序生成" in gen_type:
-            col_a, col_b = st.columns(2)
-            start_rank = col_a.number_input("起始排名", 1, constants.VOCAB_PROJECT_MAX_RANK, 8000, step=100, key="rank_start")
-            count = col_b.number_input("数量", 10, 5000, 10, step=10, key="rank_count")
+            count = st.number_input("数量", 10, 5000, 10, step=10, key="rank_count")
 
             if st.button("🚀 生成词频列表", key="btn_rank_ordered"):
-                with st.spinner("正在提取..."):
-                    if full_df is not None:
-                        rank_col = next(column for column in full_df.columns if "rank" in column)
-                        word_col = next(column for column in full_df.columns if "word" in column)
-                        subset = full_df[full_df[rank_col] >= start_rank].sort_values(rank_col).head(count)
-                        set_generated_words_state(list(zip(subset[word_col], subset[rank_col])), 0, None)
+                if max_rank < min_rank:
+                    st.error("❌ 结束排名必须大于等于起始排名，请修正后重试。")
+                else:
+                    with st.spinner("正在提取..."):
+                        if full_df is not None:
+                            rank_col = next(column for column in full_df.columns if "rank" in column)
+                            word_col = next(column for column in full_df.columns if "word" in column)
+                            subset = (
+                                full_df[(full_df[rank_col] >= min_rank) & (full_df[rank_col] <= max_rank)]
+                                .sort_values(rank_col)
+                                .head(count)
+                            )
+                            if len(subset) < count:
+                                st.warning(f"⚠️ 该范围只有 {len(subset)} 个单词，已全部选中")
+                            set_generated_words_state(list(zip(subset[word_col], subset[rank_col])), 0, None)
         else:
-            col_min, col_max, col_cnt = st.columns([1, 1, 1])
-            min_rank = col_min.number_input("最小排名", 1, constants.VOCAB_PROJECT_MAX_RANK, 12000, step=100, key="rank_min")
-            max_rank = col_max.number_input("最大排名", 1, constants.VOCAB_PROJECT_MAX_RANK, 15000, step=100, key="rank_max")
-            random_count = col_cnt.number_input("抽取数量", 10, 5000, 10, step=10, key="rank_random_count")
-
-            if max_rank < min_rank:
-                st.warning("⚠️ 最大排名必须大于等于最小排名")
+            random_count = st.number_input("抽取数量", 10, 5000, 10, step=10, key="rank_random_count")
 
             if st.button("🎲 随机抽取词表", key="btn_rank_random"):
                 if max_rank < min_rank:
-                    st.error("❌ 最大排名必须大于等于最小排名，请修正后重试。")
+                    st.error("❌ 结束排名必须大于等于起始排名，请修正后重试。")
                 else:
                     with st.spinner("正在抽取..."):
                         if full_df is not None:
