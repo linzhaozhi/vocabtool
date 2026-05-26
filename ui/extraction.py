@@ -158,8 +158,8 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
     if extract_source_mode in ("文章 URL", "文件", "文本"):
         st.markdown("#### 第二步：设置提取规则")
         col1, col2 = st.columns(2)
-        current_rank = col1.number_input("跳过前 N 个高频词", 1, 20000, 6000, step=100)
-        target_rank = col2.number_input("保留到第 N 名词频", 2000, 50000, 10000, step=500)
+        current_rank = col1.number_input("跳过前 N 个高频词", 1, constants.VOCAB_PROJECT_MAX_RANK, 6000, step=100)
+        target_rank = col2.number_input("保留到第 N 名词频", 2000, constants.VOCAB_PROJECT_MAX_RANK, 10000, step=500)
 
         if target_rank < current_rank:
             st.warning("⚠️ 结束词频排名必须大于等于起始词频排名。")
@@ -439,7 +439,7 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
 
         if "顺序生成" in gen_type:
             col_a, col_b = st.columns(2)
-            start_rank = col_a.number_input("起始排名", 1, 20000, 8000, step=100, key="rank_start")
+            start_rank = col_a.number_input("起始排名", 1, constants.VOCAB_PROJECT_MAX_RANK, 8000, step=100, key="rank_start")
             count = col_b.number_input("数量", 10, 5000, 10, step=10, key="rank_count")
 
             if st.button("🚀 生成词频列表", key="btn_rank_ordered"):
@@ -451,8 +451,8 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
                         set_generated_words_state(list(zip(subset[word_col], subset[rank_col])), 0, None)
         else:
             col_min, col_max, col_cnt = st.columns([1, 1, 1])
-            min_rank = col_min.number_input("最小排名", 1, 20000, 12000, step=100, key="rank_min")
-            max_rank = col_max.number_input("最大排名", 1, 25000, 15000, step=100, key="rank_max")
+            min_rank = col_min.number_input("最小排名", 1, constants.VOCAB_PROJECT_MAX_RANK, 12000, step=100, key="rank_min")
+            max_rank = col_max.number_input("最大排名", 1, constants.VOCAB_PROJECT_MAX_RANK, 15000, step=100, key="rank_max")
             random_count = col_cnt.number_input("抽取数量", 10, 5000, 10, step=10, key="rank_random_count")
 
             if max_rank < min_rank:
