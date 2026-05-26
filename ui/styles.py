@@ -1,6 +1,9 @@
 """Shared page configuration, styles, and top-level UI chrome."""
 
+import json
+
 import streamlit as st
+import streamlit.components.v1 as components
 
 import constants
 
@@ -500,6 +503,107 @@ def apply_global_styles() -> None:
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
 
+def render_ios_resume_reloader() -> None:
+    """Install a tiny parent-page script that reloads stale iOS home-screen sessions."""
+    reload_after_ms = constants.IOS_RESUME_RELOAD_AFTER_SECONDS * 1000
+    script = f"""
+    <script>
+    (function () {{
+      const install = () => {{
+        let targetWindow = window;
+        let targetDocument = document;
+        try {{
+          if (window.parent && window.parent !== window && window.parent.document) {{
+            targetWindow = window.parent;
+            targetDocument = window.parent.document;
+          }}
+        }} catch (error) {{
+          targetWindow = window;
+          targetDocument = document;
+        }}
+
+        if (targetWindow.__vocabFlowResumeReloaderInstalled) return;
+        targetWindow.__vocabFlowResumeReloaderInstalled = true;
+
+        const injectedScript = targetDocument.createElement("script");
+        injectedScript.id = "vocabflow-ios-resume-reloader";
+        injectedScript.text = {json.dumps(f'''
+          (function () {{
+            if (window.__vocabFlowResumeReloaderActive) return;
+            window.__vocabFlowResumeReloaderActive = true;
+
+            const reloadAfterMs = {reload_after_ms};
+            const reloadCooldownMs = 30000;
+            const hiddenKey = "vocabflow.hiddenAt";
+            const reloadKey = "vocabflow.lastResumeReloadAt";
+            let hiddenAt = Number(sessionStorage.getItem(hiddenKey) || 0);
+
+            const now = () => Date.now();
+            const markHidden = () => {{
+              hiddenAt = now();
+              sessionStorage.setItem(hiddenKey, String(hiddenAt));
+            }};
+            const canReload = () => {{
+              const lastReloadAt = Number(sessionStorage.getItem(reloadKey) || 0);
+              return now() - lastReloadAt > reloadCooldownMs;
+            }};
+            const hasBeenHiddenLongEnough = () => hiddenAt && now() - hiddenAt >= reloadAfterMs;
+            const reloadWithCacheBust = () => {{
+              if (!canReload()) return;
+              sessionStorage.setItem(reloadKey, String(now()));
+              sessionStorage.removeItem(hiddenKey);
+              let appWindow = window;
+              try {{
+                if (window.parent && window.parent !== window) appWindow = window.parent;
+              }} catch (error) {{
+                appWindow = window;
+              }}
+              const url = new URL(appWindow.location.href);
+              url.searchParams.set("_vf_resume", String(now()));
+              appWindow.location.replace(url.toString());
+            }};
+            const checkAfterResume = () => {{
+              window.setTimeout(() => {{
+                if (document.visibilityState === "visible" && hasBeenHiddenLongEnough()) {{
+                  reloadWithCacheBust();
+                }}
+              }}, 350);
+            }};
+
+            document.addEventListener("visibilitychange", () => {{
+              if (document.visibilityState === "hidden") {{
+                markHidden();
+              }} else {{
+                checkAfterResume();
+              }}
+            }});
+            window.addEventListener("pagehide", markHidden);
+            window.addEventListener("pageshow", (event) => {{
+              if (event.persisted && !hiddenAt) {{
+                hiddenAt = now() - reloadAfterMs;
+              }}
+              checkAfterResume();
+            }});
+            window.addEventListener("focus", checkAfterResume);
+            window.addEventListener("online", checkAfterResume);
+            document.addEventListener("freeze", markHidden);
+            document.addEventListener("resume", checkAfterResume);
+          }})();
+        ''')};
+        targetDocument.head.appendChild(injectedScript);
+      }};
+
+      try {{
+        install();
+      }} catch (error) {{
+        console.warn("VocabFlow resume reloader could not be installed", error);
+      }}
+    }})();
+    </script>
+    """
+    components.html(script, height=0)
+
+
 def render_app_header() -> None:
     """Render the static app header."""
     st.title("⚡️ 单词流 · 稳定版")
@@ -524,7 +628,7 @@ def render_help_panel(vocab_available: bool) -> None:
     3. **制作卡片**：在“制作卡片”里使用内置智能生成并下载 Anki 牌组。
 
     **📚 当前词库**
-    - 默认词库：NGSL 项目词表（`ngsl_31k.csv`）
+    - 默认词库：""" + constants.VOCAB_PROJECT_NAME + """（`""" + constants.VOCAB_PROJECT_FILE + """`）
 
     **📄 支持的文件格式**
     - 📝 文本：TXT

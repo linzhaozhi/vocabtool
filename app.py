@@ -26,6 +26,7 @@ from ui.styles import (
     render_app_footer,
     render_app_header,
     render_help_panel,
+    render_ios_resume_reloader,
 )
 
 configure_page()
@@ -40,6 +41,7 @@ cleanup_old_apkg_files()
 
 initialize_session_state()
 apply_global_styles()
+render_ios_resume_reloader()
 render_app_header()
 render_help_panel(bool(VOCAB_DICT))
 
