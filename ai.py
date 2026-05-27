@@ -33,6 +33,20 @@ def extract_lookup_headword(raw_content: str) -> str:
     return ""
 
 
+def _looks_like_missing_lookup_input(raw_content: str) -> bool:
+    lowered = str(raw_content or "").strip().lower()
+    missing_input_markers = (
+        "please provide the word",
+        "please provide a word",
+        "please provide the phrase",
+        "provide the word, phrase",
+        "word, phrase, or chinese meaning",
+        "请输入",
+        "请提供",
+    )
+    return any(marker in lowered for marker in missing_input_markers)
+
+
 def _get_openai_compatible_client(
     api_key: str,
     base_url: str,
@@ -186,6 +200,8 @@ Output language:
 
 Hard rules:
 - Return plain text only. Do not use HTML, Markdown tables, code fences, headings, or extra notes.
+- The user's message contains the lookup input. Never ask the user to provide a word.
+- If the input is a plain word such as "developer", format that word directly.
 - If the input is Chinese, infer the most common natural English headword or short phrase.
 - Explain the most common sense only; do not list multiple unrelated senses.
 - Do not mention frequency, rank, corpus, model confidence, or that you are an AI.
@@ -214,7 +230,13 @@ vitality /vaɪˈtæləti/ (n 名词)
 • She radiates vitality and confidence. (她散发着活力与自信。)
 • The city is full of vitality. (这座城市充满活力。)"""
 
-    user_prompt = word
+    normalized_word = str(word or "").strip()
+    if not normalized_word:
+        return {"error": "Lookup input is required"}
+    user_prompt = f"""Input term:
+{normalized_word}
+
+Format the dictionary entry for the input term above. Do not ask for another word."""
 
     try:
         response = _call_ai_chat_completion(
@@ -229,6 +251,21 @@ vitality /vaɪˈtæləti/ (n 名词)
             return {"error": response["error"]}
 
         content = response.get("content", "")
+        if _looks_like_missing_lookup_input(content):
+            retry_prompt = f"""The input term is "{normalized_word}".
+
+Return the exact 6-line dictionary entry for this input now. Do not ask for input."""
+            response = _call_ai_chat_completion(
+                model_name,
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": retry_prompt}
+                ],
+                0.2
+            )
+            if "error" in response:
+                return {"error": response["error"]}
+            content = response.get("content", "")
         headword = extract_lookup_headword(content)
         rank = vocab_dict.get(headword, 99999)
         return {"result": content, "rank": rank, "headword": headword, "is_question": False}
