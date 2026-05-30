@@ -557,13 +557,6 @@ def render_ios_resume_reloader() -> None:
               hiddenAt = now();
               sessionStorage.setItem(hiddenKey, String(hiddenAt));
             }};
-            const isUserEditing = () => {{
-              const el = document.activeElement;
-              if (!el) return false;
-              const tagName = (el.tagName || "").toLowerCase();
-              return el.isContentEditable || tagName === "textarea" || tagName === "select"
-                || (tagName === "input" && !["button", "checkbox", "file", "hidden", "radio", "reset", "submit"].includes((el.type || "").toLowerCase()));
-            }};
             const canReload = () => {{
               const lastReloadAt = Number(sessionStorage.getItem(reloadKey) || 0);
               return now() - lastReloadAt > reloadCooldownMs;
@@ -571,7 +564,6 @@ def render_ios_resume_reloader() -> None:
             const hasBeenHiddenLongEnough = () => hiddenAt && now() - hiddenAt >= reloadAfterMs();
             const reloadWithCacheBust = () => {{
               if (!canReload()) return;
-              if (isUserEditing()) return;
               sessionStorage.setItem(reloadKey, String(now()));
               sessionStorage.removeItem(hiddenKey);
               let appWindow = window;
@@ -600,7 +592,10 @@ def render_ios_resume_reloader() -> None:
               }}
             }});
             window.addEventListener("pagehide", markHidden);
-            window.addEventListener("pageshow", () => {{
+            window.addEventListener("pageshow", (event) => {{
+              if (event.persisted && !hiddenAt) {{
+                hiddenAt = now() - reloadAfterMs();
+              }}
               checkAfterResume();
             }});
             window.addEventListener("focus", checkAfterResume);
