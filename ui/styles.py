@@ -592,10 +592,7 @@ def render_ios_resume_reloader() -> None:
               }}
             }});
             window.addEventListener("pagehide", markHidden);
-            window.addEventListener("pageshow", (event) => {{
-              if (event.persisted && !hiddenAt) {{
-                hiddenAt = now() - reloadAfterMs();
-              }}
+            window.addEventListener("pageshow", () => {{
               checkAfterResume();
             }});
             window.addEventListener("focus", checkAfterResume);
