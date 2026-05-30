@@ -15,11 +15,7 @@ if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
 import resources
-from anki_package import cleanup_old_apkg_files
-from ui.cards import render_cards_tab
-from ui.extraction import render_extraction_tab
 from ui.helpers import initialize_session_state
-from ui.lookup import render_english_questions_tab, render_lookup_tab
 from ui.styles import (
     apply_global_styles,
     configure_page,
@@ -36,29 +32,27 @@ VOCAB_DICT, FULL_DF = resources.load_vocab_data()
 resources.VOCAB_DICT = VOCAB_DICT
 resources.FULL_DF = FULL_DF
 
-# Clean old .apkg files from our temp subdir (e.g. from previous sessions).
-cleanup_old_apkg_files()
-
 initialize_session_state()
 apply_global_styles()
 render_ios_resume_reloader()
 render_app_header()
 render_help_panel(bool(VOCAB_DICT))
 
-tab_lookup, tab_extract, tab_cards = st.tabs([
-    "1️⃣ 英语助手",
-    "2️⃣ 提取单词",
-    "3️⃣ 制作卡片",
-])
+section = st.radio(
+    "功能",
+    ["1️⃣ 提取单词", "2️⃣ 制作卡片"],
+    horizontal=True,
+    label_visibility="collapsed",
+    key="main_section",
+)
 
-with tab_lookup:
-    render_lookup_tab(VOCAB_DICT)
-    render_english_questions_tab(VOCAB_DICT)
+if section == "1️⃣ 提取单词":
+    from ui.extraction import render_extraction_tab
 
-with tab_extract:
     render_extraction_tab(VOCAB_DICT, FULL_DF)
+else:
+    from ui.cards import render_cards_tab
 
-with tab_cards:
     render_cards_tab()
 
 render_app_footer()

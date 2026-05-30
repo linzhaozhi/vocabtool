@@ -619,7 +619,7 @@ def render_app_header() -> None:
     """Render the static app header."""
     st.title("⚡️ 单词流 · 稳定版")
     st.caption(
-        f"把日常英语助手、提词、制卡分开处理。支持内置智能释义、词源与语音，默认词库来自 {constants.VOCAB_PROJECT_NAME}。"
+        f"专注提取单词和制作 Anki 卡片。支持内置智能释义、词源与语音，默认词库来自 {constants.VOCAB_PROJECT_NAME}。"
     )
 
 
@@ -634,9 +634,8 @@ def render_help_panel(vocab_available: bool) -> None:
         st.markdown(
             """
     **🚀 极速工作流**
-    1. **英语助手**：上半部分只查单词、短语或简短中文释义；下半部分处理用法、语法、辨析、翻译、润色、纠错、例句搭配等日常英语问题。
-    2. **提取单词**：来源分为用户语料、单词表、词库三个板块，整理后的词表会自动同步到制卡。
-    3. **制作卡片**：在“制作卡片”里使用内置智能生成并下载 Anki 牌组。
+    1. **提取单词**：来源分为用户语料、单词表、词库三个板块，整理后的词表会自动同步到制卡。
+    2. **制作卡片**：在“制作卡片”里使用内置智能生成并下载 Anki 牌组。
 
     **📚 当前词库**
     - 默认词库：""" + constants.VOCAB_PROJECT_NAME + """（`""" + constants.VOCAB_PROJECT_FILE + """`）
@@ -650,7 +649,7 @@ def render_help_panel(vocab_available: bool) -> None:
     """
         )
 
-    st.caption("功能现在独立分区：英语助手、提词、制卡分开处理。")
+    st.caption("功能现在聚焦为两步：提取单词，制作 Anki 卡片。")
 
 
 def render_app_footer() -> None:

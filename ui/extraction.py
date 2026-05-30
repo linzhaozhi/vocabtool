@@ -1,5 +1,6 @@
 """Extraction tab rendering."""
 
+import random
 import time
 from typing import Any
 
@@ -89,6 +90,38 @@ def _render_rank_interval_selector(key_prefix: str) -> tuple[int, int]:
     return start_rank, end_rank
 
 
+def _select_vocab_rows(
+    full_df: Any,
+    min_rank: int,
+    max_rank: int,
+    count: int,
+    randomize: bool = False,
+) -> list[tuple[str, int]]:
+    """Select words from the loaded vocabulary rows, supporting list or DataFrame data."""
+    if full_df is None:
+        return []
+
+    if isinstance(full_df, list):
+        rows = [
+            (str(row.get("word", "")).strip(), int(row.get("rank", 99999)))
+            for row in full_df
+            if min_rank <= int(row.get("rank", 99999)) <= max_rank
+        ]
+        rows = [(word, rank) for word, rank in rows if word]
+        if randomize:
+            return random.sample(rows, k=min(count, len(rows)))
+        return sorted(rows, key=lambda item: item[1])[:count]
+
+    rank_col = next(column for column in full_df.columns if "rank" in str(column))
+    word_col = next(column for column in full_df.columns if "word" in str(column))
+    subset = full_df[(full_df[rank_col] >= min_rank) & (full_df[rank_col] <= max_rank)]
+    if randomize:
+        subset = subset.sample(n=min(count, len(subset)))
+    else:
+        subset = subset.sort_values(rank_col).head(count)
+    return [(str(word), int(rank)) for word, rank in zip(subset[word_col], subset[rank_col])]
+
+
 def _render_generated_words_result() -> None:
     """Render the shared extracted-word result block."""
     data = st.session_state["gen_words_data"]
@@ -138,10 +171,10 @@ def _render_generated_words_result() -> None:
         st.button("清空提取结果", type="secondary", on_click=reset_extraction_state, use_container_width=True)
 
     st.markdown(
-        '<div class="flow-next-panel"><strong>下一步：去制作卡片</strong>词表已经同步到 <strong>3️⃣ 制作卡片</strong>，切换过去就能直接生成。</div>',
+        '<div class="flow-next-panel"><strong>下一步：去制作卡片</strong>词表已经同步到 <strong>2️⃣ 制作卡片</strong>，切换过去就能直接生成。</div>',
         unsafe_allow_html=True,
     )
-    st.success("➡️ 词表已同步到“制作卡片”标签，切换后可直接生成。")
+    st.success("➡️ 词表已同步到“制作卡片”，切换后可直接生成。")
 
 
 def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
@@ -491,17 +524,10 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
                     st.error("❌ 结束排名必须大于等于起始排名，请修正后重试。")
                 else:
                     with st.spinner("正在提取..."):
-                        if full_df is not None:
-                            rank_col = next(column for column in full_df.columns if "rank" in column)
-                            word_col = next(column for column in full_df.columns if "word" in column)
-                            subset = (
-                                full_df[(full_df[rank_col] >= min_rank) & (full_df[rank_col] <= max_rank)]
-                                .sort_values(rank_col)
-                                .head(count)
-                            )
-                            if len(subset) < count:
-                                st.warning(f"⚠️ 该范围只有 {len(subset)} 个单词，已全部选中")
-                            set_generated_words_state(list(zip(subset[word_col], subset[rank_col])), 0, None)
+                        rows = _select_vocab_rows(full_df, min_rank, max_rank, int(count), randomize=False)
+                        if len(rows) < count:
+                            st.warning(f"⚠️ 该范围只有 {len(rows)} 个单词，已全部选中")
+                        set_generated_words_state(rows, 0, None)
         else:
             random_count = st.number_input("抽取数量", 10, 5000, 10, step=10, key="rank_random_count")
 
@@ -510,14 +536,10 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
                     st.error("❌ 结束排名必须大于等于起始排名，请修正后重试。")
                 else:
                     with st.spinner("正在抽取..."):
-                        if full_df is not None:
-                            rank_col = next(column for column in full_df.columns if "rank" in column)
-                            word_col = next(column for column in full_df.columns if "word" in column)
-                            pool = full_df[(full_df[rank_col] >= min_rank) & (full_df[rank_col] <= max_rank)]
-                            if len(pool) < random_count:
-                                st.warning(f"⚠️ 该范围只有 {len(pool)} 个单词，已全部选中")
-                            sample = pool.sample(n=min(random_count, len(pool)))
-                            set_generated_words_state(list(zip(sample[word_col], sample[rank_col])), 0, None)
+                        rows = _select_vocab_rows(full_df, min_rank, max_rank, int(random_count), randomize=True)
+                        if len(rows) < random_count:
+                            st.warning(f"⚠️ 该范围只有 {len(rows)} 个单词，已全部选中")
+                        set_generated_words_state(rows, 0, None)
 
     st.session_state["_extract_result_step_title"] = result_step_title
     st.session_state["_extract_next_step_title"] = next_step_title

@@ -5,7 +5,7 @@ import streamlit as st
 
 import constants
 from ai import process_ai_in_batches
-from anki_package import generate_anki_package
+from anki_package import cleanup_old_apkg_files, generate_anki_package
 from anki_parse import parse_anki_data
 from config import get_config
 from ui.helpers import (
@@ -32,6 +32,7 @@ def _select_card_template() -> str:
 
 def render_cards_tab() -> None:
     """Render the card-generation tab."""
+    cleanup_old_apkg_files()
     st.markdown("### 📦 制作卡片")
     st.caption("使用内置智能能力，把准备好的词表直接生成 Anki 卡片。")
     ai_provider_label = get_config().get("ai_provider_label", "智能模型")

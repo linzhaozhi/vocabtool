@@ -2,10 +2,10 @@
 
 import logging
 import os
+import csv
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-import pandas as pd
 import streamlit as st
 
 import constants
@@ -17,7 +17,7 @@ DATA_DIR = BASE_DIR / "data"
 
 # Set by app after load_vocab_data() so vocab module can use them.
 VOCAB_DICT: Dict[str, int] = {}
-FULL_DF: Optional[pd.DataFrame] = None
+FULL_DF: Optional[Any] = None
 
 
 def get_vocab_dict() -> Dict[str, int]:
@@ -69,18 +69,62 @@ def get_genanki() -> Tuple[Any, Any]:
     return genanki, tempfile
 
 
+def _load_vocab_csv(file_path: Path) -> Tuple[Dict[str, int], list[dict[str, Any]]]:
+    """Load a simple word/rank CSV without importing pandas at startup."""
+    rows_by_word: dict[str, dict[str, Any]] = {}
+    last_error: Optional[Exception] = None
+
+    for encoding in constants.ENCODING_PRIORITY:
+        try:
+            with file_path.open("r", encoding=encoding, newline="") as csv_file:
+                reader = csv.DictReader(csv_file)
+                if not reader.fieldnames:
+                    return {}, []
+
+                fieldnames = [field.strip().lower() for field in reader.fieldnames]
+                word_field = next((field for field in fieldnames if "word" in field), fieldnames[0])
+                rank_field = next((field for field in fieldnames if "rank" in field), fieldnames[1])
+
+                for raw_row in reader:
+                    row = {str(key).strip().lower(): value for key, value in raw_row.items()}
+                    word = str(row.get(word_field, "")).lower().strip()
+                    if not word:
+                        continue
+                    try:
+                        rank = int(float(str(row.get(rank_field, "")).strip()))
+                    except (TypeError, ValueError):
+                        continue
+
+                    existing = rows_by_word.get(word)
+                    if existing is None or rank < int(existing["rank"]):
+                        rows_by_word[word] = {"word": word, "rank": rank}
+
+            rows = sorted(rows_by_word.values(), key=lambda item: int(item["rank"]))
+            vocab_dict = {str(row["word"]): int(row["rank"]) for row in rows}
+            return vocab_dict, rows
+        except UnicodeDecodeError as e:
+            last_error = e
+            continue
+
+    if last_error:
+        raise last_error
+    return {}, []
+
+
 @st.cache_data
-def load_vocab_data() -> Tuple[Dict[str, int], Optional[pd.DataFrame]]:
+def load_vocab_data() -> Tuple[Dict[str, int], Optional[Any]]:
     """Load vocabulary data from pickle or CSV files."""
     pickle_candidates = [BASE_DIR / "vocab.pkl", DATA_DIR / "vocab.pkl"]
     for pickle_path in pickle_candidates:
         if not pickle_path.exists():
             continue
         try:
+            import pandas as pd
+
             df = pd.read_pickle(pickle_path)
             vocab_dict = pd.Series(df['rank'].values, index=df['word']).to_dict()
             return vocab_dict, df
-        except (FileNotFoundError, pd.errors.PickleError, KeyError) as e:
+        except Exception as e:
             logger.warning(f"Could not load pickle file: {e}")
 
     possible_files = [
@@ -97,19 +141,7 @@ def load_vocab_data() -> Tuple[Dict[str, int], Optional[pd.DataFrame]]:
 
     if file_path:
         try:
-            df = pd.read_csv(file_path)
-            df.columns = [c.strip().lower() for c in df.columns]
-
-            word_col = next((c for c in df.columns if 'word' in c), df.columns[0])
-            rank_col = next((c for c in df.columns if 'rank' in c), df.columns[1])
-
-            df = df.dropna(subset=[word_col])
-            df[word_col] = df[word_col].astype(str).str.lower().str.strip()
-            df[rank_col] = pd.to_numeric(df[rank_col], errors='coerce')
-            df = df.sort_values(rank_col).drop_duplicates(subset=[word_col], keep='first')
-
-            vocab_dict = pd.Series(df[rank_col].values, index=df[word_col]).to_dict()
-            return vocab_dict, df
+            return _load_vocab_csv(file_path)
         except Exception as e:
             logger.error(f"Error loading CSV file {file_path}: {e}")
             return {}, None
