@@ -505,7 +505,8 @@ def apply_global_styles() -> None:
 
 def render_ios_resume_reloader() -> None:
     """Install a tiny parent-page script that reloads stale iOS home-screen sessions."""
-    reload_after_ms = constants.IOS_RESUME_RELOAD_AFTER_SECONDS * 1000
+    standalone_reload_after_ms = constants.IOS_RESUME_RELOAD_AFTER_SECONDS * 1000
+    browser_reload_after_ms = constants.IOS_BROWSER_RESUME_RELOAD_AFTER_SECONDS * 1000
     script = f"""
     <script>
     (function () {{
@@ -532,24 +533,45 @@ def render_ios_resume_reloader() -> None:
             if (window.__vocabFlowResumeReloaderActive) return;
             window.__vocabFlowResumeReloaderActive = true;
 
-            const reloadAfterMs = {reload_after_ms};
+            const isIOSDevice = (() => {{
+              const ua = navigator.userAgent || "";
+              const platform = navigator.platform || "";
+              return /iPad|iPhone|iPod/i.test(ua) || (platform === "MacIntel" && navigator.maxTouchPoints > 1);
+            }})();
+            if (!isIOSDevice) return;
+
+            const standaloneReloadAfterMs = {standalone_reload_after_ms};
+            const browserReloadAfterMs = {browser_reload_after_ms};
             const reloadCooldownMs = 30000;
             const hiddenKey = "vocabflow.hiddenAt";
             const reloadKey = "vocabflow.lastResumeReloadAt";
             let hiddenAt = Number(sessionStorage.getItem(hiddenKey) || 0);
 
             const now = () => Date.now();
+            const isStandaloneMode = () => {{
+              return window.navigator.standalone === true
+                || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
+            }};
+            const reloadAfterMs = () => isStandaloneMode() ? standaloneReloadAfterMs : browserReloadAfterMs;
             const markHidden = () => {{
               hiddenAt = now();
               sessionStorage.setItem(hiddenKey, String(hiddenAt));
+            }};
+            const isUserEditing = () => {{
+              const el = document.activeElement;
+              if (!el) return false;
+              const tagName = (el.tagName || "").toLowerCase();
+              return el.isContentEditable || tagName === "textarea" || tagName === "select"
+                || (tagName === "input" && !["button", "checkbox", "file", "hidden", "radio", "reset", "submit"].includes((el.type || "").toLowerCase()));
             }};
             const canReload = () => {{
               const lastReloadAt = Number(sessionStorage.getItem(reloadKey) || 0);
               return now() - lastReloadAt > reloadCooldownMs;
             }};
-            const hasBeenHiddenLongEnough = () => hiddenAt && now() - hiddenAt >= reloadAfterMs;
+            const hasBeenHiddenLongEnough = () => hiddenAt && now() - hiddenAt >= reloadAfterMs();
             const reloadWithCacheBust = () => {{
               if (!canReload()) return;
+              if (isUserEditing()) return;
               sessionStorage.setItem(reloadKey, String(now()));
               sessionStorage.removeItem(hiddenKey);
               let appWindow = window;
@@ -567,7 +589,7 @@ def render_ios_resume_reloader() -> None:
                 if (document.visibilityState === "visible" && hasBeenHiddenLongEnough()) {{
                   reloadWithCacheBust();
                 }}
-              }}, 350);
+              }}, 1000);
             }};
 
             document.addEventListener("visibilitychange", () => {{
