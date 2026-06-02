@@ -12,7 +12,9 @@ from ui.helpers import (
     parse_unique_words,
     render_anki_download_button,
     reset_anki_state,
+    restore_word_editor_state,
     set_anki_pkg,
+    set_prepared_word_list_text,
     sync_card_editor_to_extract,
 )
 from utils import get_beijing_time_str, render_copy_button, run_gc
@@ -38,7 +40,7 @@ def render_cards_tab() -> None:
     ai_provider_label = get_config().get("ai_provider_label", "智能模型")
     card_template = _select_card_template()
 
-    current_words_text = st.session_state.get("word_list_editor", "").strip()
+    current_words_text = restore_word_editor_state("word_list_editor").strip()
     if not current_words_text:
         st.info("先到“提取单词”里准备词表，然后再来制作卡片。")
         return
@@ -95,6 +97,7 @@ def render_cards_tab() -> None:
         help="每行一个单词",
         on_change=sync_card_editor_to_extract,
     )
+    set_prepared_word_list_text(edited_words)
 
     words_only = parse_unique_words(edited_words)
 

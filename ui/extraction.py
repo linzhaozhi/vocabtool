@@ -24,7 +24,9 @@ from ui.helpers import (
     parse_wordlist_candidates,
     parse_unique_words,
     reset_extraction_state,
+    restore_word_editor_state,
     set_extract_source_mode,
+    set_prepared_word_list_text,
     sync_extract_editor_to_cards,
 )
 from utils import render_copy_button, run_gc
@@ -148,6 +150,7 @@ def _render_generated_words_result() -> None:
     st.markdown(result_step_title)
     st.caption("可以直接在这里删改；改动会自动同步到“制作卡片”。")
 
+    restore_word_editor_state("extract_word_editor")
     edited_words = st.text_area(
         f"提取出的单词列表 (共 {original_count} 个)",
         height=300,
@@ -156,6 +159,7 @@ def _render_generated_words_result() -> None:
         help="每行一个单词，也支持粘贴逗号分隔内容。",
         on_change=sync_extract_editor_to_cards,
     )
+    set_prepared_word_list_text(edited_words)
     st.session_state["word_list_editor"] = edited_words
 
     cleaned_words = parse_unique_words(edited_words)
