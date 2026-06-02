@@ -9,6 +9,7 @@ from anki_package import cleanup_old_apkg_files, generate_anki_package
 from anki_parse import parse_anki_data
 from config import get_config
 from ui.helpers import (
+    get_prepared_word_list_text,
     parse_unique_words,
     render_anki_download_button,
     reset_anki_state,
@@ -40,7 +41,8 @@ def render_cards_tab() -> None:
     ai_provider_label = get_config().get("ai_provider_label", "智能模型")
     card_template = _select_card_template()
 
-    current_words_text = restore_word_editor_state("word_list_editor").strip()
+    current_words_text = restore_word_editor_state("card_word_list_editor").strip()
+    st.session_state["word_list_editor"] = current_words_text
     if not current_words_text:
         st.info("先到“提取单词”里准备词表，然后再来制作卡片。")
         return
@@ -86,18 +88,19 @@ def render_cards_tab() -> None:
     with col_title:
         st.markdown("### 📝 待制卡词表")
     with col_copy_btn:
-        render_copy_button(st.session_state.get("word_list_editor", ""), key="copy_card_words_btn")
+        render_copy_button(get_prepared_word_list_text(), key="copy_card_words_btn")
 
     st.caption("💡 可以在这里继续编辑、新增或删除单词，每行一个。")
     edited_words = st.text_area(
         "待制卡单词列表",
         height=300,
-        key="word_list_editor",
+        key="card_word_list_editor",
         label_visibility="collapsed",
         help="每行一个单词",
         on_change=sync_card_editor_to_extract,
     )
     set_prepared_word_list_text(edited_words)
+    st.session_state["word_list_editor"] = edited_words
 
     words_only = parse_unique_words(edited_words)
 

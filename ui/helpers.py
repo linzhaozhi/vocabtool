@@ -101,6 +101,7 @@ def reset_extraction_state() -> None:
         "process_time",
         "stats_info",
         "prepared_word_list_text",
+        "card_word_list_editor",
         "word_list_editor",
         "extract_word_editor",
     ):
@@ -167,7 +168,15 @@ def _generated_words_to_text() -> str:
 def get_prepared_word_list_text() -> str:
     """Return the persistent word list shared by extraction and card pages."""
     if "prepared_word_list_text" in st.session_state:
-        return str(st.session_state.get("prepared_word_list_text") or "")
+        prepared_text = str(st.session_state.get("prepared_word_list_text") or "")
+        if prepared_text.strip():
+            return prepared_text
+
+    for legacy_key in ("card_word_list_editor", "word_list_editor", "extract_word_editor"):
+        legacy_text = str(st.session_state.get(legacy_key) or "")
+        if legacy_text.strip():
+            st.session_state["prepared_word_list_text"] = legacy_text
+            return legacy_text
 
     fallback_text = _generated_words_to_text()
     if fallback_text:
@@ -175,9 +184,11 @@ def get_prepared_word_list_text() -> str:
     return fallback_text
 
 
-def set_prepared_word_list_text(raw_text: str) -> None:
+def set_prepared_word_list_text(raw_text: str, *, allow_empty: bool = False) -> None:
     """Persist the current word list independently from Streamlit widget keys."""
-    st.session_state["prepared_word_list_text"] = str(raw_text or "")
+    text = str(raw_text or "")
+    if text.strip() or allow_empty or not get_prepared_word_list_text().strip():
+        st.session_state["prepared_word_list_text"] = text
 
 
 def restore_word_editor_state(editor_key: str) -> str:
@@ -194,14 +205,16 @@ def sync_extract_editor_to_cards() -> None:
     """Keep the card creation editor in sync with extraction edits."""
     editor_text = st.session_state.get("extract_word_editor", "")
     set_prepared_word_list_text(editor_text)
+    st.session_state["card_word_list_editor"] = editor_text
     st.session_state["word_list_editor"] = editor_text
 
 
 def sync_card_editor_to_extract() -> None:
     """Keep the extraction editor in sync with card creation edits."""
-    editor_text = st.session_state.get("word_list_editor", "")
+    editor_text = st.session_state.get("card_word_list_editor", st.session_state.get("word_list_editor", ""))
     set_prepared_word_list_text(editor_text)
     st.session_state["extract_word_editor"] = editor_text
+    st.session_state["word_list_editor"] = editor_text
 
 
 def clear_quick_lookup_state() -> None:

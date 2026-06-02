@@ -160,6 +160,7 @@ def _render_generated_words_result() -> None:
         on_change=sync_extract_editor_to_cards,
     )
     set_prepared_word_list_text(edited_words)
+    st.session_state["card_word_list_editor"] = edited_words
     st.session_state["word_list_editor"] = edited_words
 
     cleaned_words = parse_unique_words(edited_words)
