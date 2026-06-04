@@ -81,19 +81,21 @@ def _load_vocab_csv(file_path: Path) -> Tuple[Dict[str, int], list[dict[str, Any
                 if not reader.fieldnames:
                     return {}, []
 
-                fieldnames = [field.strip().lower() for field in reader.fieldnames]
-                word_field = next((field for field in fieldnames if "word" in field), fieldnames[0])
-                rank_field = next((field for field in fieldnames if "rank" in field), fieldnames[1])
+                fieldnames = [str(field).strip().lower() for field in reader.fieldnames if field]
+                if not fieldnames:
+                    return {}, []
+                word_field = next((field for field in fieldnames if "word" in field or "lemma" in field), fieldnames[0])
+                rank_field = next((field for field in fieldnames if "rank" in field), "")
 
-                for raw_row in reader:
+                for row_index, raw_row in enumerate(reader, start=1):
                     row = {str(key).strip().lower(): value for key, value in raw_row.items()}
                     word = str(row.get(word_field, "")).lower().strip()
                     if not word:
                         continue
                     try:
-                        rank = int(float(str(row.get(rank_field, "")).strip()))
+                        rank = int(float(str(row.get(rank_field, row_index)).strip()))
                     except (TypeError, ValueError):
-                        continue
+                        rank = row_index
 
                     existing = rows_by_word.get(word)
                     if existing is None or rank < int(existing["rank"]):

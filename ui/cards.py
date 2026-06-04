@@ -15,7 +15,6 @@ from ui.helpers import (
     reset_anki_state,
     restore_word_editor_state,
     set_anki_pkg,
-    set_prepared_word_list_text,
     sync_card_editor_to_extract,
 )
 from utils import get_beijing_time_str, render_copy_button, run_gc
@@ -99,7 +98,6 @@ def render_cards_tab() -> None:
         help="每行一个单词",
         on_change=sync_card_editor_to_extract,
     )
-    set_prepared_word_list_text(edited_words)
     st.session_state["word_list_editor"] = edited_words
 
     words_only = parse_unique_words(edited_words)
@@ -207,7 +205,7 @@ def render_cards_tab() -> None:
         use_container_width=True,
     )
 
-    if st.session_state["anki_cards_cache"]:
+    if st.session_state.get("anki_cards_cache"):
         cards = st.session_state["anki_cards_cache"]
         with st.expander(f"👀 预览卡片 (前 {constants.MAX_PREVIEW_CARDS} 张)", expanded=True):
             df_view = pd.DataFrame(cards)

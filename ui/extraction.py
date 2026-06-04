@@ -26,7 +26,6 @@ from ui.helpers import (
     reset_extraction_state,
     restore_word_editor_state,
     set_extract_source_mode,
-    set_prepared_word_list_text,
     sync_extract_editor_to_cards,
 )
 from utils import render_copy_button, run_gc
@@ -92,6 +91,14 @@ def _render_rank_interval_selector(key_prefix: str) -> tuple[int, int]:
     return start_rank, end_rank
 
 
+def _safe_int(value: Any, default: int | None = None) -> int | None:
+    """Convert loose rank values without letting one bad row break the UI."""
+    try:
+        return int(float(str(value).strip()))
+    except (TypeError, ValueError):
+        return default
+
+
 def _select_vocab_rows(
     full_df: Any,
     min_rank: int,
@@ -104,19 +111,32 @@ def _select_vocab_rows(
         return []
 
     if isinstance(full_df, list):
-        rows = [
-            (str(row.get("word", "")).strip(), int(row.get("rank", 99999)))
-            for row in full_df
-            if min_rank <= int(row.get("rank", 99999)) <= max_rank
-        ]
-        rows = [(word, rank) for word, rank in rows if word]
+        rows: list[tuple[str, int]] = []
+        for row in full_df:
+            if not isinstance(row, dict):
+                continue
+            word = str(row.get("word", "")).strip()
+            rank = _safe_int(row.get("rank"))
+            if word and rank is not None and min_rank <= rank <= max_rank:
+                rows.append((word, rank))
         if randomize:
             return random.sample(rows, k=min(count, len(rows)))
         return sorted(rows, key=lambda item: item[1])[:count]
 
-    rank_col = next(column for column in full_df.columns if "rank" in str(column))
-    word_col = next(column for column in full_df.columns if "word" in str(column))
-    subset = full_df[(full_df[rank_col] >= min_rank) & (full_df[rank_col] <= max_rank)]
+    rank_col = next((column for column in full_df.columns if "rank" in str(column).lower()), None)
+    word_col = next((column for column in full_df.columns if "word" in str(column).lower()), None)
+    if rank_col is None or word_col is None:
+        return []
+
+    try:
+        subset = full_df.copy()
+        subset[rank_col] = subset[rank_col].map(lambda value: _safe_int(value))
+        subset = subset.dropna(subset=[rank_col])
+        subset[rank_col] = subset[rank_col].astype(int)
+        subset = subset[(subset[rank_col] >= min_rank) & (subset[rank_col] <= max_rank)]
+    except Exception:
+        return []
+
     if randomize:
         subset = subset.sample(n=min(count, len(subset)))
     else:
@@ -159,7 +179,6 @@ def _render_generated_words_result() -> None:
         help="每行一个单词，也支持粘贴逗号分隔内容。",
         on_change=sync_extract_editor_to_cards,
     )
-    set_prepared_word_list_text(edited_words)
     st.session_state["card_word_list_editor"] = edited_words
     st.session_state["word_list_editor"] = edited_words
 

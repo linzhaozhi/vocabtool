@@ -204,7 +204,7 @@ def restore_word_editor_state(editor_key: str) -> str:
 def sync_extract_editor_to_cards() -> None:
     """Keep the card creation editor in sync with extraction edits."""
     editor_text = st.session_state.get("extract_word_editor", "")
-    set_prepared_word_list_text(editor_text)
+    set_prepared_word_list_text(editor_text, allow_empty=True)
     st.session_state["card_word_list_editor"] = editor_text
     st.session_state["word_list_editor"] = editor_text
 
@@ -212,7 +212,7 @@ def sync_extract_editor_to_cards() -> None:
 def sync_card_editor_to_extract() -> None:
     """Keep the extraction editor in sync with card creation edits."""
     editor_text = st.session_state.get("card_word_list_editor", st.session_state.get("word_list_editor", ""))
-    set_prepared_word_list_text(editor_text)
+    set_prepared_word_list_text(editor_text, allow_empty=True)
     st.session_state["extract_word_editor"] = editor_text
     st.session_state["word_list_editor"] = editor_text
 
