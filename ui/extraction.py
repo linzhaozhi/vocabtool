@@ -228,7 +228,9 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
         )
     else:
         extract_source_mode = "词库"
-        st.caption(f"使用内置 {constants.VOCAB_PROJECT_NAME} 词库按词频范围选词。")
+        st.caption(
+            f"使用内置词库按词频范围选词。默认词库来自 {constants.VOCAB_PROJECT_SOURCE}（{constants.VOCAB_PROJECT_NAME}）。"
+        )
 
     if extract_source_mode != st.session_state.get("extract_source_mode"):
         extract_source_mode = set_extract_source_mode(extract_source_mode)
@@ -514,7 +516,9 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
         result_step_title = "#### 查看与整理结果"
         next_step_title = "#### 下一步"
         st.markdown("#### 从词库生成词表")
-        st.caption(f"按 {constants.VOCAB_PROJECT_NAME} 词频范围直接选词，适合快速扩充词表。")
+        st.caption(
+            f"按来自 {constants.VOCAB_PROJECT_SOURCE} 的 {constants.VOCAB_PROJECT_NAME} 词频范围直接选词，适合快速扩充词表。"
+        )
         min_rank, max_rank = _render_rank_interval_selector("bank")
         gen_type = st.radio("生成模式", ["🔢 顺序生成", "🔀 随机抽取"], horizontal=True, key="rank_gen_type")
 

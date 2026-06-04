@@ -619,7 +619,8 @@ def render_app_header() -> None:
     """Render the static app header."""
     st.title("⚡️ 单词流 · 稳定版")
     st.caption(
-        f"专注提取单词和制作 Anki 卡片。支持内置智能释义、词源与语音，默认词库来自 {constants.VOCAB_PROJECT_NAME}。"
+        "专注提取单词和制作 Anki 卡片。支持内置智能释义、词源与语音，"
+        f"默认词库来自 {constants.VOCAB_PROJECT_SOURCE}（{constants.VOCAB_PROJECT_NAME}）。"
     )
 
 
@@ -638,7 +639,7 @@ def render_help_panel(vocab_available: bool) -> None:
     2. **制作卡片**：在“制作卡片”里使用内置智能生成并下载 Anki 牌组。
 
     **📚 当前词库**
-    - 默认词库：""" + constants.VOCAB_PROJECT_NAME + """（`""" + constants.VOCAB_PROJECT_FILE + """`）
+    - 默认词库：来自 """ + constants.VOCAB_PROJECT_SOURCE + """（""" + constants.VOCAB_PROJECT_NAME + """，`""" + constants.VOCAB_PROJECT_FILE + """`）
 
     **📄 支持的文件格式**
     - 📝 文本：TXT
