@@ -517,7 +517,7 @@ def process_ai_in_batches(
         definition_rule = (
             "Use exactly this inner format: English part of speech | Simplified Chinese meaning | "
             "English-only definition under 12 words. The third inner part is shown on the card front, "
-            "so it must be English only and must contain no Chinese characters. "
+            "so it must be English only, must contain no Chinese characters, and must not contain the target word or phrase. "
             "Use English part-of-speech names only, such as noun, verb, adjective, adverb, or phrase. "
             "Example: noun | 活力；生命力 | energy and strong life force."
         )
@@ -527,6 +527,7 @@ Template 3 strict rules:
   English part of speech | Simplified Chinese meaning | English-only definition
 - The card front uses the third inner part, so the third inner part must be English only.
 - Never put Chinese text, Chinese punctuation, or Chinese translation in the third inner part.
+- Never include the target word, target phrase, or main content word from the target phrase in the third inner part.
 - Never use Chinese part-of-speech labels such as 名词 or 动词; use noun, verb, adjective, adverb, phrase, etc.
 - If unsure, write a simple English definition instead of a Chinese explanation.
 """
@@ -596,6 +597,7 @@ Each line must contain exactly 5 occurrences of |||.
 Each line must contain both US and UK pronunciation.
 Field 4 must contain exactly {example_count} English example sentence(s).
 {translation_count_rule}
+For template 3, the English definition shown on the card front must not contain the target word or phrase.
 {template_specific_rules}
 Output only the text code block."""
 

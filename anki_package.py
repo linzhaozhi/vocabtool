@@ -43,6 +43,23 @@ def _contains_cjk(text: str) -> bool:
     return bool(re.search(r"[\u4e00-\u9fff]", text))
 
 
+TARGET_TERM_STOPWORDS = {
+    "a", "an", "the", "to", "of", "in", "on", "at", "for", "with",
+    "by", "from", "and", "or", "be", "is", "are", "was", "were",
+}
+
+
+def _definition_contains_target_term(definition: str, phrase: str) -> bool:
+    """Return True when the card-front definition gives away the target term."""
+    definition_tokens = set(re.findall(r"[a-z0-9]+", definition.lower()))
+    target_tokens = [
+        token
+        for token in re.findall(r"[a-z0-9]+", phrase.lower())
+        if token not in TARGET_TERM_STOPWORDS
+    ]
+    return bool(target_tokens and any(token in definition_tokens for token in target_tokens))
+
+
 def _looks_like_part_of_speech(text: str) -> bool:
     normalized = text.strip().lower().replace(".", "")
     english_pos = (
@@ -304,6 +321,8 @@ def generate_anki_package(
                 english_definition = meaning if not re.search(r"[\u4e00-\u9fff]", meaning) else ""
             if card_template == "definition_front" and _contains_cjk(english_definition):
                 raise RuntimeError(f"第三种卡片格式错误：{phrase} 的正面释义包含中文，请重新生成。")
+            if card_template == "definition_front" and _definition_contains_target_term(english_definition, phrase):
+                raise RuntimeError(f"第三种卡片格式错误：{phrase} 的英文正面释义包含目标词，请重新生成。")
             hint = _first_letter_hint(phrase)
             example_front = _highlight_target_in_example(example, phrase)
 
