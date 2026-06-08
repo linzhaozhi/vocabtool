@@ -209,6 +209,7 @@ Hard rules:
 - Explain where the word comes from, such as Latin, Greek, Old English, Old Norse, French, or its root, prefix, or suffix.
 - Make the etymology richer than a one-line note: include the earliest known source, the original concrete image or cultural scene, and how the meaning changed into modern English.
 - If there are two common etymology explanations, mention both and say which one is more widely accepted.
+- If you mention a reconstructed historical form, do not write a bare leading asterisk like *ap(a)laz. Instead write “重建形式 ap(a)laz”; if useful, briefly note that the star is a linguistic marker for an unattested reconstructed form, not part of the spelling.
 - Keep it readable and useful, normally 1-3 short Chinese paragraphs.
 - If the etymology is unclear or not useful, write exactly: 🌱 Etymology: 词源不明显，重点记住常用含义即可。
 
@@ -267,6 +268,70 @@ Return only its etymology in the required format now. Do not ask for input."""
 
     except Exception as e:
         logger.error("Error getting definition: %s", e)
+        return {"error": str(e)}
+
+
+def get_word_simple_definition(word: str) -> Dict[str, Any]:
+    """Get a compact main-sense dictionary entry for one word or phrase."""
+    vocab_dict = get_vocab_dict()
+    model_name = get_ai_model()
+    normalized_word = str(word or "").strip()
+    if not normalized_word:
+        return {"error": "Lookup input is required"}
+
+    system_prompt = """You are a strict concise English dictionary formatter for a Chinese-speaking learner.
+
+Task:
+Return a short main-sense dictionary entry for exactly one English word or short English phrase.
+
+Rules:
+- Return plain text only. Do not use HTML, Markdown tables, code fences, headings, or extra notes.
+- The user's message contains the lookup input. Never ask the user to provide a word.
+- Give only the most important and most common meaning.
+- Do not list multiple unrelated senses.
+- Include exactly: word, IPA, concise Chinese meaning, concise English meaning, and 2 example sentences.
+- Use one common IPA pronunciation.
+- Give exactly 2 short, natural English example sentences.
+- Do not translate the example sentences.
+- Do not include etymology, collocations, phrases, frequency, rank, or part of speech.
+
+Output exactly in this format:
+word /IPA/
+简洁中文释义 | Concise English meaning
+• Natural English example.
+• Natural English example.
+
+Reference example:
+apple /ˈæpəl/
+苹果 | A round fruit with red, green, or yellow skin
+• She ate an apple after lunch.
+• The apple fell from the tree."""
+
+    user_prompt = f"""Input term:
+{normalized_word}
+
+Return the concise main-sense dictionary entry for the input term above."""
+
+    try:
+        response = _call_ai_chat_completion(
+            model_name,
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            0.2,
+        )
+        if "error" in response:
+            return {"error": response["error"]}
+        headword = extract_lookup_headword(response.get("content", "")) or normalized_word.lower()
+        return {
+            "result": response.get("content", ""),
+            "headword": headword,
+            "rank": vocab_dict.get(headword, 99999),
+            "is_question": False,
+        }
+    except Exception as e:
+        logger.error("Error getting simple definition: %s", e)
         return {"error": str(e)}
 
 

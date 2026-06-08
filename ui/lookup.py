@@ -6,11 +6,17 @@ import re
 import streamlit as st
 
 import constants
-from ai import answer_english_learning_question, generate_topic_word_list, get_word_quick_definition
+from ai import (
+    answer_english_learning_question,
+    generate_topic_word_list,
+    get_word_quick_definition,
+    get_word_simple_definition,
+)
 from state import set_generated_words_state
 from ui.helpers import (
     clear_english_question_state,
     clear_quick_lookup_state,
+    clear_simple_lookup_state,
     clear_topic_wordlist_state,
     parse_topic_word_list,
     validate_english_question,
@@ -63,8 +69,129 @@ def _format_lookup_question_answer(raw_content: str) -> str:
     return '<div class="quick-lookup-answer">' + "".join(rendered_lines) + "</div>"
 
 
+def _render_lookup_result_card(result: dict, *, error_prefix: str) -> None:
+    """Render AI lookup output using the shared lookup card styling."""
+    if result and "error" not in result:
+        raw_content = _strip_lookup_html_fragments(result["result"])
+        if result.get("is_question") or result.get("rank") is None:
+            display_html = _format_lookup_question_answer(raw_content)
+        else:
+            lines = [line.strip() for line in raw_content.split("\n") if line.strip()]
+            rendered_lines = []
+
+            for idx, line in enumerate(lines):
+                safe_line = html.escape(line)
+
+                if line.startswith("🌱"):
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-ety">{safe_line}</div>')
+                elif idx == 0:
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-head">{safe_line}</div>')
+                elif line.startswith("🔊"):
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-phon">{safe_line}</div>')
+                elif "|" in line:
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-def">{safe_line}</div>')
+                elif line.startswith("•"):
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-ex">{safe_line}</div>')
+                else:
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-para">{safe_line}</div>')
+
+            display_html = "".join(rendered_lines).replace("\n", "<br>")
+
+        st.markdown(
+            f"""
+        <div style="background: var(--vf-accent-gradient); padding: 3px; border-radius: 14px; margin: 15px 0; box-shadow: var(--vf-shadow-soft);">
+            <div style="background: var(--vf-surface-elevated); border: 1px solid var(--vf-border); padding: 25px; border-radius: 12px;">
+                <div class="quick-lookup-card">
+                    {display_html}
+                </div>
+            </div>
+        </div>
+        """,
+            unsafe_allow_html=True,
+        )
+    elif result and "error" in result:
+        st.error(f"❌ {error_prefix}：{result.get('error', '未知错误')}")
+
+
+def _render_simple_lookup() -> None:
+    st.markdown("### 📘 简洁查词")
+    st.caption("输入英文单词或短语，只返回最主要释义、音标和 2 个英文例句。")
+    st.markdown("例如：apple、book、school")
+
+    if "simple_lookup_last_query" not in st.session_state:
+        st.session_state["simple_lookup_last_query"] = ""
+    if "simple_lookup_last_result" not in st.session_state:
+        st.session_state["simple_lookup_last_result"] = None
+    if "simple_lookup_is_loading" not in st.session_state:
+        st.session_state["simple_lookup_is_loading"] = False
+    if "simple_lookup_cache_keys" not in st.session_state:
+        st.session_state["simple_lookup_cache_keys"] = []
+    if st.session_state.get("simple_lookup_cache_version") != constants.SIMPLE_LOOKUP_CACHE_VERSION:
+        for key in list(st.session_state.keys()):
+            if str(key).startswith("simple_lookup_cache_"):
+                del st.session_state[key]
+        st.session_state["simple_lookup_cache_keys"] = []
+        st.session_state["simple_lookup_last_result"] = None
+        st.session_state["simple_lookup_cache_version"] = constants.SIMPLE_LOOKUP_CACHE_VERSION
+
+    with st.form("simple_lookup_form", clear_on_submit=False):
+        col_word, col_btn, col_clear = st.columns([4, 1, 1])
+        with col_word:
+            lookup_word = st.text_input(
+                "输入英文单词或短语",
+                placeholder="输入英文单词或短语",
+                key="simple_lookup_word",
+                label_visibility="collapsed",
+                autocomplete="off",
+            )
+        with col_btn:
+            lookup_submit = st.form_submit_button(
+                "查询中..." if st.session_state["simple_lookup_is_loading"] else "查询",
+                type="primary",
+                use_container_width=True,
+                disabled=st.session_state["simple_lookup_is_loading"],
+            )
+        with col_clear:
+            st.form_submit_button(
+                "清空",
+                type="secondary",
+                use_container_width=True,
+                on_click=clear_simple_lookup_state,
+            )
+
+    if lookup_submit:
+        is_valid_query, query_word, error_message = validate_lookup_query(lookup_word)
+        if not is_valid_query:
+            st.session_state["simple_lookup_last_query"] = ""
+            st.session_state["simple_lookup_last_result"] = None
+            st.warning(error_message)
+        elif st.session_state["simple_lookup_is_loading"]:
+            st.info("⏳ 查询进行中，请稍候。")
+        else:
+            st.session_state["simple_lookup_is_loading"] = True
+            try:
+                cache_key = f"simple_lookup_cache_{constants.SIMPLE_LOOKUP_CACHE_VERSION}_{query_word.lower()}"
+                if cache_key not in st.session_state:
+                    with st.spinner("🔍 查询中..."):
+                        st.session_state[cache_key] = get_word_simple_definition(query_word)
+                    keys = st.session_state["simple_lookup_cache_keys"]
+                    keys.append(cache_key)
+                    while len(keys) > constants.QUICK_LOOKUP_CACHE_MAX:
+                        old_key = keys.pop(0)
+                        if old_key in st.session_state:
+                            del st.session_state[old_key]
+                    st.session_state["simple_lookup_cache_keys"] = keys
+                st.session_state["simple_lookup_last_query"] = query_word
+                st.session_state["simple_lookup_last_result"] = st.session_state.get(cache_key)
+            finally:
+                st.session_state["simple_lookup_is_loading"] = False
+
+    _render_lookup_result_card(st.session_state.get("simple_lookup_last_result"), error_prefix="查询失败")
+    st.markdown("---")
+
+
 def _render_quick_lookup() -> None:
-    st.markdown("### 🔍 查单词")
+    st.markdown("### 🌱 词源查询")
     st.caption("输入英文单词或短语，只返回词源说明。")
     st.markdown("例如：apple、April、school")
 
@@ -136,55 +263,15 @@ def _render_quick_lookup() -> None:
             finally:
                 st.session_state["quick_lookup_is_loading"] = False
 
-    result = st.session_state.get("quick_lookup_last_result")
-    if result and "error" not in result:
-        raw_content = _strip_lookup_html_fragments(result["result"])
-        if result.get("is_question") or result.get("rank") is None:
-            display_html = _format_lookup_question_answer(raw_content)
-        else:
-            lines = [line.strip() for line in raw_content.split("\n") if line.strip()]
-            rendered_lines = []
-
-            for idx, line in enumerate(lines):
-                safe_line = html.escape(line)
-
-                if line.startswith("🌱"):
-                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-ety">{safe_line}</div>')
-                elif idx == 0:
-                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-head">{safe_line}</div>')
-                elif line.startswith("🔊"):
-                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-phon">{safe_line}</div>')
-                elif "|" in line:
-                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-def">{safe_line}</div>')
-                elif line.startswith("•"):
-                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-ex">{safe_line}</div>')
-                else:
-                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-para">{safe_line}</div>')
-
-            display_html = "".join(rendered_lines).replace("\n", "<br>")
-
-        st.markdown(
-            f"""
-        <div style="background: var(--vf-accent-gradient); padding: 3px; border-radius: 14px; margin: 15px 0; box-shadow: var(--vf-shadow-soft);">
-            <div style="background: var(--vf-surface-elevated); border: 1px solid var(--vf-border); padding: 25px; border-radius: 12px;">
-                <div class="quick-lookup-card">
-                    {display_html}
-                </div>
-            </div>
-        </div>
-        """,
-            unsafe_allow_html=True,
-        )
-    elif result and "error" in result:
-        st.error(f"❌ 查询失败：{result.get('error', '未知错误')}")
-
-    st.markdown("---")
+    _render_lookup_result_card(st.session_state.get("quick_lookup_last_result"), error_prefix="查询失败")
 
 
 if hasattr(st, "fragment"):
     render_quick_lookup = st.fragment(_render_quick_lookup)
+    render_simple_lookup = st.fragment(_render_simple_lookup)
 else:
     render_quick_lookup = _render_quick_lookup
+    render_simple_lookup = _render_simple_lookup
 
 
 def _render_english_questions() -> None:
@@ -269,6 +356,7 @@ else:
 
 def render_lookup_tab(_: dict[str, int]) -> None:
     """Render the word-only lookup tab."""
+    render_simple_lookup()
     render_quick_lookup()
 
 

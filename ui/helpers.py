@@ -225,6 +225,14 @@ def clear_quick_lookup_state() -> None:
     st.session_state["quick_lookup_is_loading"] = False
 
 
+def clear_simple_lookup_state() -> None:
+    """Clear simple lookup input and its rendered result."""
+    st.session_state["simple_lookup_word"] = ""
+    st.session_state["simple_lookup_last_query"] = ""
+    st.session_state["simple_lookup_last_result"] = None
+    st.session_state["simple_lookup_is_loading"] = False
+
+
 def clear_english_question_state() -> None:
     """Clear English Q&A input and rendered answer."""
     st.session_state["english_question_input"] = ""
