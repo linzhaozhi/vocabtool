@@ -192,7 +192,7 @@ def _render_simple_lookup() -> None:
 
 def _render_quick_lookup() -> None:
     st.markdown("### 🌱 词源查询")
-    st.caption("输入英文单词或短语，只返回简洁中文释义和词源。")
+    st.caption("输入英文单词或短语，返回简洁中文释义、底层逻辑和现代感词源故事。")
     st.markdown("例如：apple、April、school")
 
     if "quick_lookup_last_query" not in st.session_state:
