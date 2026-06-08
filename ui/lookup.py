@@ -115,7 +115,7 @@ def _render_lookup_result_card(result: dict, *, error_prefix: str) -> None:
 
 def _render_simple_lookup() -> None:
     st.markdown("### 📘 简洁查词")
-    st.caption("输入英文单词或短语，只返回最主要释义、音标和 1 个自然例句（含中文翻译）。")
+    st.caption("输入英文单词或短语，返回最多 3 个核心释义；每个释义 1 个自然例句（含中文翻译）。")
     st.markdown("例如：apple、book、school")
 
     if "simple_lookup_last_query" not in st.session_state:
@@ -192,7 +192,7 @@ def _render_simple_lookup() -> None:
 
 def _render_quick_lookup() -> None:
     st.markdown("### 🌱 词源查询")
-    st.caption("输入英文单词或短语，返回简洁中文释义、底层逻辑和现代感词源故事。")
+    st.caption("输入英文单词或短语，返回最多 3 个核心释义、底层逻辑和现代感词源故事。")
     st.markdown("例如：apple、April、school")
 
     if "quick_lookup_last_query" not in st.session_state:
