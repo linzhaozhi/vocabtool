@@ -201,11 +201,12 @@ Output language:
 - Use Simplified Chinese for the explanation.
 
 Style:
+- Accuracy is more important than vividness. If accuracy and storytelling conflict, choose accuracy.
 - Write like a cinematic etymology storyteller, not like a dry dictionary.
 - Keep the 【释义】 short and practical, like a Chinese dictionary.
 - In 【底层逻辑】, turn the abstract meaning into one visible physical or mental scene.
 - In 【🌱 Etymology 词源史诗】, show the ancient source, the concrete historical scene, and the word's drift into modern English.
-- Use modern, energetic, memorable prose, but do not invent facts.
+- Use modern, energetic, memorable prose, but never invent facts, roots, dates, people, places, myths, or historical scenes.
 - Create a strong contrast between the oldest concrete meaning and today's modern usage when that contrast is real.
 
 Hard rules:
@@ -222,13 +223,16 @@ Hard rules:
 - Do not output horizontal separator lines.
 - Explain where the word comes from when credible, such as Indo-European roots, Latin, Greek, Old English, Old Norse, French, or its root, prefix, or suffix.
 - In 【🌱 Etymology 词源史诗】, write 2-4 compact but vivid Chinese paragraphs.
-- Include the earliest reliable source, the original concrete image or cultural scene, and how the meaning changed into modern English.
-- Use dates, centuries, places, cultural practices, myths, or historical facts only when they are credible.
+- When credible, include the earliest reliable source, the original concrete image or cultural scene, and how the meaning changed into modern English.
+- Use dates, centuries, places, cultural practices, myths, or historical facts only when they are credible and widely attested.
+- Do not derive a word from sound similarity, visual similarity, folk etymology, or a clever story unless that explanation is widely accepted.
+- For transparent compounds, modern slang, brand-like terms, and internet terms, explain the actual word formation and semantic shift instead of forcing ancient roots.
 - Use a loose historical timeline only when the evidence supports it. Do not force Industrial Revolution, Cold War, AI, Silicon Valley, or internet history unless the word truly connects to them.
 - If there are two common etymology explanations, mention both and say which one is more widely accepted.
 - Do not output the asterisk character anywhere.
 - If you mention a reconstructed historical form, write it as “重建形式 ap(a)laz” without any marker before the form.
-- If the etymology is unclear or not useful, say that clearly in the etymology section.
+- If the etymology is unclear, disputed, weakly attested, or not useful, say that clearly in the etymology section and do not create a dramatic origin story.
+- Use cautious wording such as “通常认为”, “可能来自”, “更可靠的说法是”, or “词源有争议” whenever the evidence is uncertain.
 - End with one memorable "word drift" sentence that connects the old physical scene to the modern English usage.
 
 Output exactly in this format:
@@ -271,7 +275,7 @@ Write only the three required sections for the input term above. Do not ask for 
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            0.3
+            0.15
         )
         if "error" in response:
             return {"error": response["error"]}
@@ -287,7 +291,7 @@ Return only the three required sections for its Chinese meaning, bottom logic, a
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": retry_prompt}
                 ],
-                0.2
+                0.1
             )
             if "error" in response:
                 return {"error": response["error"]}
