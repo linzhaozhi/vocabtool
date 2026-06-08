@@ -217,9 +217,11 @@ Hard rules:
 - Include only the three required sections: 【释义】, 【底层逻辑】, and 【🌱 Etymology 词源史诗】.
 - Do not output any section other than these three.
 - Put 【释义】 on its own line.
-- In 【释义】, give 1-3 core high-frequency meanings. Use only 1 meaning if the word has one dominant modern meaning.
+- In 【释义】, give 1-3 core high-frequency meanings on one single line.
+- Separate multiple meanings with Chinese semicolons: ；.
+- Use only 1 meaning if the word has one dominant modern meaning.
 - Do not list obscure, rare, overly technical, or unrelated meanings.
-- For each meaning, include exactly one short natural English example sentence and its Simplified Chinese translation on the next line.
+- Do not include example sentences or translations in 【释义】.
 - Always use the dominant contemporary meaning. If the word is mainly slang, taboo, vulgar, sexual, offensive, medical, or internet language, still give that most common meaning neutrally and factually.
 - Do not replace a dominant slang or adult meaning with a safer literal meaning, food meaning, brand meaning, or older rare meaning.
 - For adult or vulgar terms, keep the wording non-graphic and dictionary-like.
@@ -240,9 +242,7 @@ Hard rules:
 
 Output exactly in this format:
 【释义】
-1. 简洁中文释义
-• Natural English example.
-中文翻译。
+简洁中文释义；另一个核心释义
 
 【底层逻辑】
 One vivid Chinese sentence that captures the word's shared physical or mental image across contexts.
@@ -252,13 +252,7 @@ Chinese etymology story only.
 
 Reference example:
 【释义】
-1. 竞技场；活动场所
-• The startup entered a crowded AI arena.
-这家初创公司进入了竞争激烈的 AI 领域。
-
-2. 公开较量的领域
-• The debate moved into the political arena.
-这场争论进入了政治领域。
+竞技场；活动场所；公开较量的领域
 
 【底层逻辑】
 arena 的底层画面，是一块被人群围住的沙地：所有人都看着你上场，胜负、风险和声望一起被推到聚光灯下。
