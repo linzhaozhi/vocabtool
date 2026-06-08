@@ -202,19 +202,25 @@ Output language:
 - Keep the label exactly in English: 🌱 Etymology:
 
 Hard rules:
-- Return plain text only. Do not use HTML, Markdown tables, code fences, headings, examples, or extra notes.
+- Return plain text only. Do not use HTML, Markdown tables, code fences, example sentences, or extra notes.
 - The user's message contains the lookup input. Never ask the user to provide a word.
 - If the input is a plain word such as "developer", format that word directly.
-- Do not output pronunciation, definitions, part of speech, collocations, phrases, or example sentences.
-- Explain where the word comes from, such as Latin, Greek, Old English, French, or its root, prefix, or suffix.
-- Keep it useful and concise, normally 2-5 Chinese sentences.
+- Do not output pronunciation, definitions, part of speech, collocations, or example sentences.
+- Explain where the word comes from, such as Latin, Greek, Old English, Old Norse, French, or its root, prefix, or suffix.
+- Make the etymology richer than a one-line note: include the earliest known source, the original concrete image or cultural scene, and how the meaning changed into modern English.
+- If there are two common etymology explanations, mention both and say which one is more widely accepted.
+- Keep it readable and useful, normally 1-3 short Chinese paragraphs.
 - If the etymology is unclear or not useful, write exactly: 🌱 Etymology: 词源不明显，重点记住常用含义即可。
 
 Output exactly in this format:
-🌱 Etymology: Chinese etymology explanation only.
+🌱 Etymology:
+Chinese etymology explanation only.
 
 Reference example:
-🌱 Etymology: 来自拉丁语 vita（生命）以及 vital（生命的、重要的）+ -ity（名词后缀），表示“充满生命力的状态”。
+🌱 Etymology:
+April 的词源通常追溯到拉丁语 Aprilis。较流行的解释认为它和拉丁语 aperire（to open，打开）有关，因为四月是春天真正展开的月份：树木抽芽、花朵开放，万物像被“打开”一样进入生长期。
+
+另一种说法认为 Aprilis 可能与希腊神话中的爱与美之神 Aphrodite 有关，因为古罗马月份名常和神话、祭祀传统相连。相比之下，aperire 这个解释更容易记忆，也更符合“四月万物开放”的画面。
 """
 
     normalized_word = str(word or "").strip()
@@ -223,7 +229,7 @@ Reference example:
     user_prompt = f"""Input term:
 {normalized_word}
 
-Format the dictionary entry for the input term above. Do not ask for another word."""
+Write only the etymology note for the input term above. Do not ask for another word."""
 
     try:
         response = _call_ai_chat_completion(

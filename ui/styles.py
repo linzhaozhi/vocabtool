@@ -464,6 +464,11 @@ GLOBAL_CSS = """
         color: var(--vf-text-muted);
         margin-bottom: 8px;
     }
+    .quick-lookup-para {
+        color: var(--vf-text);
+        margin: 8px 0;
+        line-height: 1.78;
+    }
     .quick-lookup-answer {
         color: var(--vf-text);
         line-height: 1.75;

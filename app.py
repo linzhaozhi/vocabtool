@@ -38,26 +38,29 @@ render_ios_resume_reloader()
 render_app_header()
 render_help_panel(bool(VOCAB_DICT))
 
+MAIN_SECTIONS = ["1️⃣ 查单词", "2️⃣ 提取单词", "3️⃣ 制作卡片"]
+if st.session_state.get("main_section") not in MAIN_SECTIONS:
+    st.session_state["main_section"] = MAIN_SECTIONS[0]
+
 section = st.radio(
     "功能",
-    ["1️⃣ 提取单词", "2️⃣ 制作卡片", "3️⃣ 查单词"],
+    MAIN_SECTIONS,
     horizontal=True,
     label_visibility="collapsed",
     key="main_section",
 )
 
-if section == "1️⃣ 提取单词":
+if section == "1️⃣ 查单词":
+    from ui.lookup import render_lookup_tab
+
+    render_lookup_tab(VOCAB_DICT)
+elif section == "2️⃣ 提取单词":
     from ui.extraction import render_extraction_tab
 
     render_extraction_tab(VOCAB_DICT, FULL_DF)
 else:
-    if section == "2️⃣ 制作卡片":
-        from ui.cards import render_cards_tab
+    from ui.cards import render_cards_tab
 
-        render_cards_tab()
-    else:
-        from ui.lookup import render_lookup_tab
-
-        render_lookup_tab(VOCAB_DICT)
+    render_cards_tab()
 
 render_app_footer()

@@ -66,7 +66,7 @@ def _format_lookup_question_answer(raw_content: str) -> str:
 def _render_quick_lookup() -> None:
     st.markdown("### 🔍 查单词")
     st.caption("输入英文单词或短语，只返回词源说明。")
-    st.markdown("例如：serendipity、artillery、take off")
+    st.markdown("例如：apple、April、school")
 
     if "quick_lookup_last_query" not in st.session_state:
         st.session_state["quick_lookup_last_query"] = ""
@@ -148,10 +148,10 @@ def _render_quick_lookup() -> None:
             for idx, line in enumerate(lines):
                 safe_line = html.escape(line)
 
-                if idx == 0:
-                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-head">{safe_line}</div>')
-                elif line.startswith("🌱"):
+                if line.startswith("🌱"):
                     rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-ety">{safe_line}</div>')
+                elif idx == 0:
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-head">{safe_line}</div>')
                 elif line.startswith("🔊"):
                     rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-phon">{safe_line}</div>')
                 elif "|" in line:
@@ -159,7 +159,7 @@ def _render_quick_lookup() -> None:
                 elif line.startswith("•"):
                     rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-ex">{safe_line}</div>')
                 else:
-                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-cn">{safe_line}</div>')
+                    rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-para">{safe_line}</div>')
 
             display_html = "".join(rendered_lines).replace("\n", "<br>")
 
