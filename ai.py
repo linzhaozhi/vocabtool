@@ -209,7 +209,8 @@ Hard rules:
 - Explain where the word comes from, such as Latin, Greek, Old English, Old Norse, French, or its root, prefix, or suffix.
 - Make the etymology richer than a one-line note: include the earliest known source, the original concrete image or cultural scene, and how the meaning changed into modern English.
 - If there are two common etymology explanations, mention both and say which one is more widely accepted.
-- If you mention a reconstructed historical form, do not write a bare leading asterisk like *ap(a)laz. Instead write “重建形式 ap(a)laz”; if useful, briefly note that the star is a linguistic marker for an unattested reconstructed form, not part of the spelling.
+- Do not output the asterisk character anywhere.
+- If you mention a reconstructed historical form, write it as “重建形式 ap(a)laz” without any marker before the form.
 - Keep it readable and useful, normally 1-3 short Chinese paragraphs.
 - If the etymology is unclear or not useful, write exactly: 🌱 Etymology: 词源不明显，重点记住常用含义即可。
 
@@ -244,7 +245,7 @@ Write only the etymology note for the input term above. Do not ask for another w
         if "error" in response:
             return {"error": response["error"]}
 
-        content = response.get("content", "")
+        content = str(response.get("content", "")).replace("*", "")
         if _looks_like_missing_lookup_input(content):
             retry_prompt = f"""The input term is "{normalized_word}".
 
@@ -259,7 +260,7 @@ Return only its etymology in the required format now. Do not ask for input."""
             )
             if "error" in response:
                 return {"error": response["error"]}
-            content = response.get("content", "")
+            content = str(response.get("content", "")).replace("*", "")
         headword = extract_lookup_headword(content)
         if not headword or headword.startswith("🌱"):
             headword = normalized_word.lower()
@@ -289,23 +290,23 @@ Rules:
 - The user's message contains the lookup input. Never ask the user to provide a word.
 - Give only the most important and most common meaning.
 - Do not list multiple unrelated senses.
-- Include exactly: word, IPA, concise Chinese meaning, concise English meaning, and 2 example sentences.
+- Include exactly: word, IPA, concise Chinese meaning, concise English meaning, 1 example sentence, and its Simplified Chinese translation.
 - Use one common IPA pronunciation.
-- Give exactly 2 short, natural English example sentences.
-- Do not translate the example sentences.
+- Give exactly 1 short, natural English example sentence.
+- Put the Simplified Chinese translation of the example sentence on the next line.
 - Do not include etymology, collocations, phrases, frequency, rank, or part of speech.
 
 Output exactly in this format:
 word /IPA/
 简洁中文释义 | Concise English meaning
 • Natural English example.
-• Natural English example.
+中文翻译。
 
 Reference example:
 apple /ˈæpəl/
 苹果 | A round fruit with red, green, or yellow skin
 • She ate an apple after lunch.
-• The apple fell from the tree."""
+她午饭后吃了一个苹果。"""
 
     user_prompt = f"""Input term:
 {normalized_word}
