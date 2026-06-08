@@ -25,6 +25,9 @@ def extract_lookup_headword(raw_content: str) -> str:
     """Extract the first non-empty line as the canonical English lookup headword."""
     for line in raw_content.splitlines():
         cleaned = line.strip().strip("`")
+        if cleaned in {"喵～", "喵~"}:
+            continue
+        cleaned = re.sub(r"\*\*(.+?)\*\*", r"\1", cleaned).strip()
         if cleaned:
             match = re.match(r"([A-Za-z][A-Za-z' -]*?)(?:\s+/|\s+\(|$)", cleaned)
             if match:
@@ -186,49 +189,33 @@ def _definition_instruction(definition_language: str) -> str:
 
 
 def get_word_quick_definition(word: str) -> Dict[str, Any]:
-    """Get a compact bilingual dictionary entry for one word or phrase."""
+    """Get an etymology-only dictionary note for one word or phrase."""
     vocab_dict = get_vocab_dict()
     model_name = get_ai_model()
-    system_prompt = """You are a strict bilingual dictionary formatter for English learners.
+    system_prompt = """You are a strict English etymology explainer for a Chinese-speaking learner.
 
 Task:
-Return a compact dictionary entry for exactly one English word, short English phrase, or short Chinese meaning.
+Return only the etymology for exactly one English word or short English phrase.
 
 Output language:
-- Use Simplified Chinese for Chinese meaning, Chinese part of speech, etymology, and translations.
-- Use natural English for the headword, English definition, and example sentences.
+- Use Simplified Chinese for the explanation.
+- Keep the label exactly in English: 🌱 Etymology:
 
 Hard rules:
-- Return plain text only. Do not use HTML, Markdown tables, code fences, headings, or extra notes.
+- Return plain text only. Do not use HTML, Markdown tables, code fences, headings, examples, or extra notes.
 - The user's message contains the lookup input. Never ask the user to provide a word.
 - If the input is a plain word such as "developer", format that word directly.
-- If the input is Chinese, infer the most common natural English headword or short phrase.
-- Explain the most common sense only; do not list multiple unrelated senses.
-- Do not mention frequency, rank, corpus, model confidence, or that you are an AI.
-- Use one common IPA pronunciation. Do not add US/UK labels.
-- Use exactly 3 example sentences, each with a Simplified Chinese translation in parentheses.
-- Put etymology before the examples.
-- Keep the English definition under 9 words.
-- Keep examples short, natural, modern, and matched to the same sense.
+- Do not output pronunciation, definitions, part of speech, collocations, phrases, or example sentences.
+- Explain where the word comes from, such as Latin, Greek, Old English, French, or its root, prefix, or suffix.
+- Keep it useful and concise, normally 2-5 Chinese sentences.
+- If the etymology is unclear or not useful, write exactly: 🌱 Etymology: 词源不明显，重点记住常用含义即可。
 
-Output exactly 6 lines in this format:
-headword /IPA/ (pos_abbrev Chinese_part_of_speech)
-Chinese meaning | English definition
-🌱 词源: concise etymology in Simplified Chinese
-• English example 1. (中文翻译。)
-• English example 2. (中文翻译。)
-• English example 3. (中文翻译。)
-
-Allowed part-of-speech labels:
-n 名词, v 动词, adj 形容词, adv 副词, prep 介词, conj 连词, phr 短语, idiom 习语
+Output exactly in this format:
+🌱 Etymology: Chinese etymology explanation only.
 
 Reference example:
-vitality /vaɪˈtæləti/ (n 名词)
-活力；生命力 | Energy and strong life force
-🌱 词源: 来自 vital（生命的、重要的）+ -ity（名词后缀），指充满生命能量的状态。
-• Exercise improves vitality. (运动能增强活力。)
-• She radiates vitality and confidence. (她散发着活力与自信。)
-• The city is full of vitality. (这座城市充满活力。)"""
+🌱 Etymology: 来自拉丁语 vita（生命）以及 vital（生命的、重要的）+ -ity（名词后缀），表示“充满生命力的状态”。
+"""
 
     normalized_word = str(word or "").strip()
     if not normalized_word:
@@ -254,7 +241,7 @@ Format the dictionary entry for the input term above. Do not ask for another wor
         if _looks_like_missing_lookup_input(content):
             retry_prompt = f"""The input term is "{normalized_word}".
 
-Return the exact 6-line dictionary entry for this input now. Do not ask for input."""
+Return only its etymology in the required format now. Do not ask for input."""
             response = _call_ai_chat_completion(
                 model_name,
                 [
@@ -267,6 +254,8 @@ Return the exact 6-line dictionary entry for this input now. Do not ask for inpu
                 return {"error": response["error"]}
             content = response.get("content", "")
         headword = extract_lookup_headword(content)
+        if not headword or headword.startswith("🌱"):
+            headword = normalized_word.lower()
         rank = vocab_dict.get(headword, 99999)
         return {"result": content, "rank": rank, "headword": headword, "is_question": False}
 

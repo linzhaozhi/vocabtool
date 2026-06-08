@@ -619,7 +619,7 @@ def render_app_header() -> None:
     """Render the static app header."""
     st.title("⚡️ 单词流 · 稳定版")
     st.caption(
-        "专注提取单词和制作 Anki 卡片。支持内置智能释义、词源与语音，"
+        "专注查单词、提取单词和制作 Anki 卡片。支持内置智能释义、词源与语音，"
         f"默认词库来自 {constants.VOCAB_PROJECT_SOURCE}（{constants.VOCAB_PROJECT_NAME}）。"
     )
 
@@ -635,8 +635,9 @@ def render_help_panel(vocab_available: bool) -> None:
         st.markdown(
             """
     **🚀 极速工作流**
-    1. **提取单词**：来源分为用户语料、单词表、词库三个板块，整理后的词表会自动同步到制卡。
-    2. **制作卡片**：在“制作卡片”里使用内置智能生成并下载 Anki 牌组。
+    1. **查单词**：输入英文单词或短语，查看词源。
+    2. **提取单词**：来源分为用户语料、单词表、词库三个板块，整理后的词表会自动同步到制卡。
+    3. **制作卡片**：在“制作卡片”里使用内置智能生成并下载 Anki 牌组。
 
     **📚 当前词库**
     - 默认词库：来自 """ + constants.VOCAB_PROJECT_SOURCE + """（""" + constants.VOCAB_PROJECT_NAME + """，`""" + constants.VOCAB_PROJECT_FILE + """`）
@@ -650,12 +651,12 @@ def render_help_panel(vocab_available: bool) -> None:
     """
         )
 
-    st.caption("功能现在聚焦为两步：提取单词，制作 Anki 卡片。")
+    st.caption("功能聚焦为三类：查单词，提取单词，制作 Anki 卡片。")
 
 
 def render_app_footer() -> None:
     """Render the shared footer."""
     st.markdown(
-        '<p class="app-footer">Vocab Flow Ultra · 文本 → 词表 → Anki 卡片</p>',
+        '<p class="app-footer">Vocab Flow Ultra · 查词 · 文本 → 词表 → Anki 卡片</p>',
         unsafe_allow_html=True,
     )

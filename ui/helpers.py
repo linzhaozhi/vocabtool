@@ -358,10 +358,10 @@ def validate_lookup_query(raw_text: str) -> tuple[bool, str, str]:
     """Validate quick-lookup input and return (is_valid, normalized_query, error)."""
     query = normalize_lookup_query(raw_text)
     if not query:
-        return False, "", "⚠️ 请输入一个英文单词、短语或简短中文释义。"
-    if is_english_lookup_query(query) or is_chinese_gloss_query(query):
+        return False, "", "⚠️ 请输入一个英文单词或短语。"
+    if is_english_lookup_query(query):
         return True, query, ""
-    return False, "", "⚠️ 查单词只支持单词、短语或简短中文释义；用法、语法、辨析等问题请用下方“英语问答”。"
+    return False, "", "⚠️ 查词源只支持英文单词或短语。"
 
 
 def validate_english_question(raw_text: str) -> tuple[bool, str, str]:

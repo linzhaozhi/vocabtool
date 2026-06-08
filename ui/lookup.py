@@ -64,9 +64,9 @@ def _format_lookup_question_answer(raw_content: str) -> str:
 
 
 def _render_quick_lookup() -> None:
-    st.markdown("### 🔍 极速查词")
-    st.caption("💡 查单词只支持英文单词、短语或简短中文释义；用法、语法、辨析等问题请用下方“英语问答”。")
-    st.markdown("例如：serendipity、take off、偶然发现")
+    st.markdown("### 🔍 查单词")
+    st.caption("输入英文单词或短语，只返回词源说明。")
+    st.markdown("例如：serendipity、artillery、take off")
 
     if "quick_lookup_last_query" not in st.session_state:
         st.session_state["quick_lookup_last_query"] = ""
@@ -88,8 +88,8 @@ def _render_quick_lookup() -> None:
         col_word, col_btn, col_clear = st.columns([4, 1, 1])
         with col_word:
             lookup_word = st.text_input(
-                "输入单词、短语或简短中文释义",
-                placeholder="输入单词、短语或简短中文释义",
+                "输入英文单词或短语",
+                placeholder="输入英文单词或短语",
                 key="quick_lookup_word",
                 label_visibility="collapsed",
                 autocomplete="off",

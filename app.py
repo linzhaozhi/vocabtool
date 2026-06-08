@@ -40,7 +40,7 @@ render_help_panel(bool(VOCAB_DICT))
 
 section = st.radio(
     "功能",
-    ["1️⃣ 提取单词", "2️⃣ 制作卡片"],
+    ["1️⃣ 提取单词", "2️⃣ 制作卡片", "3️⃣ 查单词"],
     horizontal=True,
     label_visibility="collapsed",
     key="main_section",
@@ -51,8 +51,13 @@ if section == "1️⃣ 提取单词":
 
     render_extraction_tab(VOCAB_DICT, FULL_DF)
 else:
-    from ui.cards import render_cards_tab
+    if section == "2️⃣ 制作卡片":
+        from ui.cards import render_cards_tab
 
-    render_cards_tab()
+        render_cards_tab()
+    else:
+        from ui.lookup import render_lookup_tab
+
+        render_lookup_tab(VOCAB_DICT)
 
 render_app_footer()
