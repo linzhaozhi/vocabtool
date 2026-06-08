@@ -215,7 +215,8 @@ Hard rules:
 - Do not output pronunciation, part of speech, collocations, English definitions, or example sentences.
 - Include only the three required sections: 【释义】, 【底层逻辑】, and 【🌱 Etymology 词源史诗】.
 - Do not output any section other than these three.
-- In 【释义】, give only the main Simplified Chinese meaning, normally under 12 Chinese characters.
+- Put 【释义】 on its own line. Put the main Simplified Chinese meaning on the next line, normally under 12 Chinese characters.
+- Do not output horizontal separator lines.
 - Explain where the word comes from when credible, such as Indo-European roots, Latin, Greek, Old English, Old Norse, French, or its root, prefix, or suffix.
 - In 【🌱 Etymology 词源史诗】, write 2-4 compact but vivid Chinese paragraphs.
 - Include the earliest reliable source, the original concrete image or cultural scene, and how the meaning changed into modern English.
@@ -228,27 +229,21 @@ Hard rules:
 - End with one memorable "word drift" sentence that connects the old physical scene to the modern English usage.
 
 Output exactly in this format:
-【释义】 简洁中文释义
-
----
+【释义】
+简洁中文释义
 
 【底层逻辑】
 One vivid Chinese sentence that captures the word's shared physical or mental image across contexts.
-
----
 
 【🌱 Etymology 词源史诗】
 Chinese etymology story only.
 
 Reference example:
-【释义】 竞技场；活动场所
-
----
+【释义】
+竞技场；活动场所
 
 【底层逻辑】
 arena 的底层画面，是一块被人群围住的沙地：所有人都看着你上场，胜负、风险和声望一起被推到聚光灯下。
-
----
 
 【🌱 Etymology 词源史诗】
 arena 最早不是今天灯光炸裂、观众欢呼的“竞技场”，而是一层铺在地上的沙。它来自拉丁语 harena，意思就是沙子。古罗马人把沙铺在斗兽场和角斗场上，不是为了浪漫，而是为了吸血、防滑、盖住混乱。这个词一出生，就带着阳光、尘土、脚步声和危险的味道。
