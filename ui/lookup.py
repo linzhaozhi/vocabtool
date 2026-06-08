@@ -82,7 +82,7 @@ def _render_lookup_result_card(result: dict, *, error_prefix: str) -> None:
             for idx, line in enumerate(lines):
                 safe_line = html.escape(line)
 
-                if line.startswith("🌱"):
+                if line.startswith("🌱") or line.startswith("【"):
                     rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-ety">{safe_line}</div>')
                 elif idx == 0:
                     rendered_lines.append(f'<div class="quick-lookup-line quick-lookup-head">{safe_line}</div>')
@@ -192,7 +192,7 @@ def _render_simple_lookup() -> None:
 
 def _render_quick_lookup() -> None:
     st.markdown("### 🌱 词源查询")
-    st.caption("输入英文单词或短语，只返回词源说明。")
+    st.caption("输入英文单词或短语，只返回底层逻辑和词源故事。")
     st.markdown("例如：apple、April、school")
 
     if "quick_lookup_last_query" not in st.session_state:
