@@ -216,6 +216,9 @@ Hard rules:
 - Include only the three required sections: 【释义】, 【底层逻辑】, and 【🌱 Etymology 词源史诗】.
 - Do not output any section other than these three.
 - Put 【释义】 on its own line. Put the main Simplified Chinese meaning on the next line, normally under 12 Chinese characters.
+- Always use the dominant contemporary meaning. If the word is mainly slang, taboo, vulgar, sexual, offensive, medical, or internet language, still give that most common meaning neutrally and factually.
+- Do not replace a dominant slang or adult meaning with a safer literal meaning, food meaning, brand meaning, or older rare meaning.
+- For adult or vulgar terms, keep the wording non-graphic and dictionary-like.
 - Do not output horizontal separator lines.
 - Explain where the word comes from when credible, such as Indo-European roots, Latin, Greek, Old English, Old Norse, French, or its root, prefix, or suffix.
 - In 【🌱 Etymology 词源史诗】, write 2-4 compact but vivid Chinese paragraphs.
@@ -322,6 +325,9 @@ Rules:
 - Use one common IPA pronunciation.
 - Give exactly 1 short, natural English example sentence.
 - Put the Simplified Chinese translation of the example sentence on the next line.
+- Always use the dominant contemporary meaning. If the word is mainly slang, taboo, vulgar, sexual, offensive, medical, or internet language, still give that most common meaning neutrally and factually.
+- Do not replace a dominant slang or adult meaning with a safer literal meaning, food meaning, brand meaning, or older rare meaning.
+- For adult, vulgar, or offensive terms, keep the definition non-graphic and make the example a neutral sentence about usage or context, not a vivid scenario.
 - Do not include etymology, collocations, phrases, frequency, rank, or part of speech.
 
 Output exactly in this format:
