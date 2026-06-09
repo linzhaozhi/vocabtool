@@ -318,7 +318,7 @@ Return only the three required sections for its Chinese meaning, bottom logic, a
 
 
 def get_word_simple_definition(word: str) -> Dict[str, Any]:
-    """Get a compact main-sense dictionary entry for one word or phrase."""
+    """Get a compact dictionary entry or reverse lookup for a Chinese gloss."""
     vocab_dict = get_vocab_dict()
     model_name = get_ai_model()
     normalized_word = str(word or "").strip()
@@ -328,11 +328,18 @@ def get_word_simple_definition(word: str) -> Dict[str, Any]:
     system_prompt = """You are a strict concise English dictionary formatter for a Chinese-speaking learner.
 
 Task:
-Return a short core-sense dictionary entry for exactly one English word or short English phrase.
+Return a concise lookup result for exactly one input.
+
+Input modes:
+- If the input is an English word or short English phrase, return a short core-sense dictionary entry.
+- If the input is a Simplified Chinese meaning, return the closest common English words that match that meaning.
 
 Rules:
 - Return plain text only. Do not use HTML, Markdown tables, code fences, headings, or extra notes.
 - The user's message contains the lookup input. Never ask the user to provide a word.
+- Automatically detect whether the input is English or Chinese.
+
+English input rules:
 - Give 1-3 core high-frequency meanings. Use only 1 meaning if the word has one dominant modern meaning.
 - Only add a second or third meaning if it is also genuinely common and frequently used in modern English.
 - If you are not sure a meaning is common, omit it and output only the dominant meaning.
@@ -349,13 +356,20 @@ Rules:
 - For adult, vulgar, or offensive terms, keep the definition non-graphic and make the example a neutral sentence about usage or context, not a vivid scenario.
 - Do not include etymology, collocations, phrases, frequency, rank, or part of speech.
 
-Output exactly in this format:
+Chinese input rules:
+- Return 1-5 closest common English words or short phrases, ordered from closest and most common to less close.
+- Only include words that are genuinely common and useful in modern English. If only one English word clearly fits, output only one.
+- Do not include obscure, literary, technical, archaic, or low-frequency words just to reach a number.
+- For each candidate, include IPA, concise Chinese meaning, concise English meaning, and one natural English example sentence with its Simplified Chinese translation.
+- If two candidates are close, prefer the more common, everyday word first.
+
+For English input, output exactly in this format:
 word /IPA/
 1. 简洁中文释义 | Concise English meaning
 • Natural English example.
 中文翻译。
 
-Reference example:
+English input reference example:
 run /rʌn/
 1. 跑，奔跑 | Move quickly on foot
 • She runs every morning before work.
@@ -367,12 +381,31 @@ run /rʌn/
 
 3. 运转，运行 | Function or operate
 • The app runs smoothly on my phone.
-这个应用在我的手机上运行很流畅。"""
+这个应用在我的手机上运行很流畅。
+
+For Chinese input, output exactly in this format:
+中文释义：用户输入的中文释义
+1. word /IPA/
+简洁中文释义 | Concise English meaning
+• Natural English example.
+中文翻译。
+
+Chinese input reference example:
+中文释义：活力
+1. vitality /vaɪˈtæləti/
+活力，生命力 | Energy and strong life force
+• Exercise can improve your vitality.
+运动可以增强你的活力。
+
+2. energy /ˈenərdʒi/
+精力，能量 | Strength to do things
+• She still has a lot of energy after work.
+她下班后仍然精力充沛。"""
 
     user_prompt = f"""Input term:
 {normalized_word}
 
-Return the concise main-sense dictionary entry for the input term above."""
+Return the concise lookup result for the input above."""
 
     try:
         response = _call_ai_chat_completion(

@@ -372,6 +372,16 @@ def validate_lookup_query(raw_text: str) -> tuple[bool, str, str]:
     return False, "", "⚠️ 查词源只支持英文单词或短语。"
 
 
+def validate_simple_lookup_query(raw_text: str) -> tuple[bool, str, str]:
+    """Validate concise lookup input, allowing English terms or short Chinese glosses."""
+    query = normalize_lookup_query(raw_text)
+    if not query:
+        return False, "", "⚠️ 请输入一个英文单词、短语或简洁中文释义。"
+    if is_english_lookup_query(query) or is_chinese_gloss_query(query):
+        return True, query, ""
+    return False, "", "⚠️ 简洁查词支持英文单词/短语，或简洁中文释义。"
+
+
 def validate_english_question(raw_text: str) -> tuple[bool, str, str]:
     """Validate English-learning questions for the standalone Q&A tab."""
     question = raw_text.strip()

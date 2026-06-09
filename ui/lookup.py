@@ -20,6 +20,7 @@ from ui.helpers import (
     clear_topic_wordlist_state,
     parse_topic_word_list,
     validate_english_question,
+    validate_simple_lookup_query,
     validate_lookup_query,
     validate_topic_label,
 )
@@ -115,8 +116,8 @@ def _render_lookup_result_card(result: dict, *, error_prefix: str) -> None:
 
 def _render_simple_lookup() -> None:
     st.markdown("### 📘 简洁查词")
-    st.caption("输入英文单词或短语，返回最多 3 个核心释义；每个释义 1 个自然例句（含中文翻译）。")
-    st.markdown("例如：apple、book、school")
+    st.caption("输入英文单词/短语，或简洁中文释义；返回常见核心词义或最接近的常见英文词。")
+    st.markdown("例如：apple、run、活力、谨慎")
 
     if "simple_lookup_last_query" not in st.session_state:
         st.session_state["simple_lookup_last_query"] = ""
@@ -138,8 +139,8 @@ def _render_simple_lookup() -> None:
         col_word, col_btn, col_clear = st.columns([4, 1, 1])
         with col_word:
             lookup_word = st.text_input(
-                "输入英文单词或短语",
-                placeholder="输入英文单词或短语",
+                "输入英文单词、短语或中文释义",
+                placeholder="输入英文单词、短语或中文释义",
                 key="simple_lookup_word",
                 label_visibility="collapsed",
                 autocomplete="off",
@@ -160,7 +161,7 @@ def _render_simple_lookup() -> None:
             )
 
     if lookup_submit:
-        is_valid_query, query_word, error_message = validate_lookup_query(lookup_word)
+        is_valid_query, query_word, error_message = validate_simple_lookup_query(lookup_word)
         if not is_valid_query:
             st.session_state["simple_lookup_last_query"] = ""
             st.session_state["simple_lookup_last_result"] = None
