@@ -220,6 +220,9 @@ Hard rules:
 - In 【释义】, give 1-3 core high-frequency meanings on one single line.
 - Separate multiple meanings with Chinese semicolons: ；.
 - Use only 1 meaning if the word has one dominant modern meaning.
+- Only add a second or third meaning if it is also genuinely common and frequently used in modern English.
+- If you are not sure a meaning is common, omit it and output only the dominant meaning.
+- Never pad the answer to reach 2 or 3 meanings.
 - Do not list obscure, rare, overly technical, or unrelated meanings.
 - Do not include example sentences or translations in 【释义】.
 - Always use the dominant contemporary meaning. If the word is mainly slang, taboo, vulgar, sexual, offensive, medical, or internet language, still give that most common meaning neutrally and factually.
@@ -329,6 +332,9 @@ Rules:
 - Return plain text only. Do not use HTML, Markdown tables, code fences, headings, or extra notes.
 - The user's message contains the lookup input. Never ask the user to provide a word.
 - Give 1-3 core high-frequency meanings. Use only 1 meaning if the word has one dominant modern meaning.
+- Only add a second or third meaning if it is also genuinely common and frequently used in modern English.
+- If you are not sure a meaning is common, omit it and output only the dominant meaning.
+- Never pad the answer to reach 2 or 3 meanings.
 - Do not list obscure, rare, overly technical, or unrelated meanings.
 - Include exactly: word, IPA, 1-3 concise Chinese meanings, 1-3 concise English meanings, and one example sentence per meaning with its Simplified Chinese translation.
 - Use one common IPA pronunciation.
