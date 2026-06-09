@@ -218,7 +218,9 @@ Hard rules:
 - Do not output any section other than these three.
 - Put 【释义】 on its own line.
 - In 【释义】, give 1-3 core high-frequency meanings on one single line.
-- Separate multiple meanings with Chinese semicolons: ；.
+- Separate different core meanings with Chinese semicolons: ；.
+- Separate synonymous translations inside the same meaning with Chinese commas: ，.
+- Example: 竞技场，活动场所；公开较量的领域
 - Use only 1 meaning if the word has one dominant modern meaning.
 - Only add a second or third meaning if it is also genuinely common and frequently used in modern English.
 - If you are not sure a meaning is common, omit it and output only the dominant meaning.
@@ -245,7 +247,7 @@ Hard rules:
 
 Output exactly in this format:
 【释义】
-简洁中文释义；另一个核心释义
+同一核心义的译法，同义译法；另一个核心释义
 
 【底层逻辑】
 One vivid Chinese sentence that captures the word's shared physical or mental image across contexts.
@@ -255,7 +257,7 @@ Chinese etymology story only.
 
 Reference example:
 【释义】
-竞技场；活动场所；公开较量的领域
+竞技场，活动场所；公开较量的领域
 
 【底层逻辑】
 arena 的底层画面，是一块被人群围住的沙地：所有人都看着你上场，胜负、风险和声望一起被推到聚光灯下。
@@ -336,6 +338,8 @@ Rules:
 - If you are not sure a meaning is common, omit it and output only the dominant meaning.
 - Never pad the answer to reach 2 or 3 meanings.
 - Do not list obscure, rare, overly technical, or unrelated meanings.
+- In each Chinese meaning, separate synonymous translations with Chinese commas: ，.
+- Do not use Chinese semicolons inside one numbered meaning.
 - Include exactly: word, IPA, 1-3 concise Chinese meanings, 1-3 concise English meanings, and one example sentence per meaning with its Simplified Chinese translation.
 - Use one common IPA pronunciation.
 - Give exactly 1 short, natural English example sentence for each meaning.
@@ -353,15 +357,15 @@ word /IPA/
 
 Reference example:
 run /rʌn/
-1. 跑；奔跑 | Move quickly on foot
+1. 跑，奔跑 | Move quickly on foot
 • She runs every morning before work.
 她每天上班前跑步。
 
-2. 经营；管理 | Operate or manage something
+2. 经营，管理 | Operate or manage something
 • He runs a small cafe near the station.
 他在车站附近经营一家小咖啡馆。
 
-3. 运转；运行 | Function or operate
+3. 运转，运行 | Function or operate
 • The app runs smoothly on my phone.
 这个应用在我的手机上运行很流畅。"""
 
