@@ -29,7 +29,7 @@ from ui.helpers import (
     sync_extract_editor_to_cards,
 )
 from utils import render_copy_button, run_gc
-from vocab_logic import analyze_logic
+from vocab_logic import analyze_logic_with_remaining
 
 SOURCE_BLOCK_OPTIONS = ("用户语料", "单词表", "词库")
 SOURCE_BLOCK_MODES = {
@@ -47,48 +47,29 @@ def _source_block_for_mode(source_mode: str) -> str:
     return "用户语料"
 
 
-def _rank_interval_options() -> list[tuple[str, int, int]]:
-    intervals: list[tuple[str, int, int]] = []
-    start_rank = 1
-    for cutoff in constants.VOCAB_BASE_RANK_CUTOFFS:
-        intervals.append((f"{start_rank}-{cutoff}", start_rank, cutoff))
-        start_rank = cutoff + 1
-    return intervals
-
-
 def _render_rank_interval_selector(key_prefix: str) -> tuple[int, int]:
-    intervals = _rank_interval_options()
-    interval_map = {label: (start, end) for label, start, end in intervals}
-    custom_label = "自定义"
-    selected_label = st.selectbox(
-        "词频区间",
-        [*interval_map.keys(), custom_label],
-        key=f"{key_prefix}_rank_interval",
+    """Render adjustable rank bounds without preset dropdowns."""
+    col_start, col_end = st.columns(2)
+    start_rank = col_start.number_input(
+        "起始排名",
+        min_value=1,
+        max_value=constants.VOCAB_PROJECT_MAX_RANK,
+        value=1,
+        step=100,
+        key=f"{key_prefix}_rank_start",
+        help="排名越小越常见。默认从 1 开始。",
     )
-
-    if selected_label == custom_label:
-        col_start, col_end = st.columns(2)
-        start_rank = col_start.number_input(
-            "起始排名",
-            1,
-            constants.VOCAB_PROJECT_MAX_RANK,
-            8000,
-            step=100,
-            key=f"{key_prefix}_rank_start_custom",
-        )
-        end_rank = col_end.number_input(
-            "结束排名",
-            1,
-            constants.VOCAB_PROJECT_MAX_RANK,
-            10000,
-            step=100,
-            key=f"{key_prefix}_rank_end_custom",
-        )
-        return int(start_rank), int(end_rank)
-
-    start_rank, end_rank = interval_map[selected_label]
+    end_rank = col_end.number_input(
+        "结束排名",
+        min_value=1,
+        max_value=constants.VOCAB_PROJECT_MAX_RANK,
+        value=12000,
+        step=100,
+        key=f"{key_prefix}_rank_end",
+        help="默认到 12000；可以按自己的词汇水平调整。",
+    )
     st.caption(f"当前区间：{start_rank}-{end_rank}")
-    return start_rank, end_rank
+    return int(start_rank), int(end_rank)
 
 
 def _safe_int(value: Any, default: int | None = None) -> int | None:
@@ -168,11 +149,11 @@ def _render_generated_words_result() -> None:
     next_step_title = st.session_state.get("_extract_next_step_title", "#### 下一步")
 
     st.markdown(result_step_title)
-    st.caption("可以直接在这里删改；改动会自动同步到“制作卡片”。")
+    st.caption("筛选词表可以直接删改；改动会自动同步到“制作卡片”。")
 
     restore_word_editor_state("extract_word_editor")
     edited_words = st.text_area(
-        f"提取出的单词列表 (共 {original_count} 个)",
+        f"筛选出的单词列表 (共 {original_count} 个)",
         height=300,
         key="extract_word_editor",
         label_visibility="collapsed",
@@ -186,6 +167,18 @@ def _render_generated_words_result() -> None:
     st.caption(f"当前词表共 {len(cleaned_words)} 个唯一词条。")
     if edited_words.strip() != "\n".join(cleaned_words):
         st.info("检测到空行、逗号分隔或重复项；制卡时会按整理后的唯一词表处理。")
+
+    remaining_text = str(st.session_state.get("extract_remaining_words_text") or "").strip()
+    if remaining_text:
+        st.markdown("#### 剩余词表")
+        st.caption("这些词没有进入当前筛选结果，不会自动同步到“制作卡片”。")
+        col_remaining_title, col_remaining_copy = st.columns([5, 1])
+        with col_remaining_title:
+            remaining_count = len(parse_unique_words(remaining_text))
+            st.markdown(f"剩余单词 (共 {remaining_count} 个)")
+        with col_remaining_copy:
+            render_copy_button(remaining_text, key="copy_extract_remaining_words")
+        st.code(remaining_text, language="text")
 
     st.markdown(next_step_title)
     col_copy, col_clear = st.columns([1, 1])
@@ -358,9 +351,17 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
                         status.update(label="❌ 提取失败", state="error")
                     elif len(raw_text) > 2:
                         status.write("🧠 正在进行词形还原与词频分级...")
-                        final_data, raw_count, stats_info = analyze_logic(raw_text, current_rank, target_rank, False)
+                        final_data, remaining_data, raw_count, stats_info = analyze_logic_with_remaining(
+                            raw_text,
+                            current_rank,
+                            target_rank,
+                            False,
+                        )
 
                         set_generated_words_state(final_data, raw_count, stats_info)
+                        st.session_state["extract_remaining_words_text"] = "\n".join(
+                            word for word, _ in remaining_data
+                        )
                         st.session_state["process_time"] = time.time() - start_time
                         run_gc()
                         status.update(label="✅ 提取完成", state="complete", expanded=False)

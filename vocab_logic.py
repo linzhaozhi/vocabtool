@@ -33,13 +33,13 @@ def get_lemma(word: str, lemminflect: Any) -> str:
         return word
 
 
-def analyze_logic(
+def analyze_logic_with_remaining(
     text: str,
     current_level: int,
     target_level: int,
     include_unknown: bool,
-) -> Tuple[List[Tuple[str, int]], int, Dict[str, float]]:
-    """Analyze text to extract vocabulary within specified rank range."""
+) -> Tuple[List[Tuple[str, int]], List[Tuple[str, int]], int, Dict[str, float]]:
+    """Analyze text and return selected words plus valid words left outside the range."""
     _, lemminflect = load_nlp_resources()
     vocab_dict = _vocab_dict()
 
@@ -54,6 +54,7 @@ def analyze_logic(
     stats_valid_total = sum(token_counts.values())
 
     final_candidates = []
+    remaining_candidates = []
     seen_lemmas = set()
 
     for word, count in token_counts.items():
@@ -76,13 +77,16 @@ def analyze_logic(
         is_in_range = current_level <= best_rank <= target_level
         is_unknown_included = best_rank == 99999 and include_unknown
 
-        if is_in_range or is_unknown_included:
-            word_to_keep = lemma if rank_lemma != 99999 else word
-            if lemma not in seen_lemmas:
+        word_to_keep = lemma if rank_lemma != 99999 else word
+        if lemma not in seen_lemmas:
+            if is_in_range or is_unknown_included:
                 final_candidates.append((word_to_keep, best_rank))
-                seen_lemmas.add(lemma)
+            else:
+                remaining_candidates.append((word_to_keep, best_rank))
+            seen_lemmas.add(lemma)
 
     final_candidates.sort(key=lambda x: x[1])
+    remaining_candidates.sort(key=lambda x: x[1])
 
     coverage_ratio = (stats_known_count / stats_valid_total) if stats_valid_total > 0 else 0
     target_ratio = (stats_target_count / stats_valid_total) if stats_valid_total > 0 else 0
@@ -92,4 +96,20 @@ def analyze_logic(
         "target_density": target_ratio,
     }
 
+    return final_candidates, remaining_candidates, total_raw_count, stats_info
+
+
+def analyze_logic(
+    text: str,
+    current_level: int,
+    target_level: int,
+    include_unknown: bool,
+) -> Tuple[List[Tuple[str, int]], int, Dict[str, float]]:
+    """Analyze text to extract vocabulary within specified rank range."""
+    final_candidates, _, total_raw_count, stats_info = analyze_logic_with_remaining(
+        text,
+        current_level,
+        target_level,
+        include_unknown,
+    )
     return final_candidates, total_raw_count, stats_info

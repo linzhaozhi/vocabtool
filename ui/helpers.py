@@ -104,6 +104,7 @@ def reset_extraction_state() -> None:
         "card_word_list_editor",
         "word_list_editor",
         "extract_word_editor",
+        "extract_remaining_words_text",
     ):
         if key in st.session_state:
             del st.session_state[key]

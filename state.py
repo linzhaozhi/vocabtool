@@ -26,6 +26,7 @@ def clear_all_state() -> None:
     keys_to_drop = [
         'gen_words_data', 'raw_count', 'process_time', 'stats_info',
         'prepared_word_list_text', 'card_word_list_editor', 'word_list_editor', 'extract_word_editor',
+        'extract_remaining_words_text',
         'anki_pkg_path', 'anki_pkg_name', 'anki_input_text', 'anki_cards_cache'
     ]
 
@@ -57,6 +58,7 @@ def set_generated_words_state(
     st.session_state['gen_words_data'] = data_list
     st.session_state['raw_count'] = raw_count
     st.session_state['stats_info'] = stats_info
+    st.session_state['extract_remaining_words_text'] = ""
     word_list_text = "\n".join([w for w, _ in data_list])
     st.session_state['prepared_word_list_text'] = word_list_text
     st.session_state['card_word_list_editor'] = word_list_text
