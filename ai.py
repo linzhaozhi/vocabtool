@@ -683,6 +683,9 @@ Template 3 strict rules:
 - The card front uses the third inner part, so the third inner part must be English only.
 - Never put Chinese text, Chinese punctuation, or Chinese translation in the third inner part.
 - Never include the target word, target phrase, or main content word from the target phrase in the third inner part.
+- Never include obvious inflected forms of the target word, such as plural, -ing, -ed, or -ies forms.
+- Bad for "rally": a public rally or event.
+- Good for "rally": a public gathering or renewed effort.
 - Never use Chinese part-of-speech labels such as 名词 or 动词; use noun, verb, adjective, adverb, phrase, etc.
 - If unsure, write a simple English definition instead of a Chinese explanation.
 """
@@ -752,7 +755,7 @@ Each line must contain exactly 5 occurrences of |||.
 Each line must contain both US and UK pronunciation.
 Field 4 must contain exactly {example_count} English example sentence(s).
 {translation_count_rule}
-For template 3, the English definition shown on the card front must not contain the target word or phrase.
+For template 3, the English definition shown on the card front must not contain the target word, target phrase, or inflected forms of the target word.
 {template_specific_rules}
 Output only the text code block."""
 

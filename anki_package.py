@@ -49,15 +49,74 @@ TARGET_TERM_STOPWORDS = {
 }
 
 
+def _target_term_variants(phrase: str) -> set[str]:
+    """Build simple target variants so the front definition does not leak the answer."""
+    variants: set[str] = set()
+    for token in re.findall(r"[a-z0-9]+", phrase.lower()):
+        if token in TARGET_TERM_STOPWORDS:
+            continue
+        variants.add(token)
+        if token.endswith("y") and len(token) > 2:
+            variants.add(f"{token[:-1]}ies")
+            variants.add(f"{token[:-1]}ied")
+        if token.endswith("e") and len(token) > 2:
+            variants.add(f"{token[:-1]}ing")
+        variants.update({
+            f"{token}s",
+            f"{token}es",
+            f"{token}ed",
+            f"{token}ing",
+        })
+    return variants
+
+
 def _definition_contains_target_term(definition: str, phrase: str) -> bool:
     """Return True when the card-front definition gives away the target term."""
     definition_tokens = set(re.findall(r"[a-z0-9]+", definition.lower()))
-    target_tokens = [
-        token
-        for token in re.findall(r"[a-z0-9]+", phrase.lower())
-        if token not in TARGET_TERM_STOPWORDS
-    ]
+    target_tokens = _target_term_variants(phrase)
     return bool(target_tokens and any(token in definition_tokens for token in target_tokens))
+
+
+def _fallback_definition(part_of_speech: str) -> str:
+    normalized = part_of_speech.lower().replace(".", "").strip()
+    if normalized in {"verb", "v", "phrasal verb"}:
+        return "to do the described action"
+    if normalized in {"adjective", "adj"}:
+        return "having the described quality"
+    if normalized in {"adverb", "adv"}:
+        return "in the described manner"
+    if normalized in {"phrase", "idiom"}:
+        return "a common expression with this meaning"
+    return "a person, thing, event, or idea"
+
+
+def _sanitize_front_definition(definition: str, phrase: str, part_of_speech: str) -> str:
+    """Remove answer-leaking target terms from the template-3 front definition."""
+    cleaned = _english_only_fragment(definition)
+    if not cleaned:
+        return _fallback_definition(part_of_speech)
+
+    removed_target = False
+    for token in sorted(_target_term_variants(phrase), key=len, reverse=True):
+        cleaned, count = re.subn(
+            rf"(?<![A-Za-z0-9]){re.escape(token)}(?![A-Za-z0-9])",
+            " ",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+        removed_target = removed_target or count > 0
+
+    if removed_target:
+        cleaned = re.sub(r"\b(?:and|or)\b", " ", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,.;:-|")
+
+    if (
+        len(re.findall(r"[A-Za-z]+", cleaned)) < 3
+        or _contains_cjk(cleaned)
+        or _definition_contains_target_term(cleaned, phrase)
+    ):
+        return _fallback_definition(part_of_speech)
+    return cleaned
 
 
 def _looks_like_part_of_speech(text: str) -> bool:
@@ -316,13 +375,9 @@ def generate_anki_package(
             if not chinese_meaning:
                 chinese_meaning = meaning
             if not english_definition:
-                if card_template == "definition_front":
-                    raise RuntimeError(f"第三种卡片格式错误：{phrase} 缺少英文正面释义，请重新生成。")
                 english_definition = meaning if not re.search(r"[\u4e00-\u9fff]", meaning) else ""
-            if card_template == "definition_front" and _contains_cjk(english_definition):
-                raise RuntimeError(f"第三种卡片格式错误：{phrase} 的正面释义包含中文，请重新生成。")
-            if card_template == "definition_front" and _definition_contains_target_term(english_definition, phrase):
-                raise RuntimeError(f"第三种卡片格式错误：{phrase} 的英文正面释义包含目标词，请重新生成。")
+            if card_template == "definition_front":
+                english_definition = _sanitize_front_definition(english_definition, phrase, part_of_speech)
             hint = _first_letter_hint(phrase)
             example_front = _highlight_target_in_example(example, phrase)
 
