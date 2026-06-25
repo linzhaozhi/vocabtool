@@ -20,7 +20,7 @@ APKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), constants.APKG_TEMP_SUBDIR)
 CARD_TEMPLATE_MODEL_OFFSETS = {
     "word_front": 1,
     "example_front": 2,
-    "definition_front": 15,
+    "definition_front": 16,
 }
 
 
@@ -421,8 +421,8 @@ def generate_anki_package(
     .cloze-fallback { display: inline-block; margin-top: 10px; }
     .cloze-back { text-align: left; color: #243041; }
     .cloze-back-word { display: flex; align-items: center; gap: 10px; font-size: 30px; font-weight: 800; color: #0056b3; margin-bottom: 24px; }
-    .cloze-back-definition { font-size: 21px; line-height: 1.45; color: #222; margin-bottom: 24px; }
-    .cloze-back-example { font-size: 22px; line-height: 1.5; color: #444; }
+    .cloze-back-definition { font-size: 24px; line-height: 1.5; color: #222; margin-bottom: 24px; }
+    .cloze-back-example { font-size: 25px; line-height: 1.55; color: #444; }
     .cloze-back-example br { display: block; content: ""; margin-top: 10px; }
     .meta { display: inline-block; font-size: 15px; color: #526071; background: #eef6f8; border: 1px solid #cfe4ea; border-radius: 999px; padding: 3px 10px; margin: 4px 0 10px; }
     .hint { display: inline-block; font-size: 18px; line-height: 1.35; letter-spacing: 0; color: #0f766e; background: #eefbf7; border: 1px solid #b7ead8; border-radius: 8px; padding: 6px 12px; margin-top: 8px; }

@@ -182,10 +182,10 @@ def _normalize_definition_language(value: str) -> str:
 def _definition_instruction(definition_language: str) -> str:
     """Build the prompt rule for the card meaning field."""
     if definition_language == "英文":
-        return "English only, concise, under 10 words. Do not include Chinese."
+        return "Use only the single most common core meaning. English only, concise, under 10 words. Do not include Chinese."
     if definition_language == "中英":
-        return "Simplified Chinese + short English definition, format: 中文释义 | English definition under 8 words."
-    return "Concise Simplified Chinese only."
+        return "Use only the single most common core meaning. Format: 中文释义 | English definition under 8 words."
+    return "Use only the single most common core meaning. Concise Simplified Chinese only."
 
 
 def get_word_quick_definition(word: str) -> Dict[str, Any]:
@@ -673,6 +673,7 @@ def process_ai_in_batches(
         example_count = 2
         definition_rule = (
             "Use exactly this inner format: English part-of-speech abbreviation | concise English definition under 10 words. "
+            "Select only the single most common core meaning. "
             "Use abbreviations such as n., v., adj., adv., or phrase. "
             "The English definition should be simple and should not repeat the target word or phrase. "
             "Example: adj. | able to catch fire easily."
@@ -684,6 +685,8 @@ Template 3 strict rules:
 - Field 4 must contain exactly two natural English sentences joined with <br>.
 - The first sentence is the card front. It must contain the exact target word or phrase once and will be converted into a cloze deletion.
 - The second sentence is the card back example. It must be a different natural sentence and should contain the target word or phrase.
+- Both sentences must illustrate the same single core meaning from field 3.
+- Do not include secondary meanings, rare meanings, or multiple senses.
 - Bad for "flammable": Materials near fire can be dangerous.
 - Good for "flammable": Keep flammable materials away from fire.<br>Gasoline is highly flammable.
 - Never put Chinese text, Chinese punctuation, or Chinese translation in field 3 or field 5.
@@ -742,7 +745,7 @@ Field requirements:
 1. Word/Phrase: English word or phrase, preferably lowercase.
 2. Pronunciation: must follow exactly this format: 美 /.../；英 /.../
 3. Meaning: {definition_rule}
-4. English Example(s): generate exactly {example_count} natural and short English example sentence(s).
+4. English Example(s): generate exactly {example_count} natural and short English example sentence(s) for the same core meaning as field 3.
 5. Example Translation(s): {translation_rule}
 6. Etymology: {etymology_rule}
 
@@ -759,6 +762,7 @@ Final check:
 Each line must contain exactly 5 occurrences of |||.
 Each line must contain both US and UK pronunciation.
 Field 4 must contain exactly {example_count} English example sentence(s).
+Field 3 and field 4 must all use one same dominant, common meaning.
 {translation_count_rule}
 For template 3, the first sentence in field 4 must contain the target word or phrase so the app can convert it into {{{{c1::word::first-letter hint}}}}, and the second sentence is used on the card back.
 {template_specific_rules}
