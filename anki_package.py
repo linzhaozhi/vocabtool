@@ -20,7 +20,7 @@ APKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), constants.APKG_TEMP_SUBDIR)
 CARD_TEMPLATE_MODEL_OFFSETS = {
     "word_front": 1,
     "example_front": 2,
-    "definition_front": 3,
+    "definition_front": 13,
 }
 
 
@@ -34,6 +34,17 @@ def _first_letter_hint(phrase: str) -> str:
     tokens = re.findall(r"[A-Za-z]+", phrase)
     return " ".join(
         f'<span class="hint-token"><span class="hint-letter">{html.escape(token[0].lower())}</span><span class="hint-line"></span></span>'
+        for token in tokens
+        if token
+    )
+
+
+def _plain_first_letter_hint(phrase: str) -> str:
+    tokens = re.findall(r"[A-Za-z]+", phrase)
+    if not tokens:
+        return "________"
+    return " ".join(
+        f"{token[0].lower()}{'_' * max(len(token) - 1, 6)}"
         for token in tokens
         if token
     )
@@ -160,6 +171,8 @@ def _split_structured_meaning(meaning: str) -> tuple[str, str, str]:
     parts = [part.strip() for part in meaning.split("|") if part.strip()]
     if len(parts) >= 2 and _looks_like_part_of_speech(parts[0]):
         chinese_meaning, english_definition = _pick_meaning_parts(parts[1:])
+        if english_definition and not any(_contains_cjk(part) for part in parts[1:]):
+            chinese_meaning = ""
         return parts[0], chinese_meaning, english_definition
     if len(parts) >= 2:
         chinese_meaning, english_definition = _pick_meaning_parts(parts)
@@ -167,8 +180,39 @@ def _split_structured_meaning(meaning: str) -> tuple[str, str, str]:
     return "", meaning, ""
 
 
-def _highlight_target_in_example(example: str, phrase: str) -> str:
+def _format_part_of_speech(part_of_speech: str) -> str:
+    normalized = part_of_speech.strip().lower().replace(".", "")
+    pos_map = {
+        "noun": "n.",
+        "n": "n.",
+        "verb": "v.",
+        "v": "v.",
+        "adjective": "adj.",
+        "adj": "adj.",
+        "adverb": "adv.",
+        "adv": "adv.",
+        "preposition": "prep.",
+        "prep": "prep.",
+        "conjunction": "conj.",
+        "conj": "conj.",
+        "pronoun": "pron.",
+        "pron": "pron.",
+        "interjection": "interj.",
+        "phrase": "phrase",
+        "phrasal verb": "phr. v.",
+        "idiom": "idiom",
+    }
+    return pos_map.get(normalized, part_of_speech.strip())
+
+
+def _first_example_text(example: str) -> str:
     first_example = re.split(r"<br\s*/?>", example, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+    first_example = re.sub(r"<[^>]+>", "", first_example)
+    return html.unescape(re.sub(r"\s+", " ", first_example).strip())
+
+
+def _highlight_target_in_example(example: str, phrase: str) -> str:
+    first_example = _first_example_text(example)
     if not first_example:
         return html.escape(phrase)
     if not phrase:
@@ -182,6 +226,38 @@ def _highlight_target_in_example(example: str, phrase: str) -> str:
         html.escape(first_example[:match.start()])
         + f"<strong>{html.escape(match.group(0))}</strong>"
         + html.escape(first_example[match.end():])
+    )
+
+
+def _build_cloze_example(example: str, phrase: str) -> str:
+    first_example = _first_example_text(example)
+    hint = _plain_first_letter_hint(phrase)
+
+    if not first_example:
+        return f"{{{{c1::{html.escape(phrase)}::{html.escape(hint)}}}}}"
+
+    patterns = [
+        re.compile(rf"(?<![A-Za-z0-9])({re.escape(phrase)})(?![A-Za-z0-9])", re.IGNORECASE)
+    ]
+    target_tokens = re.findall(r"[A-Za-z]+", phrase)
+    if len(target_tokens) == 1:
+        for variant in sorted(_target_term_variants(phrase), key=len, reverse=True):
+            patterns.append(
+                re.compile(rf"(?<![A-Za-z0-9])({re.escape(variant)})(?![A-Za-z0-9])", re.IGNORECASE)
+            )
+
+    for pattern in patterns:
+        match = pattern.search(first_example)
+        if match:
+            return (
+                html.escape(first_example[:match.start()])
+                + f"{{{{c1::{html.escape(match.group(0))}::{html.escape(hint)}}}}}"
+                + html.escape(first_example[match.end():])
+            )
+
+    return (
+        f"{html.escape(first_example)}<br>"
+        f'<span class="cloze-fallback">{{{{c1::{html.escape(phrase)}::{html.escape(hint)}}}}}</span>'
     )
 
 
@@ -227,26 +303,22 @@ def _get_template(card_template: str) -> Dict[str, str]:
             ''',
         },
         "definition_front": {
-            "name": "3. Definition Front",
+            "name": "3. Cloze Example Front",
             "qfmt": '''
-                <div class="front-definition">{{EnglishDefinition}}</div>
-                {{#PartOfSpeech}}<div class="meta">{{PartOfSpeech}}</div>{{/PartOfSpeech}}
-                {{#Hint}}<div class="hint">Hint: {{Hint}}</div>{{/Hint}}
+                <div class="cloze-front">{{cloze:ExampleCloze}}</div>
             ''',
             "afmt": '''
-            {{FrontSide}}
-            <hr>
-            <div class="phrase-row">
-                <span class="phrase">{{Phrase}}</span>
-                <span class="phrase-audio">{{Audio_Phrase}}</span>
+            <div class="cloze-back">
+                <div class="cloze-back-word">
+                    <span>{{Phrase}}</span>
+                    {{#Audio_Phrase}}<span class="phrase-audio">{{Audio_Phrase}}</span>{{/Audio_Phrase}}
+                </div>
+                <div class="cloze-back-definition">
+                    {{#PartOfSpeech}}{{PartOfSpeech}} {{/PartOfSpeech}}{{EnglishDefinition}}
+                </div>
+                <div class="cloze-back-example">{{ExampleSingle}}</div>
+                {{#Audio_Example}}<div class="example-audio">{{Audio_Example}}</div>{{/Audio_Example}}
             </div>
-            {{#Phonetic}}<div class="phonetic">{{Phonetic}}</div>{{/Phonetic}}
-            <div class="meaning">{{ChineseMeaning}}</div>
-            <div class="example">
-                <div>{{Example}}</div>
-                {{#Example_Translation}}<div class="example-translation">译：{{Example_Translation}}</div>{{/Example_Translation}}
-            </div>
-            <div class="example-audio">{{Audio_Example}}</div>
             ''',
         },
     }
@@ -324,6 +396,13 @@ def generate_anki_package(
     .front-example { font-size: 25px; line-height: 1.55; text-align: left; color: #243041; }
     .front-example strong { color: #0f766e; font-weight: 800; }
     .front-definition { font-size: 25px; line-height: 1.45; color: #243041; margin-bottom: 12px; }
+    .cloze-front { font-size: 26px; line-height: 1.55; text-align: left; color: #243041; }
+    .cloze { font-weight: 800; color: #0f766e; }
+    .cloze-fallback { display: inline-block; margin-top: 10px; }
+    .cloze-back { text-align: left; color: #243041; }
+    .cloze-back-word { display: flex; align-items: center; gap: 10px; font-size: 30px; font-weight: 800; color: #0056b3; margin-bottom: 24px; }
+    .cloze-back-definition { font-size: 21px; line-height: 1.45; color: #222; margin-bottom: 24px; }
+    .cloze-back-example { font-size: 22px; line-height: 1.5; color: #444; }
     .meta { display: inline-block; font-size: 15px; color: #526071; background: #eef6f8; border: 1px solid #cfe4ea; border-radius: 999px; padding: 3px 10px; margin: 4px 0 10px; }
     .hint { display: inline-block; font-size: 18px; line-height: 1.35; letter-spacing: 0; color: #0f766e; background: #eefbf7; border: 1px solid #b7ead8; border-radius: 8px; padding: 6px 12px; margin-top: 8px; }
     .hint-token { display: inline-block; margin-right: 0.65em; white-space: nowrap; }
@@ -332,7 +411,10 @@ def generate_anki_package(
     .definition { font-size: 19px; color: #435060; margin-bottom: 14px; text-align: left; }
     .etymology { display: block; font-size: """ + str(constants.ANKI_ETYMOLOGY_FONT_SIZE_PX) + """px; line-height: 1.6; color: #555; background-color: #fffdf5; padding: 10px; border-radius: 6px; margin-bottom: 5px; border: 1px solid #fef3c7; }
     .nightMode .etymology { background-color: #333; color: #aaa; border-color: #444; }
-    .nightMode .front-example, .nightMode .front-definition { color: #e5e7eb; }
+    .nightMode .front-example, .nightMode .front-definition, .nightMode .cloze-front, .nightMode .cloze-back { color: #e5e7eb; }
+    .nightMode .cloze { color: #99f6e4; }
+    .nightMode .cloze-back-word { color: #66b0ff; }
+    .nightMode .cloze-back-definition, .nightMode .cloze-back-example { color: #e5e7eb; }
     .nightMode .definition { color: #cbd5e1; }
     .nightMode .meta { background: #263241; color: #cbd5e1; border-color: #3f4f63; }
     .nightMode .hint { background: #12312f; color: #99f6e4; border-color: #1f5f58; }
@@ -342,18 +424,27 @@ def generate_anki_package(
     model_id = constants.ANKI_MODEL_ID_BASE + CARD_TEMPLATE_MODEL_OFFSETS[card_template]
     model_label = constants.CARD_TEMPLATES[card_template]["label"]
 
+    model_type = 0
+    if card_template == "definition_front":
+        model_type = getattr(genanki.Model, "CLOZE", 1)
+
+    field_defs = [
+        {'name': 'Phrase'}, {'name': 'Phonetic'}, {'name': 'Meaning'},
+        {'name': 'Example'}, {'name': 'Example_Translation'}, {'name': 'Etymology'},
+        {'name': 'PartOfSpeech'}, {'name': 'ChineseMeaning'},
+        {'name': 'EnglishDefinition'}, {'name': 'Hint'}, {'name': 'ExampleFront'},
+    ]
+    if card_template == "definition_front":
+        field_defs.extend([{'name': 'ExampleCloze'}, {'name': 'ExampleSingle'}])
+    field_defs.extend([{'name': 'Audio_Phrase'}, {'name': 'Audio_Example'}])
+
     model = genanki.Model(
         model_id,
         f'VocabFlow {model_label}',
-        fields=[
-            {'name': 'Phrase'}, {'name': 'Phonetic'}, {'name': 'Meaning'},
-            {'name': 'Example'}, {'name': 'Example_Translation'}, {'name': 'Etymology'},
-            {'name': 'PartOfSpeech'}, {'name': 'ChineseMeaning'},
-            {'name': 'EnglishDefinition'}, {'name': 'Hint'}, {'name': 'ExampleFront'},
-            {'name': 'Audio_Phrase'}, {'name': 'Audio_Example'}
-        ],
+        fields=field_defs,
         templates=[_get_template(card_template)],
-        css=CSS
+        css=CSS,
+        model_type=model_type,
     )
 
     deck = genanki.Deck(DECK_ID, deck_name)
@@ -372,14 +463,17 @@ def generate_anki_package(
             etymology = safe_str_clean(card.get('r', ''))
             note_id = card.get('id')
             part_of_speech, chinese_meaning, english_definition = _split_structured_meaning(meaning)
-            if not chinese_meaning:
+            if not chinese_meaning and card_template != "definition_front":
                 chinese_meaning = meaning
             if not english_definition:
                 english_definition = meaning if not re.search(r"[\u4e00-\u9fff]", meaning) else ""
             if card_template == "definition_front":
                 english_definition = _sanitize_front_definition(english_definition, phrase, part_of_speech)
+            part_of_speech = _format_part_of_speech(part_of_speech)
             hint = _first_letter_hint(phrase)
             example_front = _highlight_target_in_example(example, phrase)
+            example_cloze = _build_cloze_example(example, phrase)
+            example_single = _first_example_text(example)
 
             audio_phrase_field = ""
             audio_example_field = ""
@@ -395,6 +489,8 @@ def generate_anki_package(
                 'english_definition': english_definition,
                 'hint': hint,
                 'example_front': example_front,
+                'example_cloze': example_cloze,
+                'example_single': example_single,
                 'note_id': note_id,
                 'audio_phrase_field': audio_phrase_field,
                 'audio_example_field': audio_example_field,
@@ -491,9 +587,16 @@ def generate_anki_package(
                 prepared_card['english_definition'],
                 prepared_card['hint'],
                 prepared_card['example_front'],
+            ]
+            if card_template == "definition_front":
+                fields.extend([
+                    prepared_card['example_cloze'],
+                    prepared_card['example_single'],
+                ])
+            fields.extend([
                 prepared_card['audio_phrase_field'],
                 prepared_card['audio_example_field'],
-            ]
+            ])
             if prepared_card['note_id']:
                 note = genanki.Note(
                     model=model,

@@ -669,25 +669,24 @@ def process_ai_in_batches(
     definition_rule = _definition_instruction(definition_language)
     template_specific_rules = ""
     if card_template == "definition_front":
+        translate_examples = False
+        example_count = 1
         definition_rule = (
-            "Use exactly this inner format: English part of speech | Simplified Chinese meaning | "
-            "English-only definition under 12 words. The third inner part is shown on the card front, "
-            "so it must be English only, must contain no Chinese characters, and must not contain the target word or phrase. "
-            "Use English part-of-speech names only, such as noun, verb, adjective, adverb, or phrase. "
-            "Example: noun | 活力；生命力 | energy and strong life force."
+            "Use exactly this inner format: English part-of-speech abbreviation | concise English definition under 10 words. "
+            "Use abbreviations such as n., v., adj., adv., or phrase. "
+            "The English definition should be simple and should not repeat the target word or phrase. "
+            "Example: adj. | able to catch fire easily."
         )
         template_specific_rules = """
 Template 3 strict rules:
-- Field 3 must contain exactly three inner parts separated by two single | characters:
-  English part of speech | Simplified Chinese meaning | English-only definition
-- The card front uses the third inner part, so the third inner part must be English only.
-- Never put Chinese text, Chinese punctuation, or Chinese translation in the third inner part.
-- Never include the target word, target phrase, or main content word from the target phrase in the third inner part.
-- Never include obvious inflected forms of the target word, such as plural, -ing, -ed, or -ies forms.
-- Bad for "rally": a public rally or event.
-- Good for "rally": a public gathering or renewed effort.
-- Never use Chinese part-of-speech labels such as 名词 or 动词; use noun, verb, adjective, adverb, phrase, etc.
-- If unsure, write a simple English definition instead of a Chinese explanation.
+- Field 3 must contain exactly two inner parts separated by one single | character:
+  English part-of-speech abbreviation | concise English definition
+- Field 4 is used to build a cloze card front, so it must contain the exact target word or phrase once.
+- Field 4 must be one natural English sentence for template 3.
+- Bad for "flammable": Materials near fire can be dangerous.
+- Good for "flammable": Keep flammable materials away from fire.
+- Never put Chinese text, Chinese punctuation, or Chinese translation in field 3 or field 5.
+- Never use Chinese part-of-speech labels such as 名词 or 动词; use n., v., adj., adv., or phrase.
 """
     translation_rule = (
         "Translate field 4 sentence by sentence into Simplified Chinese."
@@ -698,6 +697,11 @@ Template 3 strict rules:
         f"Field 5 contains exactly {example_count} Chinese translation(s), matching field 4 in order."
         if translate_examples
         else "Field 5 is empty."
+    )
+    etymology_rule = (
+        "Leave this field empty for template 3."
+        if card_template == "definition_front"
+        else "Briefly explain root, affix, or origin in Simplified Chinese."
     )
 
     model_name = get_ai_model()
@@ -739,7 +743,7 @@ Field requirements:
 3. Meaning: {definition_rule}
 4. English Example(s): generate exactly {example_count} natural and short English example sentence(s).
 5. Example Translation(s): {translation_rule}
-6. Etymology: briefly explain root, affix, or origin in Simplified Chinese.
+6. Etymology: {etymology_rule}
 
 If {example_count}=1:
 - Field 4 contains exactly 1 English sentence.
@@ -755,7 +759,7 @@ Each line must contain exactly 5 occurrences of |||.
 Each line must contain both US and UK pronunciation.
 Field 4 must contain exactly {example_count} English example sentence(s).
 {translation_count_rule}
-For template 3, the English definition shown on the card front must not contain the target word, target phrase, or inflected forms of the target word.
+For template 3, field 4 must contain the target word or phrase so the app can convert it into {{{{c1::word::first-letter hint}}}}.
 {template_specific_rules}
 Output only the text code block."""
 
