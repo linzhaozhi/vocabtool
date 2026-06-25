@@ -1,5 +1,7 @@
 """Card-generation tab rendering."""
 
+import re
+
 import pandas as pd
 import streamlit as st
 
@@ -30,6 +32,41 @@ def _select_card_template() -> str:
     selected_key = label_to_key[selected_label]
     st.caption(constants.CARD_TEMPLATES[selected_key]["description"])
     return selected_key
+
+
+def _card_word_key(value: str) -> str:
+    """Normalize word keys only for counting generated cards."""
+    return re.sub(r"\s+", " ", str(value or "").strip()).lower()
+
+
+def _missing_card_words(cards: list[dict], requested_words: list[str]) -> list[str]:
+    """Return requested words that did not produce a parseable card."""
+    generated_keys = {
+        _card_word_key(card.get("w", ""))
+        for card in cards
+        if _card_word_key(card.get("w", ""))
+    }
+    return [
+        word
+        for word in requested_words
+        if _card_word_key(word) not in generated_keys
+    ]
+
+
+def _ordered_requested_cards(cards: list[dict], requested_words: list[str]) -> list[dict]:
+    """Keep exactly one generated card per requested word, in requested order."""
+    cards_by_key: dict[str, dict] = {}
+    for card in cards:
+        key = _card_word_key(card.get("w", ""))
+        if key and key not in cards_by_key:
+            cards_by_key[key] = card
+
+    ordered_cards = []
+    for word in requested_words:
+        card = cards_by_key.get(_card_word_key(word))
+        if card:
+            ordered_cards.append(card)
+    return ordered_cards
 
 
 def render_cards_tab() -> None:
@@ -163,7 +200,49 @@ def render_cards_tab() -> None:
             if ai_result:
                 content_progress_bar.progress(1.0)
                 content_status.text("✅ 内容生成完成，正在解析...")
-                parsed_data = parse_anki_data(ai_result)
+                all_ai_result = ai_result
+                parsed_data = parse_anki_data(all_ai_result)
+                missing_words = _missing_card_words(parsed_data, words_for_generation)
+
+                repair_round = 0
+                while missing_words and repair_round < constants.MAX_RETRIES:
+                    repair_round += 1
+                    missing_count = len(missing_words)
+                    content_status.text(
+                        f"🧠 正在补齐缺失卡片：{missing_count} 个（第 {repair_round}/{constants.MAX_RETRIES} 次）"
+                    )
+
+                    def update_repair_progress(current: int, total: int) -> None:
+                        base_done = len(words_for_generation) - missing_count
+                        ratio = (base_done + current) / len(words_for_generation) if words_for_generation else 0
+                        content_progress_bar.progress(min(ratio, 0.98))
+                        content_status.text(
+                            f"🧠 正在补齐缺失卡片：{current}/{total}（第 {repair_round}/{constants.MAX_RETRIES} 次）"
+                        )
+
+                    repair_result = process_ai_in_batches(
+                        missing_words,
+                        example_count=int(selected_example_count),
+                        definition_language=definition_language,
+                        translate_examples=bool(translate_examples),
+                        progress_callback=update_repair_progress,
+                        card_template=card_template,
+                    )
+                    if not repair_result:
+                        break
+
+                    all_ai_result = f"{all_ai_result}\n{repair_result}"
+                    parsed_data = parse_anki_data(all_ai_result)
+                    missing_words = _missing_card_words(parsed_data, words_for_generation)
+
+                if missing_words:
+                    preview = "、".join(missing_words[:20])
+                    more = f" 等 {len(missing_words)} 个词" if len(missing_words) > 20 else ""
+                    content_status.text("❌ 卡片数量未补齐")
+                    st.error(f"仍有 {len(missing_words)} 个词没有生成可解析卡片：{preview}{more}。本次不打包，请重试。")
+                    return
+
+                parsed_data = _ordered_requested_cards(parsed_data, words_for_generation)
 
                 if parsed_data:
                     try:
