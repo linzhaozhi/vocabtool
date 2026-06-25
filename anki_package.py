@@ -514,6 +514,10 @@ def generate_anki_package(
             example_cloze = _build_cloze_example(example, phrase)
             example_one = _first_example_text(example)
             example_two = _second_example_text(example)
+            if card_template == "definition_front" and (not example_one or not example_two):
+                raise RuntimeError(
+                    f"第三种卡片格式错误：{phrase} 必须有两个英文例句，才能生成 3 个音频。"
+                )
 
             audio_phrase_field = ""
             audio_example_field = ""
@@ -591,6 +595,14 @@ def generate_anki_package(
 
             prepared_cards.append(prepared_card)
 
+        if card_template == "definition_front" and enable_tts and tts_mode != "none":
+            expected_audio_tasks = len(prepared_cards) * 3
+            if len(audio_tasks) != expected_audio_tasks:
+                raise RuntimeError(
+                    f"第三种卡片音频任务数量错误：应生成 {expected_audio_tasks} 个音频任务，实际只有 {len(audio_tasks)} 个。"
+                    "请重新生成内容，确保每张卡都有两个英文例句。"
+                )
+
         if audio_tasks:
             if progress_callback:
                 progress_callback(0.0, f"🎙️ 正在准备 {len(audio_tasks)} 个音频任务...")
@@ -640,6 +652,20 @@ def generate_anki_package(
                 raise RuntimeError(
                     f"语音生成不完整：缺少 {missing_audio_count} 个音频。请稍后重试，或减少本次单词数量。"
                 )
+            if card_template == "definition_front":
+                incomplete_cards = [
+                    prepared_card.get("phrase", "")
+                    for prepared_card in prepared_cards
+                    if (
+                        not prepared_card.get("audio_phrase_field")
+                        or not prepared_card.get("audio_example_field")
+                        or not prepared_card.get("audio_example_2_field")
+                    )
+                ]
+                if incomplete_cards:
+                    preview = "、".join(incomplete_cards[:5])
+                    more = f" 等 {len(incomplete_cards)} 个词" if len(incomplete_cards) > 5 else ""
+                    raise RuntimeError(f"第三种卡片音频不完整：{preview}{more} 缺少单词或例句音频。")
             if progress_callback:
                 progress_callback(1.0, "🎙️ 音频全部生成完成，正在打包。")
         elif progress_callback:
