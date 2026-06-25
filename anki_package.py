@@ -18,9 +18,9 @@ from utils import safe_str_clean
 APKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), constants.APKG_TEMP_SUBDIR)
 
 CARD_TEMPLATE_MODEL_OFFSETS = {
-    "word_front": 1,
-    "example_front": 2,
-    "definition_front": 18,
+    "word_front": 21,
+    "example_front": 22,
+    "definition_front": 23,
 }
 
 
@@ -249,6 +249,20 @@ def _build_cloze_example(example: str, phrase: str) -> str:
     if not first_example:
         return f"{{{{c1::{html.escape(phrase)}::{html.escape(hint)}}}}}"
 
+    def render_all_matches(pattern: re.Pattern[str]) -> str:
+        pieces = []
+        last_end = 0
+        match_count = 0
+        for match in pattern.finditer(first_example):
+            pieces.append(html.escape(first_example[last_end:match.start()]))
+            pieces.append(f"{{{{c1::{html.escape(match.group(0))}::{html.escape(hint)}}}}}")
+            last_end = match.end()
+            match_count += 1
+        if not match_count:
+            return ""
+        pieces.append(html.escape(first_example[last_end:]))
+        return "".join(pieces)
+
     patterns = [
         re.compile(rf"(?<![A-Za-z0-9])({re.escape(phrase)})(?![A-Za-z0-9])", re.IGNORECASE)
     ]
@@ -260,13 +274,9 @@ def _build_cloze_example(example: str, phrase: str) -> str:
             )
 
     for pattern in patterns:
-        match = pattern.search(first_example)
-        if match:
-            return (
-                html.escape(first_example[:match.start()])
-                + f"{{{{c1::{html.escape(match.group(0))}::{html.escape(hint)}}}}}"
-                + html.escape(first_example[match.end():])
-            )
+        clozed = render_all_matches(pattern)
+        if clozed:
+            return clozed
 
     return (
         f"{html.escape(first_example)}<br>"
@@ -285,7 +295,6 @@ def _get_template(card_template: str) -> Dict[str, str]:
             "afmt": '''
             {{FrontSide}}
             <hr>
-            {{#Phonetic}}<div class="phonetic">{{Phonetic}}</div>{{/Phonetic}}
             <div class="meaning">{{Meaning}}</div>
             {{#EnglishDefinition}}<div class="definition">{{EnglishDefinition}}</div>{{/EnglishDefinition}}
             <div class="example">
@@ -306,7 +315,6 @@ def _get_template(card_template: str) -> Dict[str, str]:
             {{FrontSide}}
             <hr>
             <div class="phrase">{{Phrase}}</div>
-            {{#Phonetic}}<div class="phonetic">{{Phonetic}}</div>{{/Phonetic}}
             <div class="meaning">{{Meaning}}</div>
             {{#EnglishDefinition}}<div class="definition">{{EnglishDefinition}}</div>{{/EnglishDefinition}}
             <div class="example">

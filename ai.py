@@ -214,8 +214,8 @@ def _validate_definition_front_examples(raw_text: str) -> Optional[str]:
             return f"{phrase} 必须生成 1 个英文例句"
         for index, sentence in enumerate(examples, start=1):
             count = _target_occurrence_count(sentence, phrase)
-            if count != 1:
-                return f"{phrase} 第 {index} 个例句中目标词必须只出现 1 次"
+            if count < 1:
+                return f"{phrase} 第 {index} 个例句必须包含目标词"
             if len(re.findall(r"[A-Za-z]+", sentence)) < 8:
                 return f"{phrase} 第 {index} 个例句太短，信息量不足"
             if _looks_like_weak_example(sentence, phrase):
@@ -255,8 +255,8 @@ def _validate_card_batch_completeness(
         phrase = str(card.get("w", "")).strip()
         if _normalize_card_item(phrase) != _normalize_card_item(expected_item):
             return f"第 {index} 张卡片词条不匹配：应为 {expected_item}，实际为 {phrase}"
-        if not str(card.get("p", "")).strip() or "美" not in card.get("p", "") or "英" not in card.get("p", ""):
-            return f"{phrase} 缺少完整美英音标"
+        if str(card.get("p", "")).strip():
+            return f"{phrase} 不应包含音标"
         if not str(card.get("m", "")).strip():
             return f"{phrase} 缺少释义"
 
@@ -794,7 +794,8 @@ Template 3 strict rules:
   English part-of-speech abbreviation | concise English definition
 - Field 4 must contain exactly one natural English sentence.
 - The sentence is used as the card front cloze and the full card back example.
-- The sentence must contain the exact target word or phrase once and will be converted into a cloze deletion.
+- The sentence must contain the exact target word or phrase at least once and will be converted into a cloze deletion.
+- If the target word or phrase appears multiple times, the app will cloze every occurrence.
 - The sentence must illustrate the same single core meaning from field 3.
 - The sentence must be self-contained and semantically informative: it should show what the word is, does, produces, causes, describes, or is used for.
 - Keep the definition concise; the example can be longer when needed for natural, sufficient context.
@@ -860,7 +861,7 @@ Word/Phrase ||| Pronunciation ||| Meaning ||| English Example(s) ||| Example Tra
 
 Field requirements:
 1. Word/Phrase: English word or phrase, preferably lowercase.
-2. Pronunciation: must follow exactly this format: 美 /.../；英 /.../
+2. Pronunciation: leave this field empty. Keep the field separator, but write no text in this field.
 3. Meaning: {definition_rule}
 4. English Example(s): generate exactly {example_count} natural, moderately detailed English example sentence(s) for the same core meaning as field 3. Each example must be self-contained and reveal the meaning through concrete context.
 5. Example Translation(s): {translation_rule}
@@ -877,10 +878,10 @@ If {example_count}>1:
 
 Final check:
 Each line must contain exactly 5 occurrences of |||.
-Each line must contain both US and UK pronunciation.
+Field 2 is empty.
 Field 4 must contain exactly {example_count} English example sentence(s).
 Field 3 and field 4 must all use one same dominant, common meaning.
-Each example must contain the target word or phrase exactly once and must be informative enough to reveal the meaning.
+Each example must contain the target word or phrase at least once and must be informative enough to reveal the meaning.
 {translation_count_rule}
 For template 3, field 4 must contain the target word or phrase so the app can convert it into {{{{c1::word::first-letter hint}}}}.
 {template_specific_rules}
