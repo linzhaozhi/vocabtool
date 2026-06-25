@@ -163,123 +163,6 @@ def get_deepseek_model() -> str:
     return get_ai_model()
 
 
-def _count_parseable_cards(raw_text: str) -> int:
-    """Count parseable cards without making ai.py depend on UI code."""
-    from anki_parse import parse_anki_data
-
-    return len(parse_anki_data(raw_text))
-
-
-def _target_occurrence_count(sentence: str, target: str) -> int:
-    """Count exact target occurrences in one generated example sentence."""
-    target = re.sub(r"\s+", " ", str(target or "").strip())
-    if not target:
-        return 0
-    if " " in target:
-        return len(re.findall(rf"(?<![A-Za-z0-9]){re.escape(target)}(?![A-Za-z0-9])", sentence, re.IGNORECASE))
-    return len(re.findall(rf"(?<![A-Za-z0-9]){re.escape(target)}(?![A-Za-z0-9])", sentence, re.IGNORECASE))
-
-
-def _looks_like_weak_example(sentence: str, target: str) -> bool:
-    """Reject vague examples that do not reveal what the target means."""
-    sentence_clean = re.sub(r"\s+", " ", str(sentence or "").strip())
-    lowered = sentence_clean.lower().strip(" .")
-    target_escaped = re.escape(str(target or "").strip().lower())
-    if not lowered or not target_escaped:
-        return True
-
-    weak_patterns = (
-        rf"^(i|we|they|he|she)\s+(visited|saw|found|noticed|liked|used|bought|checked)\s+.*\b{target_escaped}\b.*\b(yesterday|today|last\s+week|last\s+weekend)\b",
-        rf"^(i|we|they|he|she)\s+(visited|saw|found|noticed|liked)\s+(a|an|the|my|our)?\s*(local|nearby|new|old|small|big)?\s*\b{target_escaped}\b$",
-        rf"^(this|that|it)\s+is\s+(a|an|the)?\s*\b{target_escaped}\b$",
-        rf"^there\s+(is|was|are|were)\s+(a|an|the)?\s*\b{target_escaped}\b",
-        rf"^the\s+\b{target_escaped}\b\s+(is|was)\s+(nice|good|bad|important|useful|common|popular)$",
-    )
-    return any(re.search(pattern, lowered, flags=re.IGNORECASE) for pattern in weak_patterns)
-
-
-def _validate_definition_front_examples(raw_text: str) -> Optional[str]:
-    """Validate template-3 examples before accepting an AI batch."""
-    from anki_parse import parse_anki_data
-
-    cards = parse_anki_data(raw_text)
-    for card in cards:
-        phrase = str(card.get("w", "")).strip()
-        examples = [
-            re.sub(r"\s+", " ", item).strip()
-            for item in re.split(r"<br\s*/?>", str(card.get("e", "")), flags=re.IGNORECASE)
-            if re.sub(r"\s+", " ", item).strip()
-        ]
-        if len(examples) != 1:
-            return f"{phrase} 必须生成 1 个英文例句"
-        for index, sentence in enumerate(examples, start=1):
-            count = _target_occurrence_count(sentence, phrase)
-            if count < 1:
-                return f"{phrase} 第 {index} 个例句必须包含目标词"
-            if len(re.findall(r"[A-Za-z]+", sentence)) < 8:
-                return f"{phrase} 第 {index} 个例句太短，信息量不足"
-            if _looks_like_weak_example(sentence, phrase):
-                return f"{phrase} 第 {index} 个例句信息量不足"
-    return None
-
-
-def _normalize_card_item(text: str) -> str:
-    """Normalize a generated card item for strict batch comparison."""
-    return re.sub(r"\s+", " ", str(text or "").strip()).lower()
-
-
-def _split_example_sentences(example_field: str) -> list[str]:
-    """Split normalized <br>-joined example fields."""
-    return [
-        re.sub(r"\s+", " ", item).strip()
-        for item in re.split(r"<br\s*/?>", str(example_field or ""), flags=re.IGNORECASE)
-        if re.sub(r"\s+", " ", item).strip()
-    ]
-
-
-def _validate_card_batch_completeness(
-    raw_text: str,
-    expected_items: List[str],
-    example_count: int,
-    translate_examples: bool,
-    card_template: str,
-) -> Optional[str]:
-    """Validate that an AI batch can produce a complete card set."""
-    from anki_parse import parse_anki_data
-
-    cards = parse_anki_data(raw_text)
-    if len(cards) != len(expected_items):
-        return f"应返回 {len(expected_items)} 张卡片，实际解析到 {len(cards)} 张"
-
-    for index, (card, expected_item) in enumerate(zip(cards, expected_items), start=1):
-        phrase = str(card.get("w", "")).strip()
-        if _normalize_card_item(phrase) != _normalize_card_item(expected_item):
-            return f"第 {index} 张卡片词条不匹配：应为 {expected_item}，实际为 {phrase}"
-        if str(card.get("p", "")).strip():
-            return f"{phrase} 不应包含音标"
-        if not str(card.get("m", "")).strip():
-            return f"{phrase} 缺少释义"
-
-        examples = _split_example_sentences(str(card.get("e", "")))
-        if len(examples) != example_count:
-            return f"{phrase} 应有 {example_count} 个英文例句，实际为 {len(examples)} 个"
-
-        translations = _split_example_sentences(str(card.get("ec", "")))
-        if card_template == "definition_front":
-            if translations:
-                return f"{phrase} 第三种模板不应包含例句中文翻译"
-            if str(card.get("r", "")).strip():
-                return f"{phrase} 第三种模板不应包含词源字段"
-        elif translate_examples and len(translations) != example_count:
-            return f"{phrase} 应有 {example_count} 个例句翻译，实际为 {len(translations)} 个"
-        elif not translate_examples and translations:
-            return f"{phrase} 不应包含例句翻译"
-
-    if card_template == "definition_front":
-        return _validate_definition_front_examples(raw_text)
-    return None
-
-
 def _normalize_definition_language(value: str) -> str:
     """Normalize card definition-language options from UI."""
     if value in {"英文", "english", "en"}:
@@ -903,15 +786,6 @@ Output only the text code block."""
                 content = response.get("content", "")
                 if not content:
                     raise RuntimeError("AI 返回了空内容")
-                validation_error = _validate_card_batch_completeness(
-                    content,
-                    batch,
-                    example_count,
-                    translate_examples,
-                    card_template,
-                )
-                if validation_error:
-                    raise RuntimeError(f"AI 返回内容不完整：{validation_error}")
                 full_results.append(content)
 
                 if progress_callback:
@@ -933,7 +807,7 @@ Output only the text code block."""
                     )
 
     if failed_batches:
-        st.error(f"❌ 有 {len(failed_batches)} 个批次生成失败。为保证制卡完整性，本次不会生成部分卡片，请减少词数或重试。")
+        st.error(f"❌ 有 {len(failed_batches)} 个批次请求失败。本次不会生成部分卡片，请稍后重试或减少词数。")
         return None
 
     return "\n".join(full_results)

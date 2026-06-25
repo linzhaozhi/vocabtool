@@ -72,6 +72,14 @@ def _target_term_variants(phrase: str) -> set[str]:
             variants.add(f"{token[:-1]}ied")
         if token.endswith("e") and len(token) > 2:
             variants.add(f"{token[:-1]}ing")
+        if (
+            len(token) >= 3
+            and token[-1] not in "aeiouwxy"
+            and token[-2] in "aeiou"
+            and token[-3] not in "aeiou"
+        ):
+            variants.add(f"{token}{token[-1]}ed")
+            variants.add(f"{token}{token[-1]}ing")
         variants.update({
             f"{token}s",
             f"{token}es",

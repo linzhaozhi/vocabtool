@@ -200,7 +200,7 @@ def render_cards_tab() -> None:
                 else:
                     st.error("解析失败，返回内容为空或格式错误。")
             else:
-                st.error("生成失败，请检查 API Key 或网络连接。")
+                st.error("生成失败：请先查看上方具体错误后重试；如果没有具体错误，再检查 API Key 或网络连接。")
 
     st.caption("⚠️ 智能生成内容可能存在错误，请人工复核。")
 
