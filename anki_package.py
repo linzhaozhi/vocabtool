@@ -205,10 +205,28 @@ def _format_part_of_speech(part_of_speech: str) -> str:
     return pos_map.get(normalized, part_of_speech.strip())
 
 
+def _example_texts(example: str) -> list[str]:
+    examples = []
+    for item in re.split(r"<br\s*/?>", example, flags=re.IGNORECASE):
+        cleaned = re.sub(r"<[^>]+>", "", item.strip())
+        cleaned = html.unescape(re.sub(r"\s+", " ", cleaned).strip())
+        if cleaned:
+            examples.append(cleaned)
+    return examples
+
+
 def _first_example_text(example: str) -> str:
-    first_example = re.split(r"<br\s*/?>", example, maxsplit=1, flags=re.IGNORECASE)[0].strip()
-    first_example = re.sub(r"<[^>]+>", "", first_example)
-    return html.unescape(re.sub(r"\s+", " ", first_example).strip())
+    examples = _example_texts(example)
+    return examples[0] if examples else ""
+
+
+def _back_example_text(example: str) -> str:
+    examples = _example_texts(example)
+    return "<br>".join(html.escape(item) for item in examples[:2])
+
+
+def _front_example_text(example: str) -> str:
+    return _first_example_text(example)
 
 
 def _highlight_target_in_example(example: str, phrase: str) -> str:
@@ -230,7 +248,7 @@ def _highlight_target_in_example(example: str, phrase: str) -> str:
 
 
 def _build_cloze_example(example: str, phrase: str) -> str:
-    first_example = _first_example_text(example)
+    first_example = _front_example_text(example)
     hint = _plain_first_letter_hint(phrase)
 
     if not first_example:
@@ -306,6 +324,7 @@ def _get_template(card_template: str) -> Dict[str, str]:
             "name": "3. Cloze Example Front",
             "qfmt": '''
                 <div class="cloze-front">{{cloze:ExampleCloze}}</div>
+                {{#Audio_Example}}<div class="cloze-front-audio">{{Audio_Example}}</div>{{/Audio_Example}}
             ''',
             "afmt": '''
             <div class="cloze-back">
@@ -397,12 +416,14 @@ def generate_anki_package(
     .front-example strong { color: #0f766e; font-weight: 800; }
     .front-definition { font-size: 25px; line-height: 1.45; color: #243041; margin-bottom: 12px; }
     .cloze-front { font-size: 26px; line-height: 1.55; text-align: left; color: #243041; }
+    .cloze-front-audio { margin-top: 14px; text-align: left; }
     .cloze { font-weight: 800; color: #0f766e; }
     .cloze-fallback { display: inline-block; margin-top: 10px; }
     .cloze-back { text-align: left; color: #243041; }
     .cloze-back-word { display: flex; align-items: center; gap: 10px; font-size: 30px; font-weight: 800; color: #0056b3; margin-bottom: 24px; }
     .cloze-back-definition { font-size: 21px; line-height: 1.45; color: #222; margin-bottom: 24px; }
     .cloze-back-example { font-size: 22px; line-height: 1.5; color: #444; }
+    .cloze-back-example br { display: block; content: ""; margin-top: 10px; }
     .meta { display: inline-block; font-size: 15px; color: #526071; background: #eef6f8; border: 1px solid #cfe4ea; border-radius: 999px; padding: 3px 10px; margin: 4px 0 10px; }
     .hint { display: inline-block; font-size: 18px; line-height: 1.35; letter-spacing: 0; color: #0f766e; background: #eefbf7; border: 1px solid #b7ead8; border-radius: 8px; padding: 6px 12px; margin-top: 8px; }
     .hint-token { display: inline-block; margin-right: 0.65em; white-space: nowrap; }
@@ -473,7 +494,7 @@ def generate_anki_package(
             hint = _first_letter_hint(phrase)
             example_front = _highlight_target_in_example(example, phrase)
             example_cloze = _build_cloze_example(example, phrase)
-            example_single = _first_example_text(example)
+            example_single = _back_example_text(example)
 
             audio_phrase_field = ""
             audio_example_field = ""
@@ -514,7 +535,8 @@ def generate_anki_package(
                 prepared_card['phrase_audio_path'] = phrase_path
                 prepared_card['phrase_audio_filename'] = phrase_filename
 
-                tts_example = re.sub(r'<br\s*/?>', '. ', example, flags=re.IGNORECASE)
+                tts_example_source = _front_example_text(example) if card_template == "definition_front" else example
+                tts_example = re.sub(r'<br\s*/?>', '. ', tts_example_source, flags=re.IGNORECASE)
                 tts_example = re.sub(r'<[^>]+>', '', tts_example)
                 tts_example = re.sub(r'\s+', ' ', tts_example).strip()
                 if tts_mode == "word_and_example" and tts_example and len(tts_example) > 3:

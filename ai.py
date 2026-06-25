@@ -670,7 +670,7 @@ def process_ai_in_batches(
     template_specific_rules = ""
     if card_template == "definition_front":
         translate_examples = False
-        example_count = 1
+        example_count = 2
         definition_rule = (
             "Use exactly this inner format: English part-of-speech abbreviation | concise English definition under 10 words. "
             "Use abbreviations such as n., v., adj., adv., or phrase. "
@@ -681,10 +681,11 @@ def process_ai_in_batches(
 Template 3 strict rules:
 - Field 3 must contain exactly two inner parts separated by one single | character:
   English part-of-speech abbreviation | concise English definition
-- Field 4 is used to build a cloze card front, so it must contain the exact target word or phrase once.
-- Field 4 must be one natural English sentence for template 3.
+- Field 4 must contain exactly two natural English sentences joined with <br>.
+- The first sentence is the card front. It must contain the exact target word or phrase once and will be converted into a cloze deletion.
+- The second sentence is the card back example. It must be a different natural sentence and should contain the target word or phrase.
 - Bad for "flammable": Materials near fire can be dangerous.
-- Good for "flammable": Keep flammable materials away from fire.
+- Good for "flammable": Keep flammable materials away from fire.<br>Gasoline is highly flammable.
 - Never put Chinese text, Chinese punctuation, or Chinese translation in field 3 or field 5.
 - Never use Chinese part-of-speech labels such as 名词 or 动词; use n., v., adj., adv., or phrase.
 """
@@ -759,7 +760,7 @@ Each line must contain exactly 5 occurrences of |||.
 Each line must contain both US and UK pronunciation.
 Field 4 must contain exactly {example_count} English example sentence(s).
 {translation_count_rule}
-For template 3, field 4 must contain the target word or phrase so the app can convert it into {{{{c1::word::first-letter hint}}}}.
+For template 3, the first sentence in field 4 must contain the target word or phrase so the app can convert it into {{{{c1::word::first-letter hint}}}}, and the second sentence is used on the card back.
 {template_specific_rules}
 Output only the text code block."""
 
