@@ -21,7 +21,7 @@ from ui.helpers import (
     clear_direct_wordlist_input,
     clear_paste_input,
     clear_url_input,
-    parse_wordlist_candidates,
+    parse_single_word_candidates,
     parse_unique_words,
     reset_extraction_state,
     restore_word_editor_state,
@@ -372,7 +372,7 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
         result_step_title = "#### 查看与整理结果"
         next_step_title = "#### 下一步"
         st.markdown("#### 导入单词表")
-        st.caption("支持上传简单词表 `.txt` 文件，也支持直接粘贴现成词表。")
+        st.caption("支持上传 `.txt` 文件或直接粘贴。这里只提取单词，不保留短语；空格和符号都会作为分隔。")
 
         word_list_file = st.file_uploader("上传单词表文件", type=["txt"], key="wordlist_import_uploader")
         if word_list_file and is_upload_too_large(word_list_file):
@@ -414,10 +414,10 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
                 use_container_width=True,
             )
         raw_input = st.text_area(
-            "✍️ 粘贴单词列表（每行一个或逗号分隔）",
+            "✍️ 粘贴单词列表（空格、换行或符号分隔）",
             height=220,
             key="direct_wordlist_input",
-            placeholder="altruism\nhectic\nserendipity",
+            placeholder="UEFA arsenal / falcon, tsunami\nself-deprecatingly lo mein",
             label_visibility="collapsed",
         )
         if st.session_state.get("direct_wordlist_last_input") != raw_input:
@@ -425,9 +425,9 @@ def render_extraction_tab(vocab_dict: dict[str, int], full_df: Any) -> None:
             st.session_state["ai_word_selection_selected"] = ""
             st.session_state["ai_word_selection_remaining"] = ""
 
-        candidate_words = parse_wordlist_candidates(raw_input)
+        candidate_words = parse_single_word_candidates(raw_input)
         if candidate_words:
-            st.caption(f"已识别 {len(candidate_words)} 个候选词/短语。可以导入全部，也可以让 AI 筛出最值得先学的词。")
+            st.caption(f"已识别 {len(candidate_words)} 个候选单词。可以导入全部，也可以让 AI 筛出最值得先学的词。")
 
         col_all_import, col_ai_count, col_ai_select = st.columns([1, 1, 2])
         with col_all_import:

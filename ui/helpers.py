@@ -150,6 +150,24 @@ def parse_wordlist_candidates(raw_text: str) -> list[str]:
     return words
 
 
+def parse_single_word_candidates(raw_text: str) -> list[str]:
+    """Parse a messy word list into single words only, splitting on spaces and symbols."""
+    words: list[str] = []
+    seen_words = set()
+    for match in re.finditer(r"[A-Za-z]+(?:'[A-Za-z]+)?", str(raw_text or "")):
+        cleaned = match.group(0).strip("'").strip()
+        if not cleaned or len(cleaned) < 2:
+            continue
+        if cleaned.lower() == "chapter":
+            continue
+
+        normalized = cleaned.lower()
+        if normalized not in seen_words:
+            seen_words.add(normalized)
+            words.append(cleaned)
+    return words
+
+
 def _generated_words_to_text() -> str:
     """Build a word-list text value from the latest generated data."""
     lines: list[str] = []

@@ -20,7 +20,7 @@ APKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), constants.APKG_TEMP_SUBDIR)
 CARD_TEMPLATE_MODEL_OFFSETS = {
     "word_front": 1,
     "example_front": 2,
-    "definition_front": 13,
+    "definition_front": 15,
 }
 
 
@@ -324,7 +324,6 @@ def _get_template(card_template: str) -> Dict[str, str]:
             "name": "3. Cloze Example Front",
             "qfmt": '''
                 <div class="cloze-front">{{cloze:ExampleCloze}}</div>
-                {{#Audio_Example}}<div class="cloze-front-audio">{{Audio_Example}}</div>{{/Audio_Example}}
             ''',
             "afmt": '''
             <div class="cloze-back">
@@ -378,6 +377,8 @@ def generate_anki_package(
     card_template = _normalize_card_template(card_template)
     if tts_mode not in constants.CARD_AUDIO_MODES:
         tts_mode = constants.DEFAULT_CARD_AUDIO_MODE
+    if card_template == "definition_front" and tts_mode == "word":
+        tts_mode = "word_and_example"
 
     CSS = """
     .card { font-family: 'Arial', sans-serif; font-size: 20px; text-align: center; color: #333; background-color: white; padding: 20px; }
@@ -416,7 +417,6 @@ def generate_anki_package(
     .front-example strong { color: #0f766e; font-weight: 800; }
     .front-definition { font-size: 25px; line-height: 1.45; color: #243041; margin-bottom: 12px; }
     .cloze-front { font-size: 26px; line-height: 1.55; text-align: left; color: #243041; }
-    .cloze-front-audio { margin-top: 14px; text-align: left; }
     .cloze { font-weight: 800; color: #0f766e; }
     .cloze-fallback { display: inline-block; margin-top: 10px; }
     .cloze-back { text-align: left; color: #243041; }
