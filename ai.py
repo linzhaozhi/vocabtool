@@ -170,6 +170,59 @@ def _count_parseable_cards(raw_text: str) -> int:
     return len(parse_anki_data(raw_text))
 
 
+def _target_occurrence_count(sentence: str, target: str) -> int:
+    """Count exact target occurrences in one generated example sentence."""
+    target = re.sub(r"\s+", " ", str(target or "").strip())
+    if not target:
+        return 0
+    if " " in target:
+        return len(re.findall(rf"(?<![A-Za-z0-9]){re.escape(target)}(?![A-Za-z0-9])", sentence, re.IGNORECASE))
+    return len(re.findall(rf"(?<![A-Za-z0-9]){re.escape(target)}(?![A-Za-z0-9])", sentence, re.IGNORECASE))
+
+
+def _looks_like_weak_example(sentence: str, target: str) -> bool:
+    """Reject vague examples that do not reveal what the target means."""
+    sentence_clean = re.sub(r"\s+", " ", str(sentence or "").strip())
+    lowered = sentence_clean.lower().strip(" .")
+    target_escaped = re.escape(str(target or "").strip().lower())
+    if not lowered or not target_escaped:
+        return True
+
+    weak_patterns = (
+        rf"^(i|we|they|he|she)\s+(visited|saw|found|noticed|liked|used|bought|checked)\s+.*\b{target_escaped}\b.*\b(yesterday|today|last\s+week|last\s+weekend)\b",
+        rf"^(i|we|they|he|she)\s+(visited|saw|found|noticed|liked)\s+(a|an|the|my|our)?\s*(local|nearby|new|old|small|big)?\s*\b{target_escaped}\b$",
+        rf"^(this|that|it)\s+is\s+(a|an|the)?\s*\b{target_escaped}\b$",
+        rf"^there\s+(is|was|are|were)\s+(a|an|the)?\s*\b{target_escaped}\b",
+        rf"^the\s+\b{target_escaped}\b\s+(is|was)\s+(nice|good|bad|important|useful|common|popular)$",
+    )
+    return any(re.search(pattern, lowered, flags=re.IGNORECASE) for pattern in weak_patterns)
+
+
+def _validate_definition_front_examples(raw_text: str) -> Optional[str]:
+    """Validate template-3 examples before accepting an AI batch."""
+    from anki_parse import parse_anki_data
+
+    cards = parse_anki_data(raw_text)
+    for card in cards:
+        phrase = str(card.get("w", "")).strip()
+        examples = [
+            re.sub(r"\s+", " ", item).strip()
+            for item in re.split(r"<br\s*/?>", str(card.get("e", "")), flags=re.IGNORECASE)
+            if re.sub(r"\s+", " ", item).strip()
+        ]
+        if len(examples) != 2:
+            return f"{phrase} 必须生成 2 个英文例句"
+        for index, sentence in enumerate(examples, start=1):
+            count = _target_occurrence_count(sentence, phrase)
+            if count != 1:
+                return f"{phrase} 第 {index} 个例句中目标词必须只出现 1 次"
+            if len(re.findall(r"[A-Za-z]+", sentence)) < 8:
+                return f"{phrase} 第 {index} 个例句太短，信息量不足"
+            if _looks_like_weak_example(sentence, phrase):
+                return f"{phrase} 第 {index} 个例句信息量不足"
+    return None
+
+
 def _normalize_definition_language(value: str) -> str:
     """Normalize card definition-language options from UI."""
     if value in {"英文", "english", "en"}:
@@ -684,11 +737,17 @@ Template 3 strict rules:
   English part-of-speech abbreviation | concise English definition
 - Field 4 must contain exactly two natural English sentences joined with <br>.
 - The first sentence is the card front. It must contain the exact target word or phrase once and will be converted into a cloze deletion.
-- The second sentence is the card back example. It must be a different natural sentence and should contain the target word or phrase.
+- The second sentence is the card back example. It must be a different natural sentence and must contain the exact target word or phrase once.
 - Both sentences must illustrate the same single core meaning from field 3.
+- Each sentence must be self-contained and semantically informative: it should show what the word is, does, produces, causes, describes, or is used for.
+- Each sentence should be moderately rich, about 10-18 words, with a concrete subject, action, and meaning clue.
+- Avoid overly short, empty, or diary-like sentences.
+- Do not write vague event-only examples about visiting, seeing, liking, or using something without revealing the meaning.
 - Do not include secondary meanings, rare meanings, or multiple senses.
+- Bad for "brewery": We visited a local brewery last weekend.
+- Good for "brewery": The brewery produces small-batch beer and delivers fresh kegs to nearby restaurants.<br>The brewery stores fresh hops in cold rooms before the beer is fermented.
 - Bad for "flammable": Materials near fire can be dangerous.
-- Good for "flammable": Keep flammable materials away from fire.<br>Gasoline is highly flammable.
+- Good for "flammable": Keep flammable materials away from sparks because they can catch fire quickly.<br>Gasoline is highly flammable, so workers store it far from heat.
 - Never put Chinese text, Chinese punctuation, or Chinese translation in field 3 or field 5.
 - Never use Chinese part-of-speech labels such as 名词 or 动词; use n., v., adj., adv., or phrase.
 """
@@ -745,7 +804,7 @@ Field requirements:
 1. Word/Phrase: English word or phrase, preferably lowercase.
 2. Pronunciation: must follow exactly this format: 美 /.../；英 /.../
 3. Meaning: {definition_rule}
-4. English Example(s): generate exactly {example_count} natural and short English example sentence(s) for the same core meaning as field 3.
+4. English Example(s): generate exactly {example_count} natural, moderately detailed English example sentence(s) for the same core meaning as field 3. Each example must be self-contained and reveal the meaning through concrete context.
 5. Example Translation(s): {translation_rule}
 6. Etymology: {etymology_rule}
 
@@ -763,6 +822,7 @@ Each line must contain exactly 5 occurrences of |||.
 Each line must contain both US and UK pronunciation.
 Field 4 must contain exactly {example_count} English example sentence(s).
 Field 3 and field 4 must all use one same dominant, common meaning.
+Each example must contain the target word or phrase exactly once and must be informative enough to reveal the meaning.
 {translation_count_rule}
 For template 3, the first sentence in field 4 must contain the target word or phrase so the app can convert it into {{{{c1::word::first-letter hint}}}}, and the second sentence is used on the card back.
 {template_specific_rules}
@@ -789,6 +849,10 @@ Output only the text code block."""
                     raise RuntimeError(
                         f"AI 返回格式不完整：本批 {len(batch)} 个词，只解析到 {parsed_count} 张卡片"
                     )
+                if card_template == "definition_front":
+                    validation_error = _validate_definition_front_examples(content)
+                    if validation_error:
+                        raise RuntimeError(f"第三种卡片例句不合格：{validation_error}")
                 full_results.append(content)
 
                 if progress_callback:
