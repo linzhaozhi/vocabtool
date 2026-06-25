@@ -20,7 +20,7 @@ APKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), constants.APKG_TEMP_SUBDIR)
 CARD_TEMPLATE_MODEL_OFFSETS = {
     "word_front": 1,
     "example_front": 2,
-    "definition_front": 16,
+    "definition_front": 17,
 }
 
 
@@ -44,7 +44,7 @@ def _plain_first_letter_hint(phrase: str) -> str:
     if not tokens:
         return "________"
     return " ".join(
-        f"{token[0].lower()}{'_' * max(len(token) - 1, 6)}"
+        f"{token[0].lower()}{'_' * 8}"
         for token in tokens
         if token
     )
@@ -220,9 +220,9 @@ def _first_example_text(example: str) -> str:
     return examples[0] if examples else ""
 
 
-def _back_example_text(example: str) -> str:
+def _second_example_text(example: str) -> str:
     examples = _example_texts(example)
-    return "<br>".join(html.escape(item) for item in examples[:2])
+    return examples[1] if len(examples) >= 2 else ""
 
 
 def _front_example_text(example: str) -> str:
@@ -327,15 +327,25 @@ def _get_template(card_template: str) -> Dict[str, str]:
             ''',
             "afmt": '''
             <div class="cloze-back">
-                <div class="cloze-back-word">
-                    <span>{{Phrase}}</span>
-                    {{#Audio_Phrase}}<span class="phrase-audio">{{Audio_Phrase}}</span>{{/Audio_Phrase}}
+                <div class="cloze-back-head">
+                    <div class="cloze-back-word">{{Phrase}}</div>
+                    {{#Audio_Phrase}}<div class="cloze-audio">{{Audio_Phrase}}</div>{{/Audio_Phrase}}
                 </div>
                 <div class="cloze-back-definition">
                     {{#PartOfSpeech}}{{PartOfSpeech}} {{/PartOfSpeech}}{{EnglishDefinition}}
                 </div>
-                <div class="cloze-back-example">{{ExampleSingle}}</div>
-                {{#Audio_Example}}<div class="example-audio">{{Audio_Example}}</div>{{/Audio_Example}}
+                <div class="cloze-back-examples">
+                    <div class="cloze-example-row">
+                        <div class="cloze-example-text">{{ExampleOne}}</div>
+                        {{#Audio_Example}}<div class="cloze-audio">{{Audio_Example}}</div>{{/Audio_Example}}
+                    </div>
+                    {{#ExampleTwo}}
+                    <div class="cloze-example-row">
+                        <div class="cloze-example-text">{{ExampleTwo}}</div>
+                        {{#Audio_Example_2}}<div class="cloze-audio">{{Audio_Example_2}}</div>{{/Audio_Example_2}}
+                    </div>
+                    {{/ExampleTwo}}
+                </div>
             </div>
             ''',
         },
@@ -420,10 +430,14 @@ def generate_anki_package(
     .cloze { font-weight: 800; color: #0f766e; }
     .cloze-fallback { display: inline-block; margin-top: 10px; }
     .cloze-back { text-align: left; color: #243041; }
-    .cloze-back-word { display: flex; align-items: center; gap: 10px; font-size: 30px; font-weight: 800; color: #0056b3; margin-bottom: 24px; }
-    .cloze-back-definition { font-size: 24px; line-height: 1.5; color: #222; margin-bottom: 24px; }
-    .cloze-back-example { font-size: 25px; line-height: 1.55; color: #444; }
-    .cloze-back-example br { display: block; content: ""; margin-top: 10px; }
+    .cloze-back-head { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+    .cloze-back-word { font-size: 32px; font-weight: 800; color: #0056b3; }
+    .cloze-audio { display: inline-flex; align-items: center; flex: 0 0 auto; }
+    .cloze-back-definition { font-size: 24px; line-height: 1.5; color: #222; margin-bottom: 26px; padding-bottom: 18px; border-bottom: 1px solid #dbe4ee; }
+    .cloze-back-examples { display: grid; gap: 16px; }
+    .cloze-example-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 14px 0; border-bottom: 1px solid #edf2f7; }
+    .cloze-example-row:last-child { border-bottom: 0; }
+    .cloze-example-text { font-size: 25px; line-height: 1.55; color: #444; }
     .meta { display: inline-block; font-size: 15px; color: #526071; background: #eef6f8; border: 1px solid #cfe4ea; border-radius: 999px; padding: 3px 10px; margin: 4px 0 10px; }
     .hint { display: inline-block; font-size: 18px; line-height: 1.35; letter-spacing: 0; color: #0f766e; background: #eefbf7; border: 1px solid #b7ead8; border-radius: 8px; padding: 6px 12px; margin-top: 8px; }
     .hint-token { display: inline-block; margin-right: 0.65em; white-space: nowrap; }
@@ -435,7 +449,9 @@ def generate_anki_package(
     .nightMode .front-example, .nightMode .front-definition, .nightMode .cloze-front, .nightMode .cloze-back { color: #e5e7eb; }
     .nightMode .cloze { color: #99f6e4; }
     .nightMode .cloze-back-word { color: #66b0ff; }
-    .nightMode .cloze-back-definition, .nightMode .cloze-back-example { color: #e5e7eb; }
+    .nightMode .cloze-back-definition { color: #e5e7eb; border-bottom-color: #334155; }
+    .nightMode .cloze-example-row { border-bottom-color: #253244; }
+    .nightMode .cloze-example-text { color: #e5e7eb; }
     .nightMode .definition { color: #cbd5e1; }
     .nightMode .meta { background: #263241; color: #cbd5e1; border-color: #3f4f63; }
     .nightMode .hint { background: #12312f; color: #99f6e4; border-color: #1f5f58; }
@@ -456,8 +472,10 @@ def generate_anki_package(
         {'name': 'EnglishDefinition'}, {'name': 'Hint'}, {'name': 'ExampleFront'},
     ]
     if card_template == "definition_front":
-        field_defs.extend([{'name': 'ExampleCloze'}, {'name': 'ExampleSingle'}])
+        field_defs.extend([{'name': 'ExampleCloze'}, {'name': 'ExampleOne'}, {'name': 'ExampleTwo'}])
     field_defs.extend([{'name': 'Audio_Phrase'}, {'name': 'Audio_Example'}])
+    if card_template == "definition_front":
+        field_defs.append({'name': 'Audio_Example_2'})
 
     model = genanki.Model(
         model_id,
@@ -494,10 +512,12 @@ def generate_anki_package(
             hint = _first_letter_hint(phrase)
             example_front = _highlight_target_in_example(example, phrase)
             example_cloze = _build_cloze_example(example, phrase)
-            example_single = _back_example_text(example)
+            example_one = _first_example_text(example)
+            example_two = _second_example_text(example)
 
             audio_phrase_field = ""
             audio_example_field = ""
+            audio_example_2_field = ""
             prepared_card = {
                 'phrase': phrase,
                 'phonetic': phonetic,
@@ -511,14 +531,18 @@ def generate_anki_package(
                 'hint': hint,
                 'example_front': example_front,
                 'example_cloze': example_cloze,
-                'example_single': example_single,
+                'example_one': html.escape(example_one),
+                'example_two': html.escape(example_two),
                 'note_id': note_id,
                 'audio_phrase_field': audio_phrase_field,
                 'audio_example_field': audio_example_field,
+                'audio_example_2_field': audio_example_2_field,
                 'phrase_audio_path': "",
                 'phrase_audio_filename': "",
                 'example_audio_path': "",
                 'example_audio_filename': "",
+                'example_2_audio_path': "",
+                'example_2_audio_filename': "",
             }
 
             if enable_tts and tts_mode != "none" and phrase:
@@ -549,6 +573,21 @@ def generate_anki_package(
                     })
                     prepared_card['example_audio_path'] = example_path
                     prepared_card['example_audio_filename'] = example_filename
+
+                if card_template == "definition_front" and tts_mode == "word_and_example":
+                    tts_example_2 = _second_example_text(example)
+                    tts_example_2 = re.sub(r'<[^>]+>', '', tts_example_2)
+                    tts_example_2 = re.sub(r'\s+', ' ', tts_example_2).strip()
+                    if tts_example_2 and len(tts_example_2) > 3:
+                        example_2_filename = f"tts_{safe_phrase}_{unique_id}_e2.mp3"
+                        example_2_path = os.path.join(tmp_dir, example_2_filename)
+                        audio_tasks.append({
+                            'text': tts_example_2,
+                            'path': example_2_path,
+                            'voice': tts_voice
+                        })
+                        prepared_card['example_2_audio_path'] = example_2_path
+                        prepared_card['example_2_audio_filename'] = example_2_filename
 
             prepared_cards.append(prepared_card)
 
@@ -584,6 +623,16 @@ def generate_anki_package(
                     media_files.append(example_audio_path)
                     successful_audio_count += 1
 
+                example_2_audio_path = prepared_card.get('example_2_audio_path', '')
+                if (
+                    example_2_audio_path
+                    and os.path.exists(example_2_audio_path)
+                    and os.path.getsize(example_2_audio_path) > constants.MIN_AUDIO_FILE_SIZE
+                ):
+                    prepared_card['audio_example_2_field'] = f"[sound:{prepared_card['example_2_audio_filename']}]"
+                    media_files.append(example_2_audio_path)
+                    successful_audio_count += 1
+
             if progress_callback:
                 progress_callback(1.0, f"🎙️ 已生成 {successful_audio_count}/{len(audio_tasks)} 个音频。")
             if successful_audio_count != len(audio_tasks):
@@ -613,12 +662,15 @@ def generate_anki_package(
             if card_template == "definition_front":
                 fields.extend([
                     prepared_card['example_cloze'],
-                    prepared_card['example_single'],
+                    prepared_card['example_one'],
+                    prepared_card['example_two'],
                 ])
             fields.extend([
                 prepared_card['audio_phrase_field'],
                 prepared_card['audio_example_field'],
             ])
+            if card_template == "definition_front":
+                fields.append(prepared_card['audio_example_2_field'])
             if prepared_card['note_id']:
                 note = genanki.Note(
                     model=model,

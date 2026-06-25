@@ -74,11 +74,16 @@ def render_cards_tab() -> None:
         key="sel_audio_mode_cards",
     )
     selected_audio_mode = audio_label_to_key[selected_audio_label]
+    if card_template == "definition_front" and selected_audio_mode == "word":
+        selected_audio_mode = "word_and_example"
     enable_audio_auto = selected_audio_mode != "none"
-    st.caption(
-        f"{constants.CARD_AUDIO_MODES[selected_audio_mode]['description']} "
-        "生成时会校验所有请求的音频，缺少任何一个都会停止并提示重试。"
-    )
+    if card_template == "definition_front" and enable_audio_auto:
+        st.caption("第 3 种模板会在反面生成 3 个音频：单词、例句 1、例句 2。缺少任何一个都会停止并提示重试。")
+    else:
+        st.caption(
+            f"{constants.CARD_AUDIO_MODES[selected_audio_mode]['description']} "
+            "生成时会校验所有请求的音频，缺少任何一个都会停止并提示重试。"
+        )
     selected_example_count = constants.AI_CARD_EXAMPLE_COUNT_DEFAULT
     definition_language = "中文"
     translate_examples = True
