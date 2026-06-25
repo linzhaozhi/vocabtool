@@ -210,8 +210,8 @@ def _validate_definition_front_examples(raw_text: str) -> Optional[str]:
             for item in re.split(r"<br\s*/?>", str(card.get("e", "")), flags=re.IGNORECASE)
             if re.sub(r"\s+", " ", item).strip()
         ]
-        if len(examples) != 2:
-            return f"{phrase} 必须生成 2 个英文例句"
+        if len(examples) != 1:
+            return f"{phrase} 必须生成 1 个英文例句"
         for index, sentence in enumerate(examples, start=1):
             count = _target_occurrence_count(sentence, phrase)
             if count != 1:
@@ -220,6 +220,63 @@ def _validate_definition_front_examples(raw_text: str) -> Optional[str]:
                 return f"{phrase} 第 {index} 个例句太短，信息量不足"
             if _looks_like_weak_example(sentence, phrase):
                 return f"{phrase} 第 {index} 个例句信息量不足"
+    return None
+
+
+def _normalize_card_item(text: str) -> str:
+    """Normalize a generated card item for strict batch comparison."""
+    return re.sub(r"\s+", " ", str(text or "").strip()).lower()
+
+
+def _split_example_sentences(example_field: str) -> list[str]:
+    """Split normalized <br>-joined example fields."""
+    return [
+        re.sub(r"\s+", " ", item).strip()
+        for item in re.split(r"<br\s*/?>", str(example_field or ""), flags=re.IGNORECASE)
+        if re.sub(r"\s+", " ", item).strip()
+    ]
+
+
+def _validate_card_batch_completeness(
+    raw_text: str,
+    expected_items: List[str],
+    example_count: int,
+    translate_examples: bool,
+    card_template: str,
+) -> Optional[str]:
+    """Validate that an AI batch can produce a complete card set."""
+    from anki_parse import parse_anki_data
+
+    cards = parse_anki_data(raw_text)
+    if len(cards) != len(expected_items):
+        return f"应返回 {len(expected_items)} 张卡片，实际解析到 {len(cards)} 张"
+
+    for index, (card, expected_item) in enumerate(zip(cards, expected_items), start=1):
+        phrase = str(card.get("w", "")).strip()
+        if _normalize_card_item(phrase) != _normalize_card_item(expected_item):
+            return f"第 {index} 张卡片词条不匹配：应为 {expected_item}，实际为 {phrase}"
+        if not str(card.get("p", "")).strip() or "美" not in card.get("p", "") or "英" not in card.get("p", ""):
+            return f"{phrase} 缺少完整美英音标"
+        if not str(card.get("m", "")).strip():
+            return f"{phrase} 缺少释义"
+
+        examples = _split_example_sentences(str(card.get("e", "")))
+        if len(examples) != example_count:
+            return f"{phrase} 应有 {example_count} 个英文例句，实际为 {len(examples)} 个"
+
+        translations = _split_example_sentences(str(card.get("ec", "")))
+        if card_template == "definition_front":
+            if translations:
+                return f"{phrase} 第三种模板不应包含例句中文翻译"
+            if str(card.get("r", "")).strip():
+                return f"{phrase} 第三种模板不应包含词源字段"
+        elif translate_examples and len(translations) != example_count:
+            return f"{phrase} 应有 {example_count} 个例句翻译，实际为 {len(translations)} 个"
+        elif not translate_examples and translations:
+            return f"{phrase} 不应包含例句翻译"
+
+    if card_template == "definition_front":
+        return _validate_definition_front_examples(raw_text)
     return None
 
 
@@ -708,7 +765,7 @@ def process_ai_in_batches(
     words_list: List[str],
     example_count: int = constants.AI_CARD_EXAMPLE_COUNT_DEFAULT,
     definition_language: str = "中文",
-    translate_examples: bool = True,
+    translate_examples: bool = False,
     progress_callback: Optional[Callable[[int, int], None]] = None,
     card_template: str = constants.DEFAULT_CARD_TEMPLATE,
 ) -> Optional[str]:
@@ -723,7 +780,7 @@ def process_ai_in_batches(
     template_specific_rules = ""
     if card_template == "definition_front":
         translate_examples = False
-        example_count = 2
+        example_count = 1
         definition_rule = (
             "Use exactly this inner format: English part-of-speech abbreviation | concise English definition under 10 words. "
             "Select only the single most common core meaning. "
@@ -735,19 +792,20 @@ def process_ai_in_batches(
 Template 3 strict rules:
 - Field 3 must contain exactly two inner parts separated by one single | character:
   English part-of-speech abbreviation | concise English definition
-- Field 4 must contain exactly two natural English sentences joined with <br>.
-- The first sentence is the card front. It must contain the exact target word or phrase once and will be converted into a cloze deletion.
-- The second sentence is the card back example. It must be a different natural sentence and must contain the exact target word or phrase once.
-- Both sentences must illustrate the same single core meaning from field 3.
-- Each sentence must be self-contained and semantically informative: it should show what the word is, does, produces, causes, describes, or is used for.
-- Each sentence should be moderately rich, about 10-18 words, with a concrete subject, action, and meaning clue.
+- Field 4 must contain exactly one natural English sentence.
+- The sentence is used as the card front cloze and the full card back example.
+- The sentence must contain the exact target word or phrase once and will be converted into a cloze deletion.
+- The sentence must illustrate the same single core meaning from field 3.
+- The sentence must be self-contained and semantically informative: it should show what the word is, does, produces, causes, describes, or is used for.
+- Keep the definition concise; the example can be longer when needed for natural, sufficient context.
+- The example should usually be about 10-20 words, with a concrete subject, action, and meaning clue.
 - Avoid overly short, empty, or diary-like sentences.
 - Do not write vague event-only examples about visiting, seeing, liking, or using something without revealing the meaning.
 - Do not include secondary meanings, rare meanings, or multiple senses.
 - Bad for "brewery": We visited a local brewery last weekend.
-- Good for "brewery": The brewery produces small-batch beer and delivers fresh kegs to nearby restaurants.<br>The brewery stores fresh hops in cold rooms before the beer is fermented.
+- Good for "brewery": The brewery produces small-batch beer and delivers fresh kegs to nearby restaurants.
 - Bad for "flammable": Materials near fire can be dangerous.
-- Good for "flammable": Keep flammable materials away from sparks because they can catch fire quickly.<br>Gasoline is highly flammable, so workers store it far from heat.
+- Good for "flammable": Keep flammable materials away from sparks because they can catch fire quickly.
 - Never put Chinese text, Chinese punctuation, or Chinese translation in field 3 or field 5.
 - Never use Chinese part-of-speech labels such as 名词 or 动词; use n., v., adj., adv., or phrase.
 """
@@ -824,7 +882,7 @@ Field 4 must contain exactly {example_count} English example sentence(s).
 Field 3 and field 4 must all use one same dominant, common meaning.
 Each example must contain the target word or phrase exactly once and must be informative enough to reveal the meaning.
 {translation_count_rule}
-For template 3, the first sentence in field 4 must contain the target word or phrase so the app can convert it into {{{{c1::word::first-letter hint}}}}, and the second sentence is used on the card back.
+For template 3, field 4 must contain the target word or phrase so the app can convert it into {{{{c1::word::first-letter hint}}}}.
 {template_specific_rules}
 Output only the text code block."""
 
@@ -844,15 +902,15 @@ Output only the text code block."""
                 content = response.get("content", "")
                 if not content:
                     raise RuntimeError("AI 返回了空内容")
-                parsed_count = _count_parseable_cards(content)
-                if parsed_count < len(batch):
-                    raise RuntimeError(
-                        f"AI 返回格式不完整：本批 {len(batch)} 个词，只解析到 {parsed_count} 张卡片"
-                    )
-                if card_template == "definition_front":
-                    validation_error = _validate_definition_front_examples(content)
-                    if validation_error:
-                        raise RuntimeError(f"第三种卡片例句不合格：{validation_error}")
+                validation_error = _validate_card_batch_completeness(
+                    content,
+                    batch,
+                    example_count,
+                    translate_examples,
+                    card_template,
+                )
+                if validation_error:
+                    raise RuntimeError(f"AI 返回内容不完整：{validation_error}")
                 full_results.append(content)
 
                 if progress_callback:
@@ -873,7 +931,8 @@ Output only the text code block."""
                         show_user=True
                     )
 
-    if failed_batches and full_results:
-        st.warning(f"⚠️ 有 {len(failed_batches)} 个批次生成失败，已保留成功生成的部分。建议减少词数后重试失败词。")
+    if failed_batches:
+        st.error(f"❌ 有 {len(failed_batches)} 个批次生成失败。为保证制卡完整性，本次不会生成部分卡片，请减少词数或重试。")
+        return None
 
     return "\n".join(full_results)

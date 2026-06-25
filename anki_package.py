@@ -20,7 +20,7 @@ APKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), constants.APKG_TEMP_SUBDIR)
 CARD_TEMPLATE_MODEL_OFFSETS = {
     "word_front": 1,
     "example_front": 2,
-    "definition_front": 17,
+    "definition_front": 18,
 }
 
 
@@ -220,11 +220,6 @@ def _first_example_text(example: str) -> str:
     return examples[0] if examples else ""
 
 
-def _second_example_text(example: str) -> str:
-    examples = _example_texts(example)
-    return examples[1] if len(examples) >= 2 else ""
-
-
 def _front_example_text(example: str) -> str:
     return _first_example_text(example)
 
@@ -331,21 +326,17 @@ def _get_template(card_template: str) -> Dict[str, str]:
                     <div class="cloze-back-word">{{Phrase}}</div>
                     {{#Audio_Phrase}}<div class="cloze-audio">{{Audio_Phrase}}</div>{{/Audio_Phrase}}
                 </div>
-                <div class="cloze-back-definition">
+                {{#EnglishDefinition}}<div class="cloze-back-definition">
                     {{#PartOfSpeech}}{{PartOfSpeech}} {{/PartOfSpeech}}{{EnglishDefinition}}
-                </div>
+                </div>{{/EnglishDefinition}}
+                {{#ExampleOne}}
                 <div class="cloze-back-examples">
                     <div class="cloze-example-row">
                         <div class="cloze-example-text">{{ExampleOne}}</div>
                         {{#Audio_Example}}<div class="cloze-audio">{{Audio_Example}}</div>{{/Audio_Example}}
                     </div>
-                    {{#ExampleTwo}}
-                    <div class="cloze-example-row">
-                        <div class="cloze-example-text">{{ExampleTwo}}</div>
-                        {{#Audio_Example_2}}<div class="cloze-audio">{{Audio_Example_2}}</div>{{/Audio_Example_2}}
-                    </div>
-                    {{/ExampleTwo}}
                 </div>
+                {{/ExampleOne}}
             </div>
             ''',
         },
@@ -472,10 +463,8 @@ def generate_anki_package(
         {'name': 'EnglishDefinition'}, {'name': 'Hint'}, {'name': 'ExampleFront'},
     ]
     if card_template == "definition_front":
-        field_defs.extend([{'name': 'ExampleCloze'}, {'name': 'ExampleOne'}, {'name': 'ExampleTwo'}])
+        field_defs.extend([{'name': 'ExampleCloze'}, {'name': 'ExampleOne'}])
     field_defs.extend([{'name': 'Audio_Phrase'}, {'name': 'Audio_Example'}])
-    if card_template == "definition_front":
-        field_defs.append({'name': 'Audio_Example_2'})
 
     model = genanki.Model(
         model_id,
@@ -513,15 +502,13 @@ def generate_anki_package(
             example_front = _highlight_target_in_example(example, phrase)
             example_cloze = _build_cloze_example(example, phrase)
             example_one = _first_example_text(example)
-            example_two = _second_example_text(example)
-            if card_template == "definition_front" and (not example_one or not example_two):
+            if card_template == "definition_front" and not example_one:
                 raise RuntimeError(
-                    f"第三种卡片格式错误：{phrase} 必须有两个英文例句，才能生成 3 个音频。"
+                    f"第三种卡片格式错误：{phrase} 必须有一个英文例句，才能生成完整卡片。"
                 )
 
             audio_phrase_field = ""
             audio_example_field = ""
-            audio_example_2_field = ""
             prepared_card = {
                 'phrase': phrase,
                 'phonetic': phonetic,
@@ -536,17 +523,13 @@ def generate_anki_package(
                 'example_front': example_front,
                 'example_cloze': example_cloze,
                 'example_one': html.escape(example_one),
-                'example_two': html.escape(example_two),
                 'note_id': note_id,
                 'audio_phrase_field': audio_phrase_field,
                 'audio_example_field': audio_example_field,
-                'audio_example_2_field': audio_example_2_field,
                 'phrase_audio_path': "",
                 'phrase_audio_filename': "",
                 'example_audio_path': "",
                 'example_audio_filename': "",
-                'example_2_audio_path': "",
-                'example_2_audio_filename': "",
             }
 
             if enable_tts and tts_mode != "none" and phrase:
@@ -578,29 +561,14 @@ def generate_anki_package(
                     prepared_card['example_audio_path'] = example_path
                     prepared_card['example_audio_filename'] = example_filename
 
-                if card_template == "definition_front" and tts_mode == "word_and_example":
-                    tts_example_2 = _second_example_text(example)
-                    tts_example_2 = re.sub(r'<[^>]+>', '', tts_example_2)
-                    tts_example_2 = re.sub(r'\s+', ' ', tts_example_2).strip()
-                    if tts_example_2 and len(tts_example_2) > 3:
-                        example_2_filename = f"tts_{safe_phrase}_{unique_id}_e2.mp3"
-                        example_2_path = os.path.join(tmp_dir, example_2_filename)
-                        audio_tasks.append({
-                            'text': tts_example_2,
-                            'path': example_2_path,
-                            'voice': tts_voice
-                        })
-                        prepared_card['example_2_audio_path'] = example_2_path
-                        prepared_card['example_2_audio_filename'] = example_2_filename
-
             prepared_cards.append(prepared_card)
 
         if card_template == "definition_front" and enable_tts and tts_mode != "none":
-            expected_audio_tasks = len(prepared_cards) * 3
+            expected_audio_tasks = len(prepared_cards) * 2
             if len(audio_tasks) != expected_audio_tasks:
                 raise RuntimeError(
                     f"第三种卡片音频任务数量错误：应生成 {expected_audio_tasks} 个音频任务，实际只有 {len(audio_tasks)} 个。"
-                    "请重新生成内容，确保每张卡都有两个英文例句。"
+                    "请重新生成内容，确保每张卡都有一个英文例句。"
                 )
 
         if audio_tasks:
@@ -635,16 +603,6 @@ def generate_anki_package(
                     media_files.append(example_audio_path)
                     successful_audio_count += 1
 
-                example_2_audio_path = prepared_card.get('example_2_audio_path', '')
-                if (
-                    example_2_audio_path
-                    and os.path.exists(example_2_audio_path)
-                    and os.path.getsize(example_2_audio_path) > constants.MIN_AUDIO_FILE_SIZE
-                ):
-                    prepared_card['audio_example_2_field'] = f"[sound:{prepared_card['example_2_audio_filename']}]"
-                    media_files.append(example_2_audio_path)
-                    successful_audio_count += 1
-
             if progress_callback:
                 progress_callback(1.0, f"🎙️ 已生成 {successful_audio_count}/{len(audio_tasks)} 个音频。")
             if successful_audio_count != len(audio_tasks):
@@ -659,7 +617,6 @@ def generate_anki_package(
                     if (
                         not prepared_card.get("audio_phrase_field")
                         or not prepared_card.get("audio_example_field")
-                        or not prepared_card.get("audio_example_2_field")
                     )
                 ]
                 if incomplete_cards:
@@ -689,14 +646,11 @@ def generate_anki_package(
                 fields.extend([
                     prepared_card['example_cloze'],
                     prepared_card['example_one'],
-                    prepared_card['example_two'],
                 ])
             fields.extend([
                 prepared_card['audio_phrase_field'],
                 prepared_card['audio_example_field'],
             ])
-            if card_template == "definition_front":
-                fields.append(prepared_card['audio_example_2_field'])
             if prepared_card['note_id']:
                 note = genanki.Note(
                     model=model,
