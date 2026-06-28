@@ -1,6 +1,7 @@
 """Card-generation tab rendering."""
 
 import re
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -37,6 +38,7 @@ def _select_card_template() -> str:
 def _card_word_key(value: str) -> str:
     """Normalize word keys only for counting generated cards."""
     cleaned = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", str(value or "").strip())
+    cleaned = cleaned.strip("`'\"“”‘’[](){}<>:：")
     return re.sub(r"\s+", " ", cleaned).lower()
 
 
@@ -120,6 +122,78 @@ def _ordered_requested_cards(cards: list[dict], requested_words: list[str]) -> l
         if card:
             ordered_cards.append(card)
     return ordered_cards
+
+
+def _generate_complete_cards_with_queue(
+    requested_words: list[str],
+    *,
+    example_count: int,
+    definition_language: str,
+    translate_examples: bool,
+    card_template: str,
+    content_status: Any,
+    content_progress_bar: Any,
+) -> tuple[list[dict], list[str]]:
+    """Generate complete cards by re-queuing failed words at the tail."""
+    pending_words = list(requested_words)
+    parsed_cards: list[dict] = []
+    attempts_by_key: dict[str, int] = {}
+    total_words = len(requested_words)
+    max_attempts_per_word = max(constants.MAX_RETRIES * 4, 12)
+
+    while pending_words:
+        batch = pending_words[: constants.AI_BATCH_SIZE]
+        pending_words = pending_words[constants.AI_BATCH_SIZE:]
+
+        for word in batch:
+            key = _card_word_key(word)
+            attempts_by_key[key] = attempts_by_key.get(key, 0) + 1
+
+        completed_count = len(_complete_cards_by_key(parsed_cards, requested_words, card_template))
+        content_status.text(
+            f"🧠 正在生成卡片：已完成 {completed_count}/{total_words}，"
+            f"本组处理 {len(batch)}/{constants.AI_BATCH_SIZE} 个，队列剩余 {len(pending_words)} 个"
+        )
+
+        def update_queue_progress(current: int, total: int) -> None:
+            ratio = (completed_count + current) / total_words if total_words else 0
+            content_progress_bar.progress(min(ratio, 0.98))
+            content_status.text(
+                f"🧠 正在生成卡片：批次 {current}/{total}，"
+                f"已完成 {completed_count}/{total_words}，队列剩余 {len(pending_words)} 个"
+            )
+
+        result = process_ai_in_batches(
+            batch,
+            example_count=int(example_count),
+            definition_language=definition_language,
+            translate_examples=bool(translate_examples),
+            progress_callback=update_queue_progress,
+            card_template=card_template,
+        )
+        if result:
+            parsed_cards = _merge_card_results(
+                parsed_cards,
+                parse_anki_data(result),
+                requested_words,
+                card_template,
+            )
+
+        incomplete_words = _incomplete_card_words(parsed_cards, batch, card_template)
+        exhausted_words = [
+            word
+            for word in incomplete_words
+            if attempts_by_key.get(_card_word_key(word), 0) >= max_attempts_per_word
+        ]
+        if exhausted_words:
+            return parsed_cards, exhausted_words
+
+        pending_words.extend(incomplete_words)
+
+    complete_cards = _complete_cards_by_key(parsed_cards, requested_words, card_template)
+    ordered_cards = _ordered_requested_cards(list(complete_cards.values()), requested_words)
+    missing_words = _incomplete_card_words(ordered_cards, requested_words, card_template)
+    return ordered_cards, missing_words
 
 
 def render_cards_tab() -> None:
@@ -234,112 +308,28 @@ def render_cards_tab() -> None:
             voice_status = st.empty()
             voice_progress_bar = st.progress(0)
 
-            def update_ai_progress(current: int, total: int) -> None:
-                ratio = current / total if total > 0 else 0
-                content_progress_bar.progress(ratio)
-                content_status.text(f"🧠 内容生成进度：{current}/{total}")
-
-            content_status.text("🧠 正在请求智能生成...")
+            content_status.text("🧠 正在按 10 个一组生成卡片...")
             voice_status.text("🎙️ 语音进度：等待内容生成完成")
-            ai_result = process_ai_in_batches(
+            parsed_data, incomplete_words = _generate_complete_cards_with_queue(
                 words_for_generation,
                 example_count=int(selected_example_count),
                 definition_language=definition_language,
                 translate_examples=bool(translate_examples),
-                progress_callback=update_ai_progress,
                 card_template=card_template,
+                content_status=content_status,
+                content_progress_bar=content_progress_bar,
             )
 
-            all_ai_result = ai_result or ""
-            if ai_result:
-                content_progress_bar.progress(1.0)
-                content_status.text("✅ 内容生成完成，正在解析...")
-            else:
-                content_status.text("🧠 初始请求未返回可用内容，正在逐步补齐...")
-
-            parsed_data = parse_anki_data(all_ai_result) if all_ai_result else []
-            incomplete_words = _incomplete_card_words(parsed_data, words_for_generation, card_template)
-
-            repair_round = 0
-            max_repair_rounds = max(constants.MAX_RETRIES * 2, 6)
-            while incomplete_words and repair_round < max_repair_rounds:
-                repair_round += 1
-                missing_count = len(incomplete_words)
-                content_status.text(
-                    f"🧠 正在补齐不完整卡片：{missing_count} 个（第 {repair_round}/{max_repair_rounds} 次）"
-                )
-
-                def update_repair_progress(current: int, total: int) -> None:
-                    base_done = len(words_for_generation) - missing_count
-                    ratio = (base_done + current) / len(words_for_generation) if words_for_generation else 0
-                    content_progress_bar.progress(min(ratio, 0.98))
-                    content_status.text(
-                        f"🧠 正在补齐不完整卡片：{current}/{total}（第 {repair_round}/{max_repair_rounds} 次）"
-                    )
-
-                repair_result = process_ai_in_batches(
-                    incomplete_words,
-                    example_count=int(selected_example_count),
-                    definition_language=definition_language,
-                    translate_examples=bool(translate_examples),
-                    progress_callback=update_repair_progress,
-                    card_template=card_template,
-                )
-                if repair_result:
-                    all_ai_result = f"{all_ai_result}\n{repair_result}"
-                    parsed_data = _merge_card_results(
-                        parsed_data,
-                        parse_anki_data(repair_result),
-                        words_for_generation,
-                        card_template,
-                    )
-                incomplete_words = _incomplete_card_words(parsed_data, words_for_generation, card_template)
-
-            single_repair_round = 0
-            while incomplete_words and single_repair_round < constants.MAX_RETRIES:
-                single_repair_round += 1
-                round_words = list(incomplete_words)
-                content_status.text(
-                    f"🧠 正在逐个生成剩余 {len(round_words)} 张完整卡片（第 {single_repair_round}/{constants.MAX_RETRIES} 轮）"
-                )
-
-                for index, word in enumerate(round_words, start=1):
-                    content_status.text(
-                        f"🧠 正在逐个生成完整卡片：{index}/{len(round_words)}（第 {single_repair_round}/{constants.MAX_RETRIES} 轮）"
-                    )
-                    single_result = process_ai_in_batches(
-                        [word],
-                        example_count=int(selected_example_count),
-                        definition_language=definition_language,
-                        translate_examples=bool(translate_examples),
-                        progress_callback=None,
-                        card_template=card_template,
-                    )
-                    if single_result:
-                        all_ai_result = f"{all_ai_result}\n{single_result}"
-                        parsed_data = _merge_card_results(
-                            parsed_data,
-                            parse_anki_data(single_result),
-                            words_for_generation,
-                            card_template,
-                        )
-
-                incomplete_words = _incomplete_card_words(parsed_data, words_for_generation, card_template)
-
-            incomplete_words = _incomplete_card_words(parsed_data, words_for_generation, card_template)
             if incomplete_words:
                 preview = "、".join(incomplete_words[:20])
                 more = f" 等 {len(incomplete_words)} 个词" if len(incomplete_words) > 20 else ""
-                content_status.text("❌ 仍有卡片未生成完整")
-                st.error(f"仍有 {len(incomplete_words)} 个词没有生成完整卡片：{preview}{more}。本次不会打包不完整卡片。")
+                content_status.text("⚠️ 仍有卡片暂未生成完整")
+                st.warning(f"仍有 {len(incomplete_words)} 个词没有生成完整卡片：{preview}{more}。本次不会打包不完整卡片。")
                 return
 
-            parsed_data = _ordered_requested_cards(
-                list(_complete_cards_by_key(parsed_data, words_for_generation, card_template).values()),
-                words_for_generation,
-            )
-
             try:
+                content_progress_bar.progress(1.0)
+                content_status.text(f"✅ 内容生成完成：共 {len(parsed_data)} 张卡片，正在打包...")
                 voice_status.text("🎙️ 正在准备语音和 Anki 包...")
                 voice_progress_bar.progress(0.0)
                 final_deck_name = deck_name.strip() or default_deck_name
