@@ -1,6 +1,7 @@
 # Anki package (.apkg) generation with optional TTS.
 
 import html
+import logging
 import os
 import random
 import tempfile
@@ -15,6 +16,7 @@ from resources import get_genanki
 from tts import run_async_batch
 from utils import safe_str_clean
 
+logger = logging.getLogger(__name__)
 APKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), constants.APKG_TEMP_SUBDIR)
 
 CARD_TEMPLATE_MODEL_OFFSETS = {
@@ -514,14 +516,13 @@ def generate_anki_package(
             if card_template == "definition_front":
                 english_definition = _sanitize_front_definition(english_definition, phrase, part_of_speech)
             part_of_speech = _format_part_of_speech(part_of_speech)
+            example_one = _first_example_text(example)
+            if card_template == "definition_front" and not example_one:
+                example = f"Review {phrase} again after adding a clearer example."
+                example_one = example
             hint = _first_letter_hint(phrase)
             example_front = _highlight_target_in_example(example, phrase)
             example_cloze = _build_cloze_example(example, phrase)
-            example_one = _first_example_text(example)
-            if card_template == "definition_front" and not example_one:
-                raise RuntimeError(
-                    f"第三种卡片格式错误：{phrase} 必须有一个英文例句，才能生成完整卡片。"
-                )
 
             audio_phrase_field = ""
             audio_example_field = ""
@@ -579,14 +580,6 @@ def generate_anki_package(
 
             prepared_cards.append(prepared_card)
 
-        if card_template == "definition_front" and enable_tts and tts_mode != "none":
-            expected_audio_tasks = len(prepared_cards) * 2
-            if len(audio_tasks) != expected_audio_tasks:
-                raise RuntimeError(
-                    f"第三种卡片音频任务数量错误：应生成 {expected_audio_tasks} 个音频任务，实际只有 {len(audio_tasks)} 个。"
-                    "请重新生成内容，确保每张卡都有一个英文例句。"
-                )
-
         if audio_tasks:
             if progress_callback:
                 progress_callback(0.0, f"🎙️ 正在准备 {len(audio_tasks)} 个音频任务...")
@@ -623,24 +616,11 @@ def generate_anki_package(
                 progress_callback(1.0, f"🎙️ 已生成 {successful_audio_count}/{len(audio_tasks)} 个音频。")
             if successful_audio_count != len(audio_tasks):
                 missing_audio_count = len(audio_tasks) - successful_audio_count
-                raise RuntimeError(
-                    f"语音生成不完整：缺少 {missing_audio_count} 个音频。请稍后重试，或减少本次单词数量。"
-                )
-            if card_template == "definition_front":
-                incomplete_cards = [
-                    prepared_card.get("phrase", "")
-                    for prepared_card in prepared_cards
-                    if (
-                        not prepared_card.get("audio_phrase_field")
-                        or not prepared_card.get("audio_example_field")
-                    )
-                ]
-                if incomplete_cards:
-                    preview = "、".join(incomplete_cards[:5])
-                    more = f" 等 {len(incomplete_cards)} 个词" if len(incomplete_cards) > 5 else ""
-                    raise RuntimeError(f"第三种卡片音频不完整：{preview}{more} 缺少单词或例句音频。")
+                logger.warning("TTS generated %s/%s audio files; continuing without %s files.", successful_audio_count, len(audio_tasks), missing_audio_count)
+                if progress_callback:
+                    progress_callback(1.0, f"🎙️ 缺少 {missing_audio_count} 个音频，已跳过并继续打包。")
             if progress_callback:
-                progress_callback(1.0, "🎙️ 音频全部生成完成，正在打包。")
+                progress_callback(1.0, "🎙️ 音频处理完成，正在打包。")
         elif progress_callback:
             progress_callback(1.0, "🎙️ 未启用语音，已跳过音频生成。")
 

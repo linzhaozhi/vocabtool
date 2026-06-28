@@ -69,6 +69,28 @@ def _ordered_requested_cards(cards: list[dict], requested_words: list[str]) -> l
     return ordered_cards
 
 
+def _fallback_card(word: str, card_template: str) -> dict:
+    """Create a minimal parseable card only when AI repeatedly returns nothing for a word."""
+    cleaned_word = str(word or "").strip()
+    if card_template == "definition_front":
+        return {
+            "w": cleaned_word,
+            "p": "",
+            "m": "phrase | pending AI definition",
+            "e": f"Review {cleaned_word} again after adding a clearer example.",
+            "ec": "",
+            "r": "",
+        }
+    return {
+        "w": cleaned_word,
+        "p": "",
+        "m": "AI 未返回释义，请手动补充",
+        "e": f"Review {cleaned_word} again after adding a clearer example.",
+        "ec": "",
+        "r": "",
+    }
+
+
 def render_cards_tab() -> None:
     """Render the card-generation tab."""
     cleanup_old_apkg_files()
@@ -115,11 +137,11 @@ def render_cards_tab() -> None:
         selected_audio_mode = "word_and_example"
     enable_audio_auto = selected_audio_mode != "none"
     if card_template == "definition_front" and enable_audio_auto:
-        st.caption("第 3 种模板会在反面生成 2 个音频：单词、完整例句。缺少任何一个都会停止并提示重试。")
+        st.caption("第 3 种模板会在反面生成单词和例句音频；个别音频失败时会跳过音频，卡片照常生成。")
     else:
         st.caption(
             f"{constants.CARD_AUDIO_MODES[selected_audio_mode]['description']} "
-            "生成时会校验所有请求的音频，缺少任何一个都会停止并提示重试。"
+            "个别音频失败时会跳过音频，卡片照常生成。"
         )
     selected_example_count = constants.AI_CARD_EXAMPLE_COUNT_DEFAULT
     definition_language = "中文"
@@ -197,89 +219,97 @@ def render_cards_tab() -> None:
                 card_template=card_template,
             )
 
+            all_ai_result = ai_result or ""
             if ai_result:
                 content_progress_bar.progress(1.0)
                 content_status.text("✅ 内容生成完成，正在解析...")
-                all_ai_result = ai_result
-                parsed_data = parse_anki_data(all_ai_result)
-                missing_words = _missing_card_words(parsed_data, words_for_generation)
+            else:
+                content_status.text("🧠 初始请求未返回可用内容，正在逐步补齐...")
 
-                repair_round = 0
-                while missing_words and repair_round < constants.MAX_RETRIES:
-                    repair_round += 1
-                    missing_count = len(missing_words)
+            parsed_data = parse_anki_data(all_ai_result) if all_ai_result else []
+            missing_words = _missing_card_words(parsed_data, words_for_generation)
+
+            repair_round = 0
+            while missing_words and repair_round < constants.MAX_RETRIES:
+                repair_round += 1
+                missing_count = len(missing_words)
+                content_status.text(
+                    f"🧠 正在补齐缺失卡片：{missing_count} 个（第 {repair_round}/{constants.MAX_RETRIES} 次）"
+                )
+
+                def update_repair_progress(current: int, total: int) -> None:
+                    base_done = len(words_for_generation) - missing_count
+                    ratio = (base_done + current) / len(words_for_generation) if words_for_generation else 0
+                    content_progress_bar.progress(min(ratio, 0.98))
                     content_status.text(
-                        f"🧠 正在补齐缺失卡片：{missing_count} 个（第 {repair_round}/{constants.MAX_RETRIES} 次）"
+                        f"🧠 正在补齐缺失卡片：{current}/{total}（第 {repair_round}/{constants.MAX_RETRIES} 次）"
                     )
 
-                    def update_repair_progress(current: int, total: int) -> None:
-                        base_done = len(words_for_generation) - missing_count
-                        ratio = (base_done + current) / len(words_for_generation) if words_for_generation else 0
-                        content_progress_bar.progress(min(ratio, 0.98))
-                        content_status.text(
-                            f"🧠 正在补齐缺失卡片：{current}/{total}（第 {repair_round}/{constants.MAX_RETRIES} 次）"
-                        )
-
-                    repair_result = process_ai_in_batches(
-                        missing_words,
-                        example_count=int(selected_example_count),
-                        definition_language=definition_language,
-                        translate_examples=bool(translate_examples),
-                        progress_callback=update_repair_progress,
-                        card_template=card_template,
-                    )
-                    if not repair_result:
-                        break
-
+                repair_result = process_ai_in_batches(
+                    missing_words,
+                    example_count=int(selected_example_count),
+                    definition_language=definition_language,
+                    translate_examples=bool(translate_examples),
+                    progress_callback=update_repair_progress,
+                    card_template=card_template,
+                )
+                if repair_result:
                     all_ai_result = f"{all_ai_result}\n{repair_result}"
                     parsed_data = parse_anki_data(all_ai_result)
-                    missing_words = _missing_card_words(parsed_data, words_for_generation)
+                missing_words = _missing_card_words(parsed_data, words_for_generation)
 
-                if missing_words:
-                    preview = "、".join(missing_words[:20])
-                    more = f" 等 {len(missing_words)} 个词" if len(missing_words) > 20 else ""
-                    content_status.text("❌ 卡片数量未补齐")
-                    st.error(f"仍有 {len(missing_words)} 个词没有生成可解析卡片：{preview}{more}。本次不打包，请重试。")
-                    return
+            if missing_words:
+                fallback_count = len(missing_words)
+                parsed_data.extend(_fallback_card(word, card_template) for word in missing_words)
+                content_status.text(f"✅ 已用基础卡补齐 {fallback_count} 个未返回词条")
+                st.warning(f"有 {fallback_count} 个词未返回 AI 内容，已自动生成基础卡占位，保证本次卡片数量完整。")
 
+            if not parsed_data:
+                parsed_data = [_fallback_card(word, card_template) for word in words_for_generation]
+                st.warning("AI 未返回可解析内容，已自动生成基础卡占位，保证本次卡片数量完整。")
+
+            parsed_data = _ordered_requested_cards(parsed_data, words_for_generation)
+
+            if len(parsed_data) < len(words_for_generation):
+                existing_keys = {_card_word_key(card.get("w", "")) for card in parsed_data}
+                parsed_data.extend(
+                    _fallback_card(word, card_template)
+                    for word in words_for_generation
+                    if _card_word_key(word) not in existing_keys
+                )
                 parsed_data = _ordered_requested_cards(parsed_data, words_for_generation)
 
-                if parsed_data:
-                    try:
-                        voice_status.text("🎙️ 正在准备语音和 Anki 包...")
-                        voice_progress_bar.progress(0.0)
-                        final_deck_name = deck_name.strip() or default_deck_name
+            try:
+                voice_status.text("🎙️ 正在准备语音和 Anki 包...")
+                voice_progress_bar.progress(0.0)
+                final_deck_name = deck_name.strip() or default_deck_name
 
-                        def update_pkg_progress(ratio: float, text: str) -> None:
-                            voice_progress_bar.progress(ratio)
-                            voice_status.text(text)
+                def update_pkg_progress(ratio: float, text: str) -> None:
+                    voice_progress_bar.progress(ratio)
+                    voice_status.text(text)
 
-                        file_path = generate_anki_package(
-                            parsed_data,
-                            final_deck_name,
-                            enable_tts=enable_audio_auto,
-                            tts_voice=selected_voice_code,
-                            progress_callback=update_pkg_progress,
-                            card_template=card_template,
-                            tts_mode=selected_audio_mode,
-                        )
+                file_path = generate_anki_package(
+                    parsed_data,
+                    final_deck_name,
+                    enable_tts=enable_audio_auto,
+                    tts_voice=selected_voice_code,
+                    progress_callback=update_pkg_progress,
+                    card_template=card_template,
+                    tts_mode=selected_audio_mode,
+                )
 
-                        st.session_state["anki_cards_cache"] = parsed_data
-                        set_anki_pkg(file_path, final_deck_name)
+                st.session_state["anki_cards_cache"] = parsed_data
+                set_anki_pkg(file_path, final_deck_name)
 
-                        voice_progress_bar.progress(1.0)
-                        voice_status.text("✅ 音频和打包完成")
-                        content_status.markdown(f"✅ **处理完成！共生成 {len(parsed_data)} 张卡片**")
-                        st.balloons()
-                        run_gc()
-                    except Exception as exc:
-                        from errors import ErrorHandler
+                voice_progress_bar.progress(1.0)
+                voice_status.text("✅ 音频和打包完成")
+                content_status.markdown(f"✅ **处理完成！共生成 {len(parsed_data)} 张卡片**")
+                st.balloons()
+                run_gc()
+            except Exception as exc:
+                from errors import ErrorHandler
 
-                        ErrorHandler.handle(exc, "生成出错")
-                else:
-                    st.error("解析失败，返回内容为空或格式错误。")
-            else:
-                st.error("生成失败：请先查看上方具体错误后重试；如果没有具体错误，再检查 API Key 或网络连接。")
+                ErrorHandler.handle(exc, "生成出错")
 
     st.caption("⚠️ 智能生成内容可能存在错误，请人工复核。")
 

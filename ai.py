@@ -803,11 +803,12 @@ Output only the text code block."""
                     ErrorHandler.handle(
                         e,
                         f"Batch {i//constants.AI_BATCH_SIZE + 1} failed after {constants.MAX_RETRIES} attempts",
-                        show_user=True
+                        show_user=False
                     )
 
     if failed_batches:
-        st.error(f"❌ 有 {len(failed_batches)} 个批次请求失败。本次不会生成部分卡片，请稍后重试或减少词数。")
-        return None
+        logger.warning("AI card batches failed after retries: %s", failed_batches)
+        if not full_results:
+            return None
 
     return "\n".join(full_results)
