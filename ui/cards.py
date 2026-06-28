@@ -36,21 +36,74 @@ def _select_card_template() -> str:
 
 def _card_word_key(value: str) -> str:
     """Normalize word keys only for counting generated cards."""
-    return re.sub(r"\s+", " ", str(value or "").strip()).lower()
+    cleaned = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", str(value or "").strip())
+    return re.sub(r"\s+", " ", cleaned).lower()
 
 
-def _missing_card_words(cards: list[dict], requested_words: list[str]) -> list[str]:
-    """Return requested words that did not produce a parseable card."""
-    generated_keys = {
-        _card_word_key(card.get("w", ""))
-        for card in cards
-        if _card_word_key(card.get("w", ""))
-    }
-    return [
-        word
-        for word in requested_words
-        if _card_word_key(word) not in generated_keys
-    ]
+def _card_is_complete(card: dict, requested_word: str, card_template: str) -> bool:
+    """Check only structural completeness, not semantic quality."""
+    if _card_word_key(card.get("w", "")) != _card_word_key(requested_word):
+        return False
+    meaning = str(card.get("m", "")).strip()
+    example = str(card.get("e", "")).strip()
+    if not meaning or not example or not re.search(r"[A-Za-z]", example):
+        return False
+    if card_template == "definition_front" and "|" not in meaning:
+        return False
+    return True
+
+
+def _complete_cards_by_key(cards: list[dict], requested_words: list[str], card_template: str) -> dict[str, dict]:
+    """Return one structurally complete card per requested word."""
+    requested_by_key = {_card_word_key(word): word for word in requested_words}
+    cards_by_key: dict[str, dict] = {}
+    for card in cards:
+        key = _card_word_key(card.get("w", ""))
+        requested_word = requested_by_key.get(key)
+        if not requested_word or key in cards_by_key:
+            continue
+        if _card_is_complete(card, requested_word, card_template):
+            normalized_card = dict(card)
+            normalized_card["w"] = requested_word
+            cards_by_key[key] = normalized_card
+    return cards_by_key
+
+
+def _incomplete_card_words(cards: list[dict], requested_words: list[str], card_template: str) -> list[str]:
+    """Return requested words that still lack one structurally complete card."""
+    complete_keys = set(_complete_cards_by_key(cards, requested_words, card_template))
+    return [word for word in requested_words if _card_word_key(word) not in complete_keys]
+
+
+def _merge_card_results(
+    current_cards: list[dict],
+    new_cards: list[dict],
+    requested_words: list[str],
+    card_template: str,
+) -> list[dict]:
+    """Merge new AI cards, letting complete cards replace incomplete earlier cards."""
+    requested_by_key = {_card_word_key(word): word for word in requested_words}
+    merged_by_key: dict[str, dict] = {}
+
+    for card in current_cards + new_cards:
+        key = _card_word_key(card.get("w", ""))
+        requested_word = requested_by_key.get(key)
+        if not requested_word:
+            continue
+
+        normalized_card = dict(card)
+        normalized_card["w"] = requested_word
+        existing = merged_by_key.get(key)
+        if existing is None:
+            merged_by_key[key] = normalized_card
+            continue
+        if (
+            not _card_is_complete(existing, requested_word, card_template)
+            and _card_is_complete(normalized_card, requested_word, card_template)
+        ):
+            merged_by_key[key] = normalized_card
+
+    return list(merged_by_key.values())
 
 
 def _ordered_requested_cards(cards: list[dict], requested_words: list[str]) -> list[dict]:
@@ -67,28 +120,6 @@ def _ordered_requested_cards(cards: list[dict], requested_words: list[str]) -> l
         if card:
             ordered_cards.append(card)
     return ordered_cards
-
-
-def _fallback_card(word: str, card_template: str) -> dict:
-    """Create a minimal parseable card only when AI repeatedly returns nothing for a word."""
-    cleaned_word = str(word or "").strip()
-    if card_template == "definition_front":
-        return {
-            "w": cleaned_word,
-            "p": "",
-            "m": "phrase | pending AI definition",
-            "e": f"Review {cleaned_word} again after adding a clearer example.",
-            "ec": "",
-            "r": "",
-        }
-    return {
-        "w": cleaned_word,
-        "p": "",
-        "m": "AI 未返回释义，请手动补充",
-        "e": f"Review {cleaned_word} again after adding a clearer example.",
-        "ec": "",
-        "r": "",
-    }
 
 
 def render_cards_tab() -> None:
@@ -227,14 +258,15 @@ def render_cards_tab() -> None:
                 content_status.text("🧠 初始请求未返回可用内容，正在逐步补齐...")
 
             parsed_data = parse_anki_data(all_ai_result) if all_ai_result else []
-            missing_words = _missing_card_words(parsed_data, words_for_generation)
+            incomplete_words = _incomplete_card_words(parsed_data, words_for_generation, card_template)
 
             repair_round = 0
-            while missing_words and repair_round < constants.MAX_RETRIES:
+            max_repair_rounds = max(constants.MAX_RETRIES * 2, 6)
+            while incomplete_words and repair_round < max_repair_rounds:
                 repair_round += 1
-                missing_count = len(missing_words)
+                missing_count = len(incomplete_words)
                 content_status.text(
-                    f"🧠 正在补齐缺失卡片：{missing_count} 个（第 {repair_round}/{constants.MAX_RETRIES} 次）"
+                    f"🧠 正在补齐不完整卡片：{missing_count} 个（第 {repair_round}/{max_repair_rounds} 次）"
                 )
 
                 def update_repair_progress(current: int, total: int) -> None:
@@ -242,11 +274,11 @@ def render_cards_tab() -> None:
                     ratio = (base_done + current) / len(words_for_generation) if words_for_generation else 0
                     content_progress_bar.progress(min(ratio, 0.98))
                     content_status.text(
-                        f"🧠 正在补齐缺失卡片：{current}/{total}（第 {repair_round}/{constants.MAX_RETRIES} 次）"
+                        f"🧠 正在补齐不完整卡片：{current}/{total}（第 {repair_round}/{max_repair_rounds} 次）"
                     )
 
                 repair_result = process_ai_in_batches(
-                    missing_words,
+                    incomplete_words,
                     example_count=int(selected_example_count),
                     definition_language=definition_language,
                     translate_examples=bool(translate_examples),
@@ -255,29 +287,57 @@ def render_cards_tab() -> None:
                 )
                 if repair_result:
                     all_ai_result = f"{all_ai_result}\n{repair_result}"
-                    parsed_data = parse_anki_data(all_ai_result)
-                missing_words = _missing_card_words(parsed_data, words_for_generation)
+                    parsed_data = _merge_card_results(
+                        parsed_data,
+                        parse_anki_data(repair_result),
+                        words_for_generation,
+                        card_template,
+                    )
+                incomplete_words = _incomplete_card_words(parsed_data, words_for_generation, card_template)
 
-            if missing_words:
-                fallback_count = len(missing_words)
-                parsed_data.extend(_fallback_card(word, card_template) for word in missing_words)
-                content_status.text(f"✅ 已用基础卡补齐 {fallback_count} 个未返回词条")
-                st.warning(f"有 {fallback_count} 个词未返回 AI 内容，已自动生成基础卡占位，保证本次卡片数量完整。")
-
-            if not parsed_data:
-                parsed_data = [_fallback_card(word, card_template) for word in words_for_generation]
-                st.warning("AI 未返回可解析内容，已自动生成基础卡占位，保证本次卡片数量完整。")
-
-            parsed_data = _ordered_requested_cards(parsed_data, words_for_generation)
-
-            if len(parsed_data) < len(words_for_generation):
-                existing_keys = {_card_word_key(card.get("w", "")) for card in parsed_data}
-                parsed_data.extend(
-                    _fallback_card(word, card_template)
-                    for word in words_for_generation
-                    if _card_word_key(word) not in existing_keys
+            single_repair_round = 0
+            while incomplete_words and single_repair_round < constants.MAX_RETRIES:
+                single_repair_round += 1
+                round_words = list(incomplete_words)
+                content_status.text(
+                    f"🧠 正在逐个生成剩余 {len(round_words)} 张完整卡片（第 {single_repair_round}/{constants.MAX_RETRIES} 轮）"
                 )
-                parsed_data = _ordered_requested_cards(parsed_data, words_for_generation)
+
+                for index, word in enumerate(round_words, start=1):
+                    content_status.text(
+                        f"🧠 正在逐个生成完整卡片：{index}/{len(round_words)}（第 {single_repair_round}/{constants.MAX_RETRIES} 轮）"
+                    )
+                    single_result = process_ai_in_batches(
+                        [word],
+                        example_count=int(selected_example_count),
+                        definition_language=definition_language,
+                        translate_examples=bool(translate_examples),
+                        progress_callback=None,
+                        card_template=card_template,
+                    )
+                    if single_result:
+                        all_ai_result = f"{all_ai_result}\n{single_result}"
+                        parsed_data = _merge_card_results(
+                            parsed_data,
+                            parse_anki_data(single_result),
+                            words_for_generation,
+                            card_template,
+                        )
+
+                incomplete_words = _incomplete_card_words(parsed_data, words_for_generation, card_template)
+
+            incomplete_words = _incomplete_card_words(parsed_data, words_for_generation, card_template)
+            if incomplete_words:
+                preview = "、".join(incomplete_words[:20])
+                more = f" 等 {len(incomplete_words)} 个词" if len(incomplete_words) > 20 else ""
+                content_status.text("❌ 仍有卡片未生成完整")
+                st.error(f"仍有 {len(incomplete_words)} 个词没有生成完整卡片：{preview}{more}。本次不会打包不完整卡片。")
+                return
+
+            parsed_data = _ordered_requested_cards(
+                list(_complete_cards_by_key(parsed_data, words_for_generation, card_template).values()),
+                words_for_generation,
+            )
 
             try:
                 voice_status.text("🎙️ 正在准备语音和 Anki 包...")

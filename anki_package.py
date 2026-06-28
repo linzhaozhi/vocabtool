@@ -518,8 +518,7 @@ def generate_anki_package(
             part_of_speech = _format_part_of_speech(part_of_speech)
             example_one = _first_example_text(example)
             if card_template == "definition_front" and not example_one:
-                example = f"Review {phrase} again after adding a clearer example."
-                example_one = example
+                raise RuntimeError(f"卡片结构不完整：{phrase} 缺少英文例句。")
             hint = _first_letter_hint(phrase)
             example_front = _highlight_target_in_example(example, phrase)
             example_cloze = _build_cloze_example(example, phrase)
