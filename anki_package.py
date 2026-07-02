@@ -20,9 +20,9 @@ logger = logging.getLogger(__name__)
 APKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), constants.APKG_TEMP_SUBDIR)
 
 CARD_TEMPLATE_MODEL_OFFSETS = {
-    "word_front": 21,
-    "example_front": 22,
-    "definition_front": 23,
+    "word_front": 31,
+    "example_front": 32,
+    "definition_front": 33,
 }
 
 
@@ -313,6 +313,7 @@ def _get_template(card_template: str) -> Dict[str, str]:
             </div>
             <div>{{Audio_Example}}</div>
             {{#Etymology}}<div class="etymology">🌱 词源: {{Etymology}}</div>{{/Etymology}}
+            {{#SourceNote}}<div class="source-note">来源注释：{{SourceNote}}</div>{{/SourceNote}}
             ''',
         },
         "example_front": {
@@ -331,6 +332,7 @@ def _get_template(card_template: str) -> Dict[str, str]:
                 <div>{{Example}}</div>
                 {{#Example_Translation}}<div class="example-translation">译：{{Example_Translation}}</div>{{/Example_Translation}}
             </div>
+            {{#SourceNote}}<div class="source-note">来源注释：{{SourceNote}}</div>{{/SourceNote}}
             ''',
         },
         "definition_front": {
@@ -355,6 +357,7 @@ def _get_template(card_template: str) -> Dict[str, str]:
                     </div>
                 </div>
                 {{/ExampleOne}}
+                {{#SourceNote}}<div class="source-note">来源注释：{{SourceNote}}</div>{{/SourceNote}}
             </div>
             ''',
         },
@@ -454,6 +457,7 @@ def generate_anki_package(
     .hint-line { display: inline-block; width: 2.6em; height: 0.72em; margin-left: 2px; border-bottom: 2px solid currentColor; vertical-align: baseline; }
     .definition { font-size: 19px; color: #435060; margin-bottom: 14px; text-align: left; }
     .etymology { display: block; font-size: """ + str(constants.ANKI_ETYMOLOGY_FONT_SIZE_PX) + """px; line-height: 1.6; color: #555; background-color: #fffdf5; padding: 10px; border-radius: 6px; margin-bottom: 5px; border: 1px solid #fef3c7; }
+    .source-note { display: block; font-size: 13px; line-height: 1.5; color: #526071; background: #f1f5f9; border: 1px solid #d8e0ea; border-radius: 6px; padding: 8px 10px; margin-top: 12px; text-align: left; font-style: normal; }
     .nightMode .etymology { background-color: #333; color: #aaa; border-color: #444; }
     .nightMode .front-example, .nightMode .front-definition, .nightMode .cloze-front, .nightMode .cloze-back { color: #e5e7eb; }
     .nightMode .cloze { color: #99f6e4; }
@@ -463,6 +467,7 @@ def generate_anki_package(
     .nightMode .cloze-example-text { color: #e5e7eb; }
     .nightMode .definition { color: #cbd5e1; }
     .nightMode .meta { background: #263241; color: #cbd5e1; border-color: #3f4f63; }
+    .nightMode .source-note { background: #1f2937; color: #cbd5e1; border-color: #3f4f63; }
     .nightMode .hint { background: #12312f; color: #99f6e4; border-color: #1f5f58; }
     """
 
@@ -479,6 +484,7 @@ def generate_anki_package(
         {'name': 'Example'}, {'name': 'Example_Translation'}, {'name': 'Etymology'},
         {'name': 'PartOfSpeech'}, {'name': 'ChineseMeaning'},
         {'name': 'EnglishDefinition'}, {'name': 'Hint'}, {'name': 'ExampleFront'},
+        {'name': 'SourceNote'},
     ]
     if card_template == "definition_front":
         field_defs.extend([{'name': 'ExampleCloze'}, {'name': 'ExampleOne'}])
@@ -507,6 +513,7 @@ def generate_anki_package(
             example = safe_str_clean(card.get('e', ''))
             example_translation = safe_str_clean(card.get('ec', ''))
             etymology = safe_str_clean(card.get('r', ''))
+            source_note = safe_str_clean(card.get('source_note', '') or card.get('s', ''))
             note_id = card.get('id')
             part_of_speech, chinese_meaning, english_definition = _split_structured_meaning(meaning)
             if not chinese_meaning and card_template != "definition_front":
@@ -532,6 +539,7 @@ def generate_anki_package(
                 'example': example,
                 'example_translation': example_translation,
                 'etymology': etymology,
+                'source_note': source_note,
                 'part_of_speech': part_of_speech,
                 'chinese_meaning': chinese_meaning,
                 'english_definition': english_definition,
@@ -636,6 +644,7 @@ def generate_anki_package(
                 prepared_card['english_definition'],
                 prepared_card['hint'],
                 prepared_card['example_front'],
+                prepared_card['source_note'],
             ]
             if card_template == "definition_front":
                 fields.extend([

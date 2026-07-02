@@ -11,6 +11,7 @@ from ai import process_ai_in_batches
 from anki_package import cleanup_old_apkg_files, generate_anki_package
 from anki_parse import parse_anki_data
 from config import get_config
+from resources import get_vocab_dict
 from ui.helpers import (
     get_prepared_word_list_text,
     parse_unique_words,
@@ -40,6 +41,40 @@ def _card_word_key(value: str) -> str:
     cleaned = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", str(value or "").strip())
     cleaned = cleaned.strip("`'\"“”‘’[](){}<>:：")
     return re.sub(r"\s+", " ", cleaned).lower()
+
+
+def _generated_card_source_note(word: str) -> str:
+    """Build the source note shown on generated card backs."""
+    vocab_dict = get_vocab_dict()
+    word_key = _card_word_key(word)
+    content_source = "内容来源：释义、例句等制卡内容为 AI 生成，请复核"
+    if not vocab_dict:
+        return f"{content_source}；内置词库：当前未加载 {constants.VOCAB_PROJECT_NAME}。"
+
+    rank = vocab_dict.get(word_key)
+    if rank is None:
+        return f"{content_source}；内置词库：未命中 {constants.VOCAB_PROJECT_NAME}。"
+    return (
+        f"{content_source}；词表/rank 来自内置词库 {constants.VOCAB_PROJECT_NAME} "
+        f"（rank {rank}；{constants.VOCAB_PROJECT_SOURCE}）。"
+    )
+
+
+def _append_source_notes(cards: list[dict], requested_words: list[str]) -> list[dict]:
+    """Attach generated-content and internal-vocab source notes to cards."""
+    requested_by_key = {_card_word_key(word): word for word in requested_words}
+    annotated_cards = []
+    for card in cards:
+        normalized_card = dict(card)
+        word = requested_by_key.get(_card_word_key(normalized_card.get("w", "")), normalized_card.get("w", ""))
+        generated_note = _generated_card_source_note(str(word))
+        existing_note = str(normalized_card.get("s") or normalized_card.get("source_note") or "").strip()
+        if existing_note:
+            normalized_card["s"] = f"{existing_note}；{generated_note}"
+        else:
+            normalized_card["s"] = generated_note
+        annotated_cards.append(normalized_card)
+    return annotated_cards
 
 
 def _card_is_complete(card: dict, requested_word: str, card_template: str) -> bool:
@@ -172,9 +207,10 @@ def _generate_complete_cards_with_queue(
             card_template=card_template,
         )
         if result:
+            new_cards = _append_source_notes(parse_anki_data(result), requested_words)
             parsed_cards = _merge_card_results(
                 parsed_cards,
-                parse_anki_data(result),
+                new_cards,
                 requested_words,
                 card_template,
             )
@@ -361,7 +397,7 @@ def render_cards_tab() -> None:
 
                 ErrorHandler.handle(exc, "生成出错")
 
-    st.caption("⚠️ 智能生成内容可能存在错误，请人工复核。")
+    st.caption("⚠️ 智能生成内容可能存在错误，请人工复核。卡片反面会标注 AI 生成和内置词库命中情况。")
 
     render_anki_download_button(
         f"📥 下载 {st.session_state.get('anki_pkg_name', '词卡.apkg')}",
@@ -373,7 +409,7 @@ def render_cards_tab() -> None:
         cards = st.session_state["anki_cards_cache"]
         with st.expander(f"👀 预览卡片 (前 {constants.MAX_PREVIEW_CARDS} 张)", expanded=True):
             df_view = pd.DataFrame(cards)
-            display_cols = ["w", "p", "m", "e", "ec", "r"]
+            display_cols = ["w", "p", "m", "e", "ec", "r", "s"]
             df_view = df_view[[column for column in display_cols if column in df_view.columns]]
             rename_map = {
                 "w": "正面",
@@ -382,6 +418,7 @@ def render_cards_tab() -> None:
                 "e": "英文例句",
                 "ec": "例句翻译",
                 "r": "词源",
+                "s": "来源注释",
             }
             df_view = df_view.rename(columns=rename_map)
             for column_name in ("英文例句", "例句翻译"):

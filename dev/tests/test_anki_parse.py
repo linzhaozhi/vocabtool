@@ -69,13 +69,14 @@ def test_parse_anki_data_card_shape():
     result = parse_anki_data(raw)
     assert len(result) == 1
     card = result[0]
-    assert set(card.keys()) == {"w", "p", "m", "e", "ec", "r"}
+    assert set(card.keys()) == {"w", "p", "m", "e", "ec", "r", "s"}
     assert card["w"] == "phrase"
     assert card["p"] == ""
     assert card["m"] == "def"
     assert card["e"] == "example"
     assert card["ec"] == ""
     assert card["r"] == "etymology"
+    assert card["s"] == ""
 
 
 def test_parse_anki_data_five_fields_with_translation():
@@ -106,6 +107,17 @@ def test_parse_anki_data_six_fields_with_phonetics():
     assert result[0]["p"] == "美 /ˈhektɪk/；英 /ˈhektɪk/"
     assert result[0]["e"] == "She has a hectic day.<br>My week is hectic."
     assert result[0]["ec"] == "她今天很忙乱。<br>我的一周很忙乱。"
+
+
+def test_parse_anki_data_seven_fields_with_source_note():
+    raw = (
+        "hectic |||  ||| 忙乱的 ||| She has a hectic day. |||  ||| "
+        "来自希腊语 hektikos ||| 内容来源：AI 生成；词表/rank 来自内置词库。"
+    )
+    result = parse_anki_data(raw)
+    assert len(result) == 1
+    assert result[0]["r"] == "来自希腊语 hektikos"
+    assert result[0]["s"] == "内容来源：AI 生成；词表/rank 来自内置词库。"
 
 
 def test_parse_anki_data_supports_three_examples_without_translation():
