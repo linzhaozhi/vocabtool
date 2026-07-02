@@ -17,12 +17,18 @@ DATA_DIR = BASE_DIR / "data"
 
 # Set by app after load_vocab_data() so vocab module can use them.
 VOCAB_DICT: Dict[str, int] = {}
+VOCAB_DISPLAY_DICT: Dict[str, str] = {}
 FULL_DF: Optional[Any] = None
 
 
 def get_vocab_dict() -> Dict[str, int]:
     """Return current VOCAB_DICT (set by app after load_vocab_data())."""
     return VOCAB_DICT
+
+
+def get_vocab_display_dict() -> Dict[str, str]:
+    """Return display spelling by normalized word key."""
+    return VOCAB_DISPLAY_DICT
 
 
 @st.cache_resource(show_spinner="正在加载分词与词形还原资源...")
@@ -71,6 +77,7 @@ def get_genanki() -> Tuple[Any, Any]:
 
 def _load_vocab_csv(file_path: Path) -> Tuple[Dict[str, int], list[dict[str, Any]]]:
     """Load a simple word/rank CSV without importing pandas at startup."""
+    global VOCAB_DISPLAY_DICT
     rows_by_word: dict[str, dict[str, Any]] = {}
     last_error: Optional[Exception] = None
 
@@ -89,20 +96,22 @@ def _load_vocab_csv(file_path: Path) -> Tuple[Dict[str, int], list[dict[str, Any
 
                 for row_index, raw_row in enumerate(reader, start=1):
                     row = {str(key).strip().lower(): value for key, value in raw_row.items()}
-                    word = str(row.get(word_field, "")).lower().strip()
-                    if not word:
+                    display_word = str(row.get(word_field, "")).strip()
+                    word_key = display_word.lower()
+                    if not word_key:
                         continue
                     try:
                         rank = int(float(str(row.get(rank_field, row_index)).strip()))
                     except (TypeError, ValueError):
                         rank = row_index
 
-                    existing = rows_by_word.get(word)
+                    existing = rows_by_word.get(word_key)
                     if existing is None or rank < int(existing["rank"]):
-                        rows_by_word[word] = {"word": word, "rank": rank}
+                        rows_by_word[word_key] = {"word": display_word, "rank": rank}
 
             rows = sorted(rows_by_word.values(), key=lambda item: int(item["rank"]))
-            vocab_dict = {str(row["word"]): int(row["rank"]) for row in rows}
+            vocab_dict = {str(row["word"]).lower(): int(row["rank"]) for row in rows}
+            VOCAB_DISPLAY_DICT = {str(row["word"]).lower(): str(row["word"]) for row in rows}
             return vocab_dict, rows
         except UnicodeDecodeError as e:
             last_error = e
@@ -116,6 +125,7 @@ def _load_vocab_csv(file_path: Path) -> Tuple[Dict[str, int], list[dict[str, Any
 @st.cache_data
 def load_vocab_data() -> Tuple[Dict[str, int], Optional[Any]]:
     """Load vocabulary data from pickle or CSV files."""
+    global VOCAB_DISPLAY_DICT
     pickle_candidates = [BASE_DIR / "vocab.pkl", DATA_DIR / "vocab.pkl"]
     for pickle_path in pickle_candidates:
         if not pickle_path.exists():
@@ -125,6 +135,7 @@ def load_vocab_data() -> Tuple[Dict[str, int], Optional[Any]]:
 
             df = pd.read_pickle(pickle_path)
             vocab_dict = pd.Series(df['rank'].values, index=df['word']).to_dict()
+            VOCAB_DISPLAY_DICT = {str(word).lower(): str(word) for word in df['word']}
             return vocab_dict, df
         except Exception as e:
             logger.warning(f"Could not load pickle file: {e}")

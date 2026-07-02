@@ -5,7 +5,7 @@ from collections import Counter
 from typing import Any, Dict, List, Tuple
 
 import constants
-from resources import get_vocab_dict, load_nlp_resources
+from resources import get_vocab_dict, get_vocab_display_dict, load_nlp_resources
 
 
 def _vocab_dict() -> Dict[str, int]:
@@ -42,6 +42,7 @@ def analyze_logic_with_remaining(
     """Analyze text and return selected words plus valid words left outside the range."""
     _, lemminflect = load_nlp_resources()
     vocab_dict = _vocab_dict()
+    display_dict = get_vocab_display_dict()
 
     raw_tokens = re.findall(r"[a-zA-Z]+(?:[-'][a-zA-Z]+)*", text)
     total_raw_count = len(raw_tokens)
@@ -77,7 +78,8 @@ def analyze_logic_with_remaining(
         is_in_range = current_level <= best_rank <= target_level
         is_unknown_included = best_rank == 99999 and include_unknown
 
-        word_to_keep = lemma if rank_lemma != 99999 else word
+        word_to_keep_key = lemma if rank_lemma != 99999 else word
+        word_to_keep = display_dict.get(word_to_keep_key, word_to_keep_key)
         if lemma not in seen_lemmas:
             if is_in_range or is_unknown_included:
                 final_candidates.append((word_to_keep, best_rank))

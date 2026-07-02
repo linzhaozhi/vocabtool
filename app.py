@@ -31,6 +31,16 @@ configure_page()
 VOCAB_DICT, FULL_DF = resources.load_vocab_data()
 resources.VOCAB_DICT = VOCAB_DICT
 resources.FULL_DF = FULL_DF
+if isinstance(FULL_DF, list):
+    resources.VOCAB_DISPLAY_DICT = {
+        str(row.get("word", "")).lower(): str(row.get("word", ""))
+        for row in FULL_DF
+        if isinstance(row, dict) and row.get("word")
+    }
+elif FULL_DF is not None:
+    word_col = next((column for column in FULL_DF.columns if "word" in str(column).lower()), None)
+    if word_col is not None:
+        resources.VOCAB_DISPLAY_DICT = {str(word).lower(): str(word) for word in FULL_DF[word_col]}
 
 initialize_session_state()
 apply_global_styles()
