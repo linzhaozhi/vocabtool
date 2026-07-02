@@ -14,10 +14,13 @@ Run this from the project root after changing source wordlists or ranking rules:
 
 ```bash
 python3 tools/build_priority_vocab.py
+python3 tools/build_local_card_lexicon.py
 ```
 
 The app loads `data/processed/ngsl_31k_priority.csv` by default. The metadata
 file next to it explains why each word received its rank.
+Card generation also loads `data/processed/local_card_lexicon.csv` so local
+definitions and available local examples are used before AI fallback.
 
 ## Legacy File
 

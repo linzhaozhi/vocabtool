@@ -222,6 +222,45 @@ def resolve_vocab_rank(value: str) -> Tuple[Optional[int], str]:
     return None, ""
 
 
+@st.cache_data
+def load_local_card_lexicon() -> Dict[str, dict[str, str]]:
+    """Load local dictionary definitions used to ground generated cards."""
+    path = BASE_DIR / constants.LOCAL_CARD_LEXICON_FILE
+    if not path.exists():
+        return {}
+
+    entries: Dict[str, dict[str, str]] = {}
+    with path.open("r", encoding="utf-8", newline="") as csv_file:
+        reader = csv.DictReader(csv_file)
+        for row in reader:
+            word_key = _normalize_vocab_lookup_key(row.get("normalized_word") or row.get("word", ""))
+            definition = str(row.get("english_definition", "")).strip()
+            if not word_key or not definition:
+                continue
+            entries[word_key] = {
+                "word": str(row.get("word", "")).strip(),
+                "normalized_word": word_key,
+                "pos": str(row.get("pos", "")).strip(),
+                "phonetic": str(row.get("phonetic", "")).strip(),
+                "english_definition": definition,
+                "example": str(row.get("example", "")).strip(),
+                "example_translation": str(row.get("example_translation", "")).strip(),
+                "sources": str(row.get("sources", "")).strip(),
+                "source_files": str(row.get("source_files", "")).strip(),
+            }
+    return entries
+
+
+def lookup_local_card_entry(value: str) -> Optional[dict[str, str]]:
+    """Return a local dictionary entry, matching simple inflections when possible."""
+    entries = load_local_card_lexicon()
+    for candidate in vocab_lookup_candidates(value):
+        entry = entries.get(candidate)
+        if entry is not None:
+            return dict(entry)
+    return None
+
+
 @st.cache_resource(show_spinner="正在加载分词与词形还原资源...")
 def load_nlp_resources() -> Tuple[Any, Any]:
     """Load NLTK and lemminflect resources with proper error handling."""

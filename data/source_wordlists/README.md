@@ -99,6 +99,17 @@ download was found in this pass. Keep Longman out of automated weighting unless
 we later add a confirmed official export or explicitly decide to crawl entry
 metadata.
 
+## Princeton WordNet
+
+Source file:
+- https://raw.githubusercontent.com/nltk/nltk_data/gh-pages/packages/corpora/wordnet.zip
+
+Files:
+- `wordnet/wordnet.zip`
+
+Use: local English definitions and local usage examples for card generation.
+The zip includes `wordnet/LICENSE`; keep the license with the raw source file.
+
 ## Use Notes
 
 These sources have different licensing and redistribution terms. Use the raw

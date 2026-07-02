@@ -651,9 +651,11 @@ def process_ai_in_batches(
     translate_examples: bool = False,
     progress_callback: Optional[Callable[[int, int], None]] = None,
     card_template: str = constants.DEFAULT_CARD_TEMPLATE,
+    meaning_overrides: Optional[Dict[str, str]] = None,
 ) -> Optional[str]:
     """Process words in batches using AI with progress reporting."""
     words_list = words_list[:constants.MAX_AUTO_LIMIT]
+    meaning_overrides = meaning_overrides or {}
     example_count = max(
         constants.AI_CARD_EXAMPLE_COUNT_MIN,
         min(int(example_count), constants.AI_CARD_EXAMPLE_COUNT_MAX)
@@ -719,6 +721,19 @@ Template 3 strict rules:
     for i in range(0, total_words, constants.AI_BATCH_SIZE):
         batch = words_list[i:i + constants.AI_BATCH_SIZE]
         current_batch_str = "\n".join(batch)
+        batch_meaning_overrides = []
+        for word in batch:
+            override = meaning_overrides.get(word) or meaning_overrides.get(word.lower())
+            if override:
+                batch_meaning_overrides.append(f"{word} => {override}")
+        local_meaning_block = ""
+        local_meaning_rule = ""
+        if batch_meaning_overrides:
+            local_meaning_block = "Local dictionary meanings:\n" + "\n".join(batch_meaning_overrides) + "\n\n"
+            local_meaning_rule = (
+                "- If an input item appears in Local dictionary meanings, copy that meaning exactly into field 3.\n"
+                "- For those items, field 4 examples must illustrate the local dictionary meaning, not another sense.\n"
+            )
 
         user_prompt = f"""Task:
 Convert the input word or phrase list into Anki card data.
@@ -727,6 +742,7 @@ The selected card template is: {constants.CARD_TEMPLATES.get(card_template, cons
 Input items:
 {current_batch_str}
 
+{local_meaning_block}\
 Output rules:
 - Output only one ```text code block.
 - One input item per line.
@@ -746,6 +762,7 @@ Field requirements:
 1. Word/Phrase: English word or phrase, preferably lowercase.
 2. Pronunciation: leave this field empty. Keep the field separator, but write no text in this field.
 3. Meaning: {definition_rule}
+{local_meaning_rule}\
 4. English Example(s): generate exactly {example_count} natural, moderately detailed English example sentence(s) for the same core meaning as field 3. Each example must be self-contained and reveal the meaning through concrete context.
 5. Example Translation(s): {translation_rule}
 6. Etymology: {etymology_rule}
@@ -764,6 +781,7 @@ Each line must contain exactly 5 occurrences of |||.
 Field 2 is empty.
 Field 4 must contain exactly {example_count} English example sentence(s).
 Field 3 and field 4 must all use one same dominant, common meaning.
+When Local dictionary meanings are provided, field 3 must match the local dictionary meaning exactly.
 Each example must contain the target word or phrase at least once and must be informative enough to reveal the meaning.
 {translation_count_rule}
 For template 3, field 4 must contain the target word or phrase so the app can convert it into {{{{c1::word::first-letter hint}}}}.

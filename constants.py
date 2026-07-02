@@ -84,6 +84,8 @@ VOCAB_PROJECT_SOURCE = "NGSL / Oxford / SP 词表综合排序"
 VOCAB_PROJECT_NAME = "NGSL 31K Priority"
 VOCAB_PROJECT_FILE = "data/processed/ngsl_31k_priority.csv"
 VOCAB_PROJECT_MAX_RANK = 31605
+LOCAL_CARD_LEXICON_NAME = "NGSL/NAWL/TSL Local Definitions"
+LOCAL_CARD_LEXICON_FILE = "data/processed/local_card_lexicon.csv"
 
 DEFAULT_SESSION_STATE = {
     'uploader_id': DEFAULT_UPLOADER_ID,
