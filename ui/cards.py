@@ -11,7 +11,6 @@ from ai import process_ai_in_batches
 from anki_package import cleanup_old_apkg_files, generate_anki_package
 from anki_parse import parse_anki_data
 from config import get_config
-from resources import get_vocab_dict, lookup_local_card_entry, resolve_vocab_rank
 from ui.helpers import (
     get_prepared_word_list_text,
     parse_unique_words,
@@ -41,200 +40,6 @@ def _card_word_key(value: str) -> str:
     cleaned = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", str(value or "").strip())
     cleaned = cleaned.strip("`'\"“”‘’[](){}<>:：")
     return re.sub(r"\s+", " ", cleaned).lower()
-
-
-def _pos_for_local_card(pos: str) -> str:
-    """Normalize local dictionary part-of-speech labels for card meanings."""
-    normalized = str(pos or "").strip().lower().replace(".", "")
-    pos_map = {
-        "noun": "n.",
-        "n": "n.",
-        "verb": "v.",
-        "v": "v.",
-        "adjective": "adj.",
-        "adj": "adj.",
-        "adverb": "adv.",
-        "adv": "adv.",
-        "preposition": "prep.",
-        "prep": "prep.",
-        "determiner": "det.",
-        "det": "det.",
-        "pronoun": "pron.",
-        "pron": "pron.",
-        "conjunction": "conj.",
-        "conj": "conj.",
-        "phrase": "phrase",
-    }
-    return pos_map.get(normalized, str(pos or "").strip())
-
-
-def _local_card_meaning(entry: dict[str, str], card_template: str) -> str:
-    """Format a local dictionary definition for the selected card template."""
-    definition = str(entry.get("english_definition", "")).strip()
-    pos = _pos_for_local_card(entry.get("pos", ""))
-    if not definition:
-        return ""
-    if card_template == "definition_front":
-        return f"{pos or 'phrase'} | {definition}"
-    if pos:
-        return f"{pos} | {definition}"
-    return definition
-
-
-def _local_entry_for_word(word: str) -> dict[str, str] | None:
-    """Look up local dictionary data for one requested word."""
-    return lookup_local_card_entry(word)
-
-
-def _local_meaning_overrides(words: list[str], card_template: str) -> dict[str, str]:
-    """Return exact local meanings that the AI prompt should preserve."""
-    overrides: dict[str, str] = {}
-    for word in words:
-        entry = _local_entry_for_word(word)
-        if not entry:
-            continue
-        meaning = _local_card_meaning(entry, card_template)
-        if meaning:
-            overrides[word] = meaning
-            overrides[word.lower()] = meaning
-    return overrides
-
-
-def _apply_local_card_content(cards: list[dict], requested_words: list[str], card_template: str) -> list[dict]:
-    """Overlay local dictionary definitions/examples onto parsed card data."""
-    requested_by_key = {_card_word_key(word): word for word in requested_words}
-    localized_cards = []
-    for card in cards:
-        normalized_card = dict(card)
-        requested_word = requested_by_key.get(
-            _card_word_key(normalized_card.get("w", "")),
-            str(normalized_card.get("w", "")),
-        )
-        entry = _local_entry_for_word(requested_word)
-        if not entry:
-            localized_cards.append(normalized_card)
-            continue
-
-        local_meaning = _local_card_meaning(entry, card_template)
-        if local_meaning:
-            normalized_card["m"] = local_meaning
-            normalized_card["local_definition_source"] = entry.get("sources", "")
-            normalized_card["local_definition_word"] = entry.get("word", "")
-
-        if entry.get("phonetic") and not str(normalized_card.get("p", "")).strip():
-            normalized_card["p"] = entry["phonetic"]
-
-        if entry.get("example"):
-            normalized_card["e"] = entry["example"]
-            normalized_card["local_example_source"] = entry.get("sources", "")
-            normalized_card["local_example_word"] = entry.get("word", "")
-        if entry.get("example_translation"):
-            normalized_card["ec"] = entry["example_translation"]
-
-        localized_cards.append(normalized_card)
-    return localized_cards
-
-
-def _build_local_complete_card(word: str, card_template: str) -> dict | None:
-    """Build a card entirely from local dictionary fields when possible."""
-    entry = _local_entry_for_word(word)
-    if not entry:
-        return None
-
-    meaning = _local_card_meaning(entry, card_template)
-    example = str(entry.get("example", "")).strip()
-    if not meaning or not example:
-        return None
-
-    return {
-        "w": word,
-        "p": entry.get("phonetic", ""),
-        "m": meaning,
-        "e": example,
-        "ec": entry.get("example_translation", ""),
-        "r": "",
-        "local_definition_source": entry.get("sources", ""),
-        "local_definition_word": entry.get("word", ""),
-        "local_example_source": entry.get("sources", ""),
-        "local_example_word": entry.get("word", ""),
-    }
-
-
-def _local_complete_cards(requested_words: list[str], card_template: str) -> list[dict]:
-    """Return cards that can be generated without AI."""
-    cards = []
-    for word in requested_words:
-        card = _build_local_complete_card(word, card_template)
-        if card:
-            cards.append(card)
-    return cards
-
-
-def _rank_source_note(word: str) -> str:
-    """Build the rank/list source portion of the card source note."""
-    vocab_dict = get_vocab_dict()
-    word_key = _card_word_key(word)
-    if not vocab_dict:
-        return f"词表/rank：当前未加载 {constants.VOCAB_PROJECT_NAME}。"
-
-    rank, matched_word = resolve_vocab_rank(word_key)
-    if rank is None:
-        return (
-            f"词表/rank：未命中 {constants.VOCAB_PROJECT_NAME}"
-            f"（{constants.VOCAB_PROJECT_MAX_RANK:,} 词）。"
-        )
-    matched_detail = f"匹配词条 {matched_word}，rank {rank}"
-    if matched_word and matched_word.lower() != word_key:
-        matched_detail = f"由 {word_key} 匹配到词条 {matched_word}，rank {rank}"
-    return (
-        f"词表/rank：来自 {constants.VOCAB_PROJECT_NAME}"
-        f"（{constants.VOCAB_PROJECT_MAX_RANK:,} 词；{matched_detail}；"
-        f"{constants.VOCAB_PROJECT_SOURCE}）。"
-    )
-
-
-def _card_source_note(card: dict, word: str) -> str:
-    """Build a field-level source note shown on generated card backs."""
-    definition_source = str(card.get("local_definition_source", "")).strip()
-    definition_word = str(card.get("local_definition_word", "")).strip()
-    example_source = str(card.get("local_example_source", "")).strip()
-    example_word = str(card.get("local_example_word", "")).strip()
-
-    content_notes = []
-    if definition_source:
-        matched = f"；匹配词条 {definition_word}" if definition_word else ""
-        content_notes.append(f"释义：本地词典 {constants.LOCAL_CARD_LEXICON_NAME}（{definition_source}{matched}）")
-    else:
-        content_notes.append("释义：AI 生成，请复核")
-
-    if example_source:
-        matched = f"；匹配词条 {example_word}" if example_word else ""
-        content_notes.append(f"例句：本地词典 {constants.LOCAL_CARD_LEXICON_NAME}（{example_source}{matched}）")
-    else:
-        content_notes.append("例句：AI 生成，请复核")
-
-    if str(card.get("r", "")).strip():
-        content_notes.append("词源：AI 生成，请复核")
-
-    content_notes.append(_rank_source_note(word))
-    return "；".join(content_notes)
-
-
-def _append_source_notes(cards: list[dict], requested_words: list[str]) -> list[dict]:
-    """Attach field-level source notes to cards."""
-    requested_by_key = {_card_word_key(word): word for word in requested_words}
-    annotated_cards = []
-    for card in cards:
-        normalized_card = dict(card)
-        word = requested_by_key.get(_card_word_key(normalized_card.get("w", "")), normalized_card.get("w", ""))
-        generated_note = _card_source_note(normalized_card, str(word))
-        existing_note = str(normalized_card.get("s") or normalized_card.get("source_note") or "").strip()
-        if existing_note:
-            normalized_card["s"] = f"{existing_note}；{generated_note}"
-        else:
-            normalized_card["s"] = generated_note
-        annotated_cards.append(normalized_card)
-    return annotated_cards
 
 
 def _card_is_complete(card: dict, requested_word: str, card_template: str) -> bool:
@@ -330,9 +135,8 @@ def _generate_complete_cards_with_queue(
     content_progress_bar: Any,
 ) -> tuple[list[dict], list[str]]:
     """Generate complete cards by re-queuing failed words at the tail."""
-    local_seed_cards = _append_source_notes(_local_complete_cards(requested_words, card_template), requested_words)
-    parsed_cards: list[dict] = _merge_card_results([], local_seed_cards, requested_words, card_template)
-    pending_words = _incomplete_card_words(parsed_cards, requested_words, card_template)
+    pending_words = list(requested_words)
+    parsed_cards: list[dict] = []
     attempts_by_key: dict[str, int] = {}
     total_words = len(requested_words)
     max_attempts_per_word = max(constants.MAX_RETRIES * 4, 12)
@@ -366,14 +170,11 @@ def _generate_complete_cards_with_queue(
             translate_examples=bool(translate_examples),
             progress_callback=update_queue_progress,
             card_template=card_template,
-            meaning_overrides=_local_meaning_overrides(batch, card_template),
         )
         if result:
-            local_cards = _apply_local_card_content(parse_anki_data(result), requested_words, card_template)
-            new_cards = _append_source_notes(local_cards, requested_words)
             parsed_cards = _merge_card_results(
                 parsed_cards,
-                new_cards,
+                parse_anki_data(result),
                 requested_words,
                 card_template,
             )
@@ -399,7 +200,7 @@ def render_cards_tab() -> None:
     """Render the card-generation tab."""
     cleanup_old_apkg_files()
     st.markdown("### 📦 制作卡片")
-    st.caption("优先使用本地释义词典；本地没有的字段由智能模型补全，并在卡片反面标注来源。")
+    st.caption("使用内置智能能力，把准备好的词表直接生成 Anki 卡片。")
     ai_provider_label = get_config().get("ai_provider_label", "智能模型")
     card_template = _select_card_template()
 
@@ -488,7 +289,7 @@ def render_cards_tab() -> None:
             unsafe_allow_html=True,
         )
         start_auto_gen = st.button(
-            f"🚀 生成卡片（本地优先，缺失时用 {ai_provider_label}）",
+            f"🚀 使用 {ai_provider_label} 生成卡片",
             type="primary",
             key="btn_generate_cards",
             use_container_width=False,
@@ -560,7 +361,7 @@ def render_cards_tab() -> None:
 
                 ErrorHandler.handle(exc, "生成出错")
 
-    st.caption("⚠️ 智能生成内容可能存在错误，请人工复核。卡片反面会按字段标注本地词典、AI 和 rank 来源。")
+    st.caption("⚠️ 智能生成内容可能存在错误，请人工复核。")
 
     render_anki_download_button(
         f"📥 下载 {st.session_state.get('anki_pkg_name', '词卡.apkg')}",
@@ -572,7 +373,7 @@ def render_cards_tab() -> None:
         cards = st.session_state["anki_cards_cache"]
         with st.expander(f"👀 预览卡片 (前 {constants.MAX_PREVIEW_CARDS} 张)", expanded=True):
             df_view = pd.DataFrame(cards)
-            display_cols = ["w", "p", "m", "e", "ec", "r", "s"]
+            display_cols = ["w", "p", "m", "e", "ec", "r"]
             df_view = df_view[[column for column in display_cols if column in df_view.columns]]
             rename_map = {
                 "w": "正面",
@@ -581,7 +382,6 @@ def render_cards_tab() -> None:
                 "e": "英文例句",
                 "ec": "例句翻译",
                 "r": "词源",
-                "s": "来源注释",
             }
             df_view = df_view.rename(columns=rename_map)
             for column_name in ("英文例句", "例句翻译"):

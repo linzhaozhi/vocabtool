@@ -56,16 +56,8 @@ def parse_anki_data(raw_text: str) -> List[Dict[str, str]]:
         example = ""
         example_translation = ""
         etymology = ""
-        source_note = ""
 
-        if len(parts) >= 7:
-            phonetic = parts[1]
-            meaning = parts[2]
-            example = parts[3]
-            example_translation = parts[4]
-            etymology = parts[5]
-            source_note = " ||| ".join(parts[6:]).strip()
-        elif len(parts) >= 6:
+        if len(parts) >= 6:
             phonetic = parts[1]
             meaning = parts[2]
             example = parts[3]
@@ -99,8 +91,7 @@ def parse_anki_data(raw_text: str) -> List[Dict[str, str]]:
             'm': meaning,
             'e': normalize_html_breaks(example),
             'ec': normalize_html_breaks(example_translation),
-            'r': etymology,
-            's': source_note,
+            'r': etymology
         })
 
     return parsed_cards
