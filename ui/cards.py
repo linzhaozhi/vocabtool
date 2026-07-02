@@ -11,7 +11,7 @@ from ai import process_ai_in_batches
 from anki_package import cleanup_old_apkg_files, generate_anki_package
 from anki_parse import parse_anki_data
 from config import get_config
-from resources import get_vocab_dict
+from resources import get_vocab_dict, resolve_vocab_rank
 from ui.helpers import (
     get_prepared_word_list_text,
     parse_unique_words,
@@ -51,12 +51,19 @@ def _generated_card_source_note(word: str) -> str:
     if not vocab_dict:
         return f"{content_source}；内置词库：当前未加载 {constants.VOCAB_PROJECT_NAME}。"
 
-    rank = vocab_dict.get(word_key)
+    rank, matched_word = resolve_vocab_rank(word_key)
     if rank is None:
-        return f"{content_source}；内置词库：未命中 {constants.VOCAB_PROJECT_NAME}。"
+        return (
+            f"{content_source}；内置词库：未命中 {constants.VOCAB_PROJECT_NAME}"
+            f"（{constants.VOCAB_PROJECT_MAX_RANK:,} 词）。"
+        )
+    matched_detail = f"匹配词条 {matched_word}，rank {rank}"
+    if matched_word and matched_word.lower() != word_key:
+        matched_detail = f"由 {word_key} 匹配到词条 {matched_word}，rank {rank}"
     return (
-        f"{content_source}；词表/rank 来自内置词库 {constants.VOCAB_PROJECT_NAME} "
-        f"（rank {rank}；{constants.VOCAB_PROJECT_SOURCE}）。"
+        f"{content_source}；词表/rank 来自内置词库 {constants.VOCAB_PROJECT_NAME}"
+        f"（{constants.VOCAB_PROJECT_MAX_RANK:,} 词；{matched_detail}；"
+        f"{constants.VOCAB_PROJECT_SOURCE}）。"
     )
 
 

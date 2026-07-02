@@ -3,10 +3,33 @@
 import logging
 import os
 import csv
+import re
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-import streamlit as st
+try:
+    import streamlit as st
+except ModuleNotFoundError:
+    class _StreamlitFallback:
+        @staticmethod
+        def cache_resource(func=None, **kwargs):
+            if func is not None:
+                return func
+
+            def decorator(func):
+                return func
+            return decorator
+
+        @staticmethod
+        def cache_data(func=None, **kwargs):
+            if func is not None:
+                return func
+
+            def decorator(inner):
+                return inner
+            return decorator
+
+    st = _StreamlitFallback()
 
 import constants
 from errors import ErrorHandler
@@ -19,16 +42,184 @@ DATA_DIR = BASE_DIR / "data"
 VOCAB_DICT: Dict[str, int] = {}
 VOCAB_DISPLAY_DICT: Dict[str, str] = {}
 FULL_DF: Optional[Any] = None
+VOCAB_LOAD_ATTEMPTED = False
+
+
+IRREGULAR_VOCAB_FORMS = {
+    "ate": "eat",
+    "became": "become",
+    "been": "be",
+    "began": "begin",
+    "begun": "begin",
+    "bought": "buy",
+    "brought": "bring",
+    "caught": "catch",
+    "children": "child",
+    "came": "come",
+    "did": "do",
+    "done": "do",
+    "driven": "drive",
+    "drove": "drive",
+    "eaten": "eat",
+    "fallen": "fall",
+    "feet": "foot",
+    "felt": "feel",
+    "found": "find",
+    "gave": "give",
+    "given": "give",
+    "gone": "go",
+    "got": "get",
+    "gotten": "get",
+    "had": "have",
+    "has": "have",
+    "held": "hold",
+    "kept": "keep",
+    "known": "know",
+    "left": "leave",
+    "lost": "lose",
+    "made": "make",
+    "men": "man",
+    "met": "meet",
+    "mice": "mouse",
+    "paid": "pay",
+    "ran": "run",
+    "said": "say",
+    "saw": "see",
+    "seen": "see",
+    "sent": "send",
+    "spent": "spend",
+    "spoken": "speak",
+    "stood": "stand",
+    "taken": "take",
+    "taught": "teach",
+    "teeth": "tooth",
+    "thought": "think",
+    "took": "take",
+    "understood": "understand",
+    "was": "be",
+    "went": "go",
+    "were": "be",
+    "women": "woman",
+    "won": "win",
+    "wore": "wear",
+    "worn": "wear",
+    "written": "write",
+    "wrote": "write",
+}
 
 
 def get_vocab_dict() -> Dict[str, int]:
     """Return current VOCAB_DICT (set by app after load_vocab_data())."""
+    global VOCAB_DICT, FULL_DF, VOCAB_LOAD_ATTEMPTED
+    if not VOCAB_DICT and not VOCAB_LOAD_ATTEMPTED:
+        VOCAB_LOAD_ATTEMPTED = True
+        default_path = BASE_DIR / constants.VOCAB_PROJECT_FILE
+        if default_path.exists():
+            try:
+                VOCAB_DICT, FULL_DF = _load_vocab_csv(default_path)
+            except Exception as e:
+                logger.warning(f"Could not lazy-load default vocab CSV {default_path}: {e}")
     return VOCAB_DICT
 
 
 def get_vocab_display_dict() -> Dict[str, str]:
     """Return display spelling by normalized word key."""
+    if not VOCAB_DISPLAY_DICT:
+        get_vocab_dict()
     return VOCAB_DISPLAY_DICT
+
+
+def _normalize_vocab_lookup_key(value: str) -> str:
+    """Normalize a user-facing word into a vocabulary lookup key."""
+    cleaned = str(value or "").strip().lower()
+    cleaned = cleaned.replace("’", "'").replace("`", "'")
+    cleaned = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", cleaned)
+    cleaned = cleaned.strip("`'\"“”‘’[](){}<>:：,.;!?，。；！？")
+    return re.sub(r"\s+", " ", cleaned)
+
+
+def _add_vocab_candidate(candidates: list[str], value: str) -> None:
+    candidate = _normalize_vocab_lookup_key(value)
+    if candidate and candidate not in candidates:
+        candidates.append(candidate)
+
+
+def _add_simple_inflection_candidates(candidates: list[str], key: str) -> None:
+    """Add lightweight English inflection candidates without requiring NLP packages."""
+    if not re.fullmatch(r"[a-z][a-z'-]*", key):
+        return
+
+    if key in IRREGULAR_VOCAB_FORMS:
+        _add_vocab_candidate(candidates, IRREGULAR_VOCAB_FORMS[key])
+
+    if key.endswith("'s") and len(key) > 3:
+        _add_vocab_candidate(candidates, key[:-2])
+    if key.endswith("s'") and len(key) > 3:
+        _add_vocab_candidate(candidates, key[:-1])
+
+    if key.endswith("ies") and len(key) > 4:
+        _add_vocab_candidate(candidates, f"{key[:-3]}y")
+    if key.endswith("ied") and len(key) > 4:
+        _add_vocab_candidate(candidates, f"{key[:-3]}y")
+    if key.endswith("ves") and len(key) > 4:
+        _add_vocab_candidate(candidates, f"{key[:-3]}f")
+        _add_vocab_candidate(candidates, f"{key[:-3]}fe")
+    if key.endswith("es") and len(key) > 4:
+        _add_vocab_candidate(candidates, key[:-2])
+    if key.endswith("s") and len(key) > 3 and not key.endswith(("ss", "us", "is")):
+        _add_vocab_candidate(candidates, key[:-1])
+
+    if key.endswith("ing") and len(key) > 5:
+        stem = key[:-3]
+        _add_vocab_candidate(candidates, stem)
+        _add_vocab_candidate(candidates, f"{stem}e")
+        if len(stem) > 2 and stem[-1] == stem[-2]:
+            _add_vocab_candidate(candidates, stem[:-1])
+    if key.endswith("ed") and len(key) > 4:
+        stem = key[:-2]
+        _add_vocab_candidate(candidates, stem)
+        _add_vocab_candidate(candidates, f"{stem}e")
+        if len(stem) > 2 and stem[-1] == stem[-2]:
+            _add_vocab_candidate(candidates, stem[:-1])
+    if key.endswith("er") and len(key) > 4:
+        stem = key[:-2]
+        _add_vocab_candidate(candidates, stem)
+        _add_vocab_candidate(candidates, f"{stem}e")
+        if len(stem) > 2 and stem[-1] == stem[-2]:
+            _add_vocab_candidate(candidates, stem[:-1])
+    if key.endswith("est") and len(key) > 5:
+        stem = key[:-3]
+        _add_vocab_candidate(candidates, stem)
+        _add_vocab_candidate(candidates, f"{stem}e")
+        if len(stem) > 2 and stem[-1] == stem[-2]:
+            _add_vocab_candidate(candidates, stem[:-1])
+
+
+def vocab_lookup_candidates(value: str) -> list[str]:
+    """Return exact and simple lemma candidates for a vocabulary lookup."""
+    candidates: list[str] = []
+    key = _normalize_vocab_lookup_key(value)
+    _add_vocab_candidate(candidates, key)
+
+    if "-" in key:
+        _add_vocab_candidate(candidates, key.replace("-", " "))
+        _add_vocab_candidate(candidates, key.replace("-", ""))
+    if "'" in key:
+        _add_vocab_candidate(candidates, key.replace("'", ""))
+
+    _add_simple_inflection_candidates(candidates, key)
+    return candidates
+
+
+def resolve_vocab_rank(value: str) -> Tuple[Optional[int], str]:
+    """Resolve a word/rank pair from the internal 31K vocabulary."""
+    vocab_dict = get_vocab_dict()
+    display_dict = get_vocab_display_dict()
+    for candidate in vocab_lookup_candidates(value):
+        rank = vocab_dict.get(candidate)
+        if rank is not None:
+            return int(rank), display_dict.get(candidate, candidate)
+    return None, ""
 
 
 @st.cache_resource(show_spinner="正在加载分词与词形还原资源...")

@@ -3,7 +3,15 @@
 import logging
 from typing import Any, Protocol
 
-import streamlit as st
+try:
+    import streamlit as st
+except ModuleNotFoundError:
+    class _StreamlitFallback:
+        @staticmethod
+        def error(message: str) -> None:
+            logger.error(message)
+
+    st = _StreamlitFallback()
 
 logger = logging.getLogger(__name__)
 
