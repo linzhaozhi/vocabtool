@@ -136,6 +136,35 @@ def test_parse_tab_delimited_txt_with_alias_headers():
     assert result.cards[0]["ec"] == "公羊移动了。"
 
 
+def test_parse_anki_cloze_txt_export():
+    raw = (
+        "#separator:Tab\n"
+        "#html:false\n"
+        "#columns:Text\tWord\tPartOfSpeech\tDefinition\tChinese\tTags\n"
+        "#tags column:6\n"
+        "She remained {{c1::adamant::a_______}} about the decision.\tadamant\tadj.\t"
+        "refusing to change an opinion or decision\t坚定不移的\tcore_vocab batch_01\n"
+        "I {{c1::tune out::t___ o__}} during dull meetings.\ttune out\tphrase\t"
+        "stop paying attention to something\t不再理会\tcore_vocab batch_01\n"
+    )
+
+    result = parse_card_file("anki_export.txt", raw.encode("utf-8"))
+
+    assert result.format_name == "制表符 TXT"
+    assert result.warnings == []
+    assert len(result.cards) == 2
+    assert result.cards[0] == {
+        "w": "adamant",
+        "p": "",
+        "m": "adj. | 坚定不移的 | refusing to change an opinion or decision",
+        "e": "She remained adamant about the decision.",
+        "ec": "",
+        "r": "",
+    }
+    assert result.cards[1]["e"] == "I tune out during dull meetings."
+    assert validate_imported_cards(result.cards, require_examples=True) == []
+
+
 def test_parse_json_stored_in_txt():
     raw = '[{"word":"apple","meaning":"苹果","examples":["One apple.","Two apples."]}]'
 

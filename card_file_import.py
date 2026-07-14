@@ -62,7 +62,7 @@ _FIELD_ALIAS_GROUPS = {
     },
     "e": {
         "e", "example", "examples", "examplesentence", "examplesentences",
-        "sentence", "englishsentence", "englishexample", "exampleenglish", "sentenceen",
+        "sentence", "text", "clozetext", "englishsentence", "englishexample", "exampleenglish", "sentenceen",
         "英文例句", "英语例句", "例句",
     },
     "ec": {
@@ -79,7 +79,7 @@ _FIELD_ALIAS_GROUPS = {
         "pos", "partofspeech", "wordclass", "词性", "词类",
     },
     "cm": {
-        "chinesemeaning", "chinesedefinition", "chinesegloss", "definitioncn", "meaningcn",
+        "chinese", "chinesemeaning", "chinesedefinition", "chinesegloss", "definitioncn", "meaningcn",
         "中文释义", "中文定义", "中文含义", "中文意思",
     },
     "ed": {
@@ -92,6 +92,8 @@ _FIELD_ALIASES = {
     for field, aliases in _FIELD_ALIAS_GROUPS.items()
     for alias in aliases
 }
+_IGNORED_HEADER_LABELS = {_normalize_label(label) for label in ("tag", "tags")}
+_ANKI_CLOZE_PATTERN = re.compile(r"\{\{c\d+::(.*?)\}\}", flags=re.IGNORECASE | re.DOTALL)
 
 
 def _canonical_field(label: Any) -> str:
@@ -118,6 +120,11 @@ def _clean_field(value: Any, field: str) -> str:
         text = re.sub(r"\s*\n+\s*", "<br>", text)
         return normalize_html_breaks(text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def _strip_anki_cloze_markup(text: str) -> str:
+    """Restore plain text from Anki cloze markers before rebuilding a card."""
+    return _ANKI_CLOZE_PATTERN.sub(lambda match: match.group(1).split("::", 1)[0], text)
 
 
 def _append_value(target: dict[str, str], field: str, value: Any) -> None:
@@ -156,6 +163,7 @@ def _mapping_to_card(values: Mapping[Any, Any], *, canonical_keys: bool = False)
     card = {field: "" for field in CARD_FIELDS}
     for field in ("w", "p", "e", "ec", "r"):
         card[field] = _clean_field(normalized.get(field, ""), field)
+    card["e"] = _strip_anki_cloze_markup(card["e"])
     card["m"] = _compose_meaning(normalized)
 
     if card["e"] and not card["ec"]:
@@ -198,7 +206,10 @@ def _rows_to_cards(rows: Iterable[list[str]]) -> tuple[list[dict[str, str]], lis
         cleaned = [str(cell).replace("\ufeff", "").strip() for cell in row]
         if not any(cleaned) or _is_separator_row(cleaned):
             continue
-        if len(cleaned) == 1 and cleaned[0].lstrip().startswith("#"):
+        first_cell = cleaned[0].lstrip()
+        if first_cell.lower().startswith("#columns:"):
+            cleaned[0] = first_cell.split(":", 1)[1].strip()
+        elif first_cell.startswith("#"):
             continue
         clean_rows.append(cleaned)
 
@@ -215,7 +226,11 @@ def _rows_to_cards(rows: Iterable[list[str]]) -> tuple[list[dict[str, str]], lis
         ignored_headers = [
             clean_rows[0][index]
             for index, field in enumerate(header_fields)
-            if not field and clean_rows[0][index]
+            if (
+                not field
+                and clean_rows[0][index]
+                and _normalize_label(clean_rows[0][index]) not in _IGNORED_HEADER_LABELS
+            )
         ]
         if ignored_headers:
             warnings.append(f"已忽略无法识别的列：{'、'.join(ignored_headers)}")
