@@ -38,7 +38,7 @@ render_ios_resume_reloader()
 render_app_header()
 render_help_panel(bool(VOCAB_DICT))
 
-MAIN_SECTIONS = ["1️⃣ 查单词", "2️⃣ 提取单词", "3️⃣ 制作卡片"]
+MAIN_SECTIONS = ["1️⃣ 查单词", "2️⃣ 提取单词", "3️⃣ 制作卡片", "4️⃣ 导入卡片"]
 if st.session_state.get("main_section") not in MAIN_SECTIONS:
     st.session_state["main_section"] = MAIN_SECTIONS[0]
 
@@ -58,9 +58,13 @@ elif section == "2️⃣ 提取单词":
     from ui.extraction import render_extraction_tab
 
     render_extraction_tab(VOCAB_DICT, FULL_DF)
-else:
+elif section == "3️⃣ 制作卡片":
     from ui.cards import render_cards_tab
 
     render_cards_tab()
+else:
+    from ui.card_import import render_card_import_tab
+
+    render_card_import_tab()
 
 render_app_footer()

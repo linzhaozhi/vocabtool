@@ -624,7 +624,7 @@ def render_app_header() -> None:
     """Render the static app header."""
     st.title("⚡️ 单词流 · 稳定版")
     st.caption(
-        "专注查单词、提取单词和制作 Anki 卡片。支持内置智能释义、词源与语音，"
+        "专注查单词、提取单词和制作 Anki 卡片。支持内置智能释义、外部 AI 卡片导入、词源与语音，"
         f"默认词库来自 {constants.VOCAB_PROJECT_SOURCE}（{constants.VOCAB_PROJECT_NAME}）。"
     )
 
@@ -643,6 +643,7 @@ def render_help_panel(vocab_available: bool) -> None:
     1. **查单词**：输入英文单词或短语，查看简洁释义或词源。
     2. **提取单词**：来源分为用户语料、单词表、词库三个板块，整理后的词表会自动同步到制卡。
     3. **制作卡片**：在“制作卡片”里使用内置智能生成并下载 Anki 牌组。
+    4. **导入卡片**：上传其他 AI 制作的 CSV 或 TXT 文件，生成语音并打包为 APKG。
 
     **📚 当前词库**
     - 默认词库：来自 """ + constants.VOCAB_PROJECT_SOURCE + """（""" + constants.VOCAB_PROJECT_NAME + """，`""" + constants.VOCAB_PROJECT_FILE + """`）
@@ -656,7 +657,7 @@ def render_help_panel(vocab_available: bool) -> None:
     """
         )
 
-    st.caption("功能聚焦为三类：查单词，提取单词，制作 Anki 卡片。")
+    st.caption("支持查单词、提取单词、智能制卡和导入外部 AI 卡片。")
 
 
 def render_app_footer() -> None:

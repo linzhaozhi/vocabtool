@@ -30,12 +30,18 @@ def initialize_session_state() -> None:
         st.session_state["anki_cards_cache"] = None
 
 
-def set_anki_pkg(file_path: str, deck_name: str) -> None:
+def set_anki_pkg(
+    file_path: str,
+    deck_name: str,
+    *,
+    path_key: str = "anki_pkg_path",
+    name_key: str = "anki_pkg_name",
+) -> None:
     """Store Anki package path in session state and clean previous file."""
     if not file_path or not os.path.exists(file_path):
         raise FileNotFoundError("Generated Anki package file not found.")
 
-    prev_path = st.session_state.get("anki_pkg_path")
+    prev_path = st.session_state.get(path_key)
     if prev_path and prev_path != file_path:
         try:
             if os.path.exists(prev_path):
@@ -43,8 +49,8 @@ def set_anki_pkg(file_path: str, deck_name: str) -> None:
         except OSError as exc:
             logger.warning("Could not remove previous anki package: %s", exc)
 
-    st.session_state["anki_pkg_path"] = file_path
-    st.session_state["anki_pkg_name"] = f"{deck_name}.apkg"
+    st.session_state[path_key] = file_path
+    st.session_state[name_key] = f"{deck_name}.apkg"
 
 
 def render_anki_download_button(
@@ -52,16 +58,18 @@ def render_anki_download_button(
     *,
     button_type: str = "primary",
     use_container_width: bool = False,
+    path_key: str = "anki_pkg_path",
+    name_key: str = "anki_pkg_name",
 ) -> None:
     """Safely render Anki package download button if file exists."""
-    file_path = st.session_state.get("anki_pkg_path")
-    file_name = st.session_state.get("anki_pkg_name", "词卡.apkg")
+    file_path = st.session_state.get(path_key)
+    file_name = st.session_state.get(name_key, "词卡.apkg")
 
     if not file_path:
         return
     if not os.path.exists(file_path):
         st.warning("⚠️ 下载文件不存在，请重新生成。")
-        st.session_state["anki_pkg_path"] = ""
+        st.session_state[path_key] = ""
         return
 
     try:
@@ -79,17 +87,22 @@ def render_anki_download_button(
         st.error("❌ 下载文件读取失败，请重新生成。")
 
 
-def reset_anki_state() -> None:
+def reset_anki_state(
+    *,
+    path_key: str = "anki_pkg_path",
+    name_key: str = "anki_pkg_name",
+    cache_key: str = "anki_cards_cache",
+) -> None:
     """Clear generated Anki package state but keep the source word list."""
-    st.session_state["anki_cards_cache"] = None
-    if st.session_state.get("anki_pkg_path"):
+    st.session_state[cache_key] = None
+    if st.session_state.get(path_key):
         try:
-            if os.path.exists(st.session_state["anki_pkg_path"]):
-                os.remove(st.session_state["anki_pkg_path"])
+            if os.path.exists(st.session_state[path_key]):
+                os.remove(st.session_state[path_key])
         except OSError as exc:
             logger.warning("Could not remove temp anki package: %s", exc)
-    st.session_state["anki_pkg_path"] = ""
-    st.session_state["anki_pkg_name"] = ""
+    st.session_state[path_key] = ""
+    st.session_state[name_key] = ""
 
 
 def reset_extraction_state() -> None:
