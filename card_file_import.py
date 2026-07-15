@@ -97,7 +97,15 @@ _ANKI_CLOZE_PATTERN = re.compile(r"\{\{c\d+::(.*?)\}\}", flags=re.IGNORECASE | r
 
 
 def _canonical_field(label: Any) -> str:
-    return _FIELD_ALIASES.get(_normalize_label(label), "")
+    normalized = _normalize_label(label)
+    direct_match = _FIELD_ALIASES.get(normalized, "")
+    if direct_match:
+        return direct_match
+    if re.fullmatch(r"(?:text|example|sentence)\d+", normalized):
+        return "e"
+    if re.fullmatch(r"(?:exampletranslation|sentencetranslation)\d+", normalized):
+        return "ec"
+    return ""
 
 
 def _value_to_text(value: Any, *, list_separator: str = "<br>") -> str:

@@ -165,6 +165,28 @@ def test_parse_anki_cloze_txt_export():
     assert validate_imported_cards(result.cards, require_examples=True) == []
 
 
+def test_parse_anki_cloze_txt_export_with_numbered_examples():
+    raw = (
+        "#separator:Tab\n"
+        "#html:false\n"
+        "#columns:Text1\tText2\tWord\tPartOfSpeech\tDefinition\tChinese\tTags\n"
+        "#tags column:7\n"
+        "She was {{c1::adamant::a______}} about leaving.\t"
+        "The union remains {{c1::adamant::a______}} about the proposal.\t"
+        "adamant\tadj.\trefusing to change an opinion or decision\t坚定不移的\tcore_vocab\n"
+    )
+
+    result = parse_card_file("anki_double_examples.txt", raw.encode("utf-8"))
+
+    assert result.warnings == []
+    assert len(result.cards) == 1
+    assert result.cards[0]["e"] == (
+        "She was adamant about leaving.<br>"
+        "The union remains adamant about the proposal."
+    )
+    assert validate_imported_cards(result.cards, require_examples=True) == []
+
+
 def test_parse_json_stored_in_txt():
     raw = '[{"word":"apple","meaning":"苹果","examples":["One apple.","Two apples."]}]'
 

@@ -253,7 +253,11 @@ def _highlight_target_in_example(example: str, phrase: str) -> str:
 
 
 def _build_cloze_example(example: str, phrase: str) -> str:
-    first_example = _front_example_text(example)
+    example_texts = _example_texts(example)
+    if len(example_texts) > 1:
+        return "<br><br>".join(_build_cloze_example(item, phrase) for item in example_texts)
+
+    first_example = example_texts[0] if example_texts else ""
     hint = _plain_first_letter_hint(phrase)
 
     if not first_example:
@@ -516,9 +520,11 @@ def generate_anki_package(
             if card_template == "definition_front":
                 english_definition = _sanitize_front_definition(english_definition, phrase, part_of_speech)
             part_of_speech = _format_part_of_speech(part_of_speech)
-            example_one = _first_example_text(example)
+            example_texts = _example_texts(example)
+            example_one = example_texts[0] if example_texts else ""
             if card_template == "definition_front" and not example_one:
                 raise RuntimeError(f"卡片结构不完整：{phrase} 缺少英文例句。")
+            example_back = "<br><br>".join(html.escape(item) for item in example_texts)
             hint = _first_letter_hint(phrase)
             example_front = _highlight_target_in_example(example, phrase)
             example_cloze = _build_cloze_example(example, phrase)
@@ -538,7 +544,7 @@ def generate_anki_package(
                 'hint': hint,
                 'example_front': example_front,
                 'example_cloze': example_cloze,
-                'example_one': html.escape(example_one),
+                'example_one': example_back,
                 'note_id': note_id,
                 'audio_phrase_field': audio_phrase_field,
                 'audio_example_field': audio_example_field,
@@ -562,7 +568,7 @@ def generate_anki_package(
                 prepared_card['phrase_audio_path'] = phrase_path
                 prepared_card['phrase_audio_filename'] = phrase_filename
 
-                tts_example_source = _front_example_text(example) if card_template == "definition_front" else example
+                tts_example_source = example
                 tts_example = re.sub(r'<br\s*/?>', '. ', tts_example_source, flags=re.IGNORECASE)
                 tts_example = re.sub(r'<[^>]+>', '', tts_example)
                 tts_example = re.sub(r'\s+', ' ', tts_example).strip()
