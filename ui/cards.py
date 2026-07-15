@@ -42,6 +42,13 @@ def _card_word_key(value: str) -> str:
     return re.sub(r"\s+", " ", cleaned).lower()
 
 
+def _card_generation_batch_size(card_template: str) -> int:
+    """Return the AI request size required by the selected template."""
+    if card_template == "definition_front":
+        return constants.AI_DEFINITION_FRONT_BATCH_SIZE
+    return constants.AI_BATCH_SIZE
+
+
 def _card_is_complete(card: dict, requested_word: str, card_template: str) -> bool:
     """Check only structural completeness, not semantic quality."""
     if _card_word_key(card.get("w", "")) != _card_word_key(requested_word):
@@ -140,10 +147,11 @@ def _generate_complete_cards_with_queue(
     attempts_by_key: dict[str, int] = {}
     total_words = len(requested_words)
     max_attempts_per_word = max(constants.MAX_RETRIES * 4, 12)
+    batch_size = _card_generation_batch_size(card_template)
 
     while pending_words:
-        batch = pending_words[: constants.AI_BATCH_SIZE]
-        pending_words = pending_words[constants.AI_BATCH_SIZE:]
+        batch = pending_words[:batch_size]
+        pending_words = pending_words[batch_size:]
 
         for word in batch:
             key = _card_word_key(word)
@@ -152,7 +160,7 @@ def _generate_complete_cards_with_queue(
         completed_count = len(_complete_cards_by_key(parsed_cards, requested_words, card_template))
         content_status.text(
             f"🧠 正在生成卡片：已完成 {completed_count}/{total_words}，"
-            f"本组处理 {len(batch)}/{constants.AI_BATCH_SIZE} 个，队列剩余 {len(pending_words)} 个"
+            f"本组处理 {len(batch)}/{batch_size} 个，队列剩余 {len(pending_words)} 个"
         )
 
         def update_queue_progress(current: int, total: int) -> None:
@@ -308,7 +316,8 @@ def render_cards_tab() -> None:
             voice_status = st.empty()
             voice_progress_bar = st.progress(0)
 
-            content_status.text("🧠 正在按 10 个一组生成卡片...")
+            batch_size = _card_generation_batch_size(card_template)
+            content_status.text(f"🧠 正在按 {batch_size} 个一组生成卡片...")
             voice_status.text("🎙️ 语音进度：等待内容生成完成")
             parsed_data, incomplete_words = _generate_complete_cards_with_queue(
                 words_for_generation,

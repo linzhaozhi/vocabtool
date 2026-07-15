@@ -163,6 +163,111 @@ def get_deepseek_model() -> str:
     return get_ai_model()
 
 
+def _build_definition_front_prompts(input_items: str) -> tuple[str, str]:
+    """Build the dedicated prompt for template 3 cloze cards."""
+    system_prompt = "You are a meticulous Anki vocabulary card generator."
+    user_prompt = f"""TASK
+
+Convert the input items into Anki card data for this template:
+3. 例句挖空（首字母提示）
+
+Input items:
+{input_items}
+
+OUTPUT CONTRACT
+
+- Output exactly one ```text code block and nothing else.
+- Output exactly one line for every input item.
+- Preserve the input order.
+- Do not number, omit, merge, or add items.
+- Every line must contain exactly 6 fields separated by exactly 5 occurrences of |||.
+- Do not use ||| inside any field.
+- Field order:
+  Word/Phrase ||| Pronunciation ||| Meaning ||| English Example ||| Example Translation ||| Etymology
+- Fields 2, 5, and 6 must be empty.
+
+FIELD REQUIREMENTS
+
+1. Word/Phrase
+
+- Use the exact input word or phrase, after trimming surrounding whitespace.
+- Use lowercase unless conventional capitalization is required.
+
+2. Pronunciation
+
+- Leave empty.
+
+3. Meaning
+
+- Use exactly this format:
+  part-of-speech abbreviation | concise English definition
+- Field 3 must contain exactly one single | character.
+- Use only: n., v., adj., adv., or phrase.
+- Select exactly one dominant, common meaning.
+- The definition and example must express exactly the same sense.
+- Do not combine distinct dictionary senses with “or”, a slash, or a semicolon.
+- Keep the definition to a maximum of 14 words.
+- Do not repeat the target word, an inflected form, or a direct derivative.
+- Include essential register, domain, or attitude when needed, such as:
+  informal, mainly British, technical, humorous, or disapproving.
+- Preserve important positive or negative connotations.
+- Do not make the definition inaccurate merely to keep it short.
+
+4. English Example
+
+- Write exactly one complete, natural English sentence.
+- The sentence should usually contain 12–24 words.
+- Include the exact target word or phrase exactly once.
+- Place a lowercase target away from the beginning of the sentence so its spelling remains unchanged.
+- Use the same single meaning selected in Field 3.
+- Use a natural and characteristic collocation whenever possible.
+- Make the context concrete and semantically informative.
+- Include useful clues such as a defining feature, function, cause, result, contrast, typical object, or consequence.
+- The target must be clearly the best expected completion after it is hidden.
+- Do not write a sentence in which the target is merely possible.
+- Avoid generic frames such as vague behavior, plans, events, visits, opinions, or personal activities unless they clearly reveal the meaning.
+- Avoid unsupported conclusions, cultural stereotypes, exaggerated claims, and unnatural dictionary-like wording.
+- Natural, accurate English is more important than artificially forcing a unique answer.
+
+5. Example Translation
+
+- Leave empty.
+
+6. Etymology
+
+- Leave empty.
+
+MANDATORY ANSWERABILITY TEST
+
+Before outputting each card, silently perform this test:
+
+1. Hide the target in the example sentence.
+2. Evaluate only the rendered front: the sentence plus the fixed-width first-letter hint.
+3. Do not use Field 3, because the definition appears on the card back.
+4. Think of at least two common alternative completions with the same part of speech and initial letter.
+5. If another word or phrase fits equally naturally and preserves the sentence meaning, rewrite the example.
+6. Strengthen the sentence with a more characteristic collocation, function, cause, result, contrast, or semantic detail.
+7. Repeat the test until the target is clearly the most natural expected answer.
+8. Do not add false, awkward, or overly explicit details merely to eliminate every possible synonym.
+
+FINAL VALIDATION
+
+Before responding, silently confirm:
+
+- The number of output lines equals the number of input items.
+- Every line contains exactly 5 occurrences of |||.
+- Every line contains exactly 6 fields.
+- Fields 2, 5, and 6 are empty.
+- Field 3 contains exactly one single | character.
+- Field 3 contains one sense only.
+- Field 4 contains exactly one complete sentence.
+- Field 4 contains the exact target exactly once.
+- The definition and example express the same sense.
+- The target is clearly the best expected answer after clozing.
+- Nothing appears outside the text code block."""
+    return system_prompt, user_prompt
+
+
 def _normalize_definition_language(value: str) -> str:
     """Normalize card definition-language options from UI."""
     if value in {"英文", "english", "en"}:
@@ -660,39 +765,10 @@ def process_ai_in_batches(
     )
     definition_language = _normalize_definition_language(definition_language)
     definition_rule = _definition_instruction(definition_language)
-    template_specific_rules = ""
-    if card_template == "definition_front":
+    is_definition_front = card_template == "definition_front"
+    if is_definition_front:
         translate_examples = False
         example_count = 1
-        definition_rule = (
-            "Use exactly this inner format: English part-of-speech abbreviation | concise English definition under 10 words. "
-            "Select only the single most common core meaning. "
-            "Use abbreviations such as n., v., adj., adv., or phrase. "
-            "The English definition should be simple and should not repeat the target word or phrase. "
-            "Example: adj. | able to catch fire easily."
-        )
-        template_specific_rules = """
-Template 3 strict rules:
-- Field 3 must contain exactly two inner parts separated by one single | character:
-  English part-of-speech abbreviation | concise English definition
-- Field 4 must contain exactly one natural English sentence.
-- The sentence is used as the card front cloze and the full card back example.
-- The sentence must contain the exact target word or phrase at least once and will be converted into a cloze deletion.
-- If the target word or phrase appears multiple times, the app will cloze every occurrence.
-- The sentence must illustrate the same single core meaning from field 3.
-- The sentence must be self-contained and semantically informative: it should show what the word is, does, produces, causes, describes, or is used for.
-- Keep the definition concise; the example can be longer when needed for natural, sufficient context.
-- The example should usually be about 10-20 words, with a concrete subject, action, and meaning clue.
-- Avoid overly short, empty, or diary-like sentences.
-- Do not write vague event-only examples about visiting, seeing, liking, or using something without revealing the meaning.
-- Do not include secondary meanings, rare meanings, or multiple senses.
-- Bad for "brewery": We visited a local brewery last weekend.
-- Good for "brewery": The brewery produces small-batch beer and delivers fresh kegs to nearby restaurants.
-- Bad for "flammable": Materials near fire can be dangerous.
-- Good for "flammable": Keep flammable materials away from sparks because they can catch fire quickly.
-- Never put Chinese text, Chinese punctuation, or Chinese translation in field 3 or field 5.
-- Never use Chinese part-of-speech labels such as 名词 or 动词; use n., v., adj., adv., or phrase.
-"""
     translation_rule = (
         "Translate field 4 sentence by sentence into Simplified Chinese."
         if translate_examples
@@ -705,7 +781,7 @@ Template 3 strict rules:
     )
     etymology_rule = (
         "Leave this field empty for template 3."
-        if card_template == "definition_front"
+        if is_definition_front
         else "Briefly explain root, affix, or origin in Simplified Chinese."
     )
 
@@ -714,13 +790,21 @@ Template 3 strict rules:
     full_results = []
     failed_batches: list[str] = []
 
-    system_prompt = "You are a strict Anki vocabulary card generator."
+    batch_size = (
+        constants.AI_DEFINITION_FRONT_BATCH_SIZE
+        if is_definition_front
+        else constants.AI_BATCH_SIZE
+    )
 
-    for i in range(0, total_words, constants.AI_BATCH_SIZE):
-        batch = words_list[i:i + constants.AI_BATCH_SIZE]
+    for i in range(0, total_words, batch_size):
+        batch = words_list[i:i + batch_size]
         current_batch_str = "\n".join(batch)
 
-        user_prompt = f"""Task:
+        if is_definition_front:
+            system_prompt, user_prompt = _build_definition_front_prompts(current_batch_str)
+        else:
+            system_prompt = "You are a strict Anki vocabulary card generator."
+            user_prompt = f"""Task:
 Convert the input word or phrase list into Anki card data.
 The selected card template is: {constants.CARD_TEMPLATES.get(card_template, constants.CARD_TEMPLATES[constants.DEFAULT_CARD_TEMPLATE])["label"]}.
 
@@ -767,7 +851,6 @@ Field 3 and field 4 must all use one same dominant, common meaning.
 Each example must contain the target word or phrase at least once and must be informative enough to reveal the meaning.
 {translation_count_rule}
 For template 3, field 4 must contain the target word or phrase so the app can convert it into {{{{c1::word::first-letter hint}}}}.
-{template_specific_rules}
 Output only the text code block."""
 
         for attempt in range(constants.MAX_RETRIES):
@@ -789,7 +872,7 @@ Output only the text code block."""
                 full_results.append(content)
 
                 if progress_callback:
-                    processed_count = min(i + constants.AI_BATCH_SIZE, total_words)
+                    processed_count = min(i + batch_size, total_words)
                     progress_callback(processed_count, total_words)
 
                 break
@@ -802,7 +885,7 @@ Output only the text code block."""
                     failed_batches.append(", ".join(batch))
                     ErrorHandler.handle(
                         e,
-                        f"Batch {i//constants.AI_BATCH_SIZE + 1} failed after {constants.MAX_RETRIES} attempts",
+                        f"Batch {i//batch_size + 1} failed after {constants.MAX_RETRIES} attempts",
                         show_user=False
                     )
 
