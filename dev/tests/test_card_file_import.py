@@ -4,6 +4,7 @@ import zipfile
 
 import pytest
 
+import card_file_import
 from card_file_import import (
     CardFileParseError,
     cards_to_display_rows,
@@ -69,6 +70,22 @@ hectic ||| /ˈhektɪk/ ||| 忙乱的 ||| It was a hectic day. ||| 那是忙乱�
     assert len(result.cards) == 1
     assert result.cards[0]["w"] == "hectic"
     assert result.cards[0]["ec"] == "那是忙乱的一天。"
+
+
+@pytest.mark.parametrize(
+    "part_of_speech",
+    ["modal verb", "determiner", "countable noun", "medical abbreviation"],
+)
+def test_template_three_detection_accepts_qualified_pos_labels(part_of_speech):
+    raw = (
+        "word ||| pronunciation ||| meaning ||| example ||| example_translation ||| etymology\n"
+        f"sample ||| ||| {part_of_speech} | a concise English definition ||| "
+        "This sentence uses sample in a clear context. ||| |||\n"
+    )
+
+    result = parse_card_file("qualified_pos.txt", raw.encode("utf-8"))
+
+    assert result.card_template == "definition_front"
 
 
 def test_parse_markdown_table():
@@ -195,14 +212,118 @@ def test_parse_rich_front_back_vocabulary_txt():
     assert validate_imported_cards(result.cards, require_examples=True) == []
 
 
-def test_plain_front_back_txt_keeps_existing_two_column_behavior():
+def test_plain_front_back_txt_uses_native_sides():
     raw = "Front\tBack\napple\t苹果\n"
 
     result = parse_card_file("plain_front_back.txt", raw.encode("utf-8"))
 
     assert result.cards[0]["w"] == "apple"
     assert result.cards[0]["m"] == "苹果"
-    assert result.card_template == "word_front"
+    assert result.cards[0]["front"] == "apple"
+    assert result.cards[0]["back"] == "苹果"
+    assert result.card_template == "front_back"
+
+
+def test_front_back_mixed_shapes_never_downgrade_the_batch():
+    raw = (
+        "Front\tBack\n"
+        "You <b>must</b> wear a helmet here.\t"
+        "<b>must</b> · modal verb<br>used to express obligation\n"
+        "She found the result through pure <b>serendipity</b>.\t"
+        "<b>serendipity</b><br>the chance discovery of something valuable\n"
+        "The service remained <b>resilient</b> after the outage.\t"
+        "resilient — technical term<br>able to recover quickly after difficulty\n"
+        "After landing, the plane <b>taxied</b> toward the terminal.\t"
+        "taxi · verb<br>to move an aircraft slowly along the ground\n"
+        "What is the capital of France?\tParis is the capital of France.\n"
+    )
+
+    result = parse_card_file("mixed_front_back.txt", raw.encode("utf-8"))
+
+    assert result.card_template == "front_back"
+    assert len(result.cards) == 5
+    assert [card["w"] for card in result.cards] == ["must", "serendipity", "resilient", "taxi", ""]
+    assert result.cards[0]["m"] == "modal verb | used to express obligation"
+    assert result.cards[1]["m"] == "the chance discovery of something valuable"
+    assert result.cards[2]["m"] == "technical term | able to recover quickly after difficulty"
+    assert result.cards[3]["m"] == "verb | to move an aircraft slowly along the ground"
+    assert result.cards[4]["front"] == "What is the capital of France?"
+    assert result.cards[4]["back"] == "Paris is the capital of France."
+    assert any("1 行未提取到目标词" in warning for warning in result.warnings)
+    assert validate_imported_cards(result.cards, require_examples=True) == []
+
+
+def test_native_front_back_allows_duplicate_or_missing_headwords():
+    cards = [
+        {
+            "w": "repeat",
+            "m": "first meaning",
+            "e": "First example.",
+            "front": "First example.",
+            "back": "First answer.",
+        },
+        {
+            "w": "repeat",
+            "m": "second meaning",
+            "e": "Second example.",
+            "front": "Second example.",
+            "back": "Second answer.",
+        },
+        {
+            "w": "",
+            "m": "",
+            "e": "A generic question?",
+            "front": "A generic question?",
+            "back": "A generic answer.",
+        },
+    ]
+
+    assert validate_imported_cards(cards, require_examples=True) == []
+
+
+def test_front_back_merges_accidental_extra_tabs_into_back():
+    raw = (
+        "Front\tBack\n"
+        "The team protected its <b>morale</b>.\t"
+        "<b>morale</b> · noun\tthe confidence of a group\t团队士气\n"
+    )
+
+    result = parse_card_file("extra_tabs.txt", raw.encode("utf-8"))
+
+    assert result.card_template == "front_back"
+    assert len(result.cards) == 1
+    assert result.cards[0]["w"] == "morale"
+    assert result.cards[0]["m"] == "noun | the confidence of a group"
+    assert result.cards[0]["back"].count("<br>") == 2
+    assert any("额外制表符" in warning for warning in result.warnings)
+
+
+def test_front_back_recovers_one_bad_row_without_losing_batch(monkeypatch):
+    original_parser = card_file_import._rich_front_back_to_card
+    call_count = 0
+
+    def fail_first_row(front, back):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise ValueError("simulated malformed row")
+        return original_parser(front, back)
+
+    monkeypatch.setattr(card_file_import, "_rich_front_back_to_card", fail_first_row)
+    raw = (
+        "Front\tBack\n"
+        "A <b>safe</b> first sentence.\t<b>safe</b> · adjective<br>not likely to cause harm\n"
+        "The group protected its <b>morale</b>.\t<b>morale</b> · noun<br>the confidence of a group\n"
+    )
+
+    result = card_file_import.parse_card_file("recover_rows.txt", raw.encode("utf-8"))
+
+    assert result.card_template == "front_back"
+    assert len(result.cards) == 2
+    assert result.cards[0]["front"] == "A safe first sentence."
+    assert result.cards[1]["w"] == "morale"
+    assert any("1 行格式异常" in warning for warning in result.warnings)
+    assert validate_imported_cards(result.cards, require_examples=True) == []
 
 
 def test_front_back_display_rows_preserve_native_sides():

@@ -146,13 +146,21 @@ def _sanitize_front_definition(definition: str, phrase: str, part_of_speech: str
 
 def _looks_like_part_of_speech(text: str) -> bool:
     normalized = text.strip().lower().replace(".", "")
-    english_pos = (
-        "noun", "n", "proper noun", "proper n", "verb", "v", "adjective", "adj", "adverb", "adv",
-        "preposition", "prep", "conjunction", "conj", "pronoun", "pron",
-        "interjection", "phrase", "phrasal verb", "idiom",
-    )
+    abbreviations = {"n", "v", "adj", "adv", "prep", "conj", "pron", "interj", "det", "aux"}
+    keywords = {
+        "noun", "verb", "adjective", "adverb", "preposition", "conjunction",
+        "pronoun", "interjection", "determiner", "article", "auxiliary", "modal",
+        "phrase", "idiom", "expression", "abbreviation", "acronym", "initialism",
+        "particle", "prefix", "suffix", "numeral", "number", "exclamation",
+        "contraction", "symbol", "term",
+    }
+    english_words = re.findall(r"[a-z]+", normalized)
     chinese_pos = ("名词", "动词", "形容词", "副词", "介词", "连词", "代词", "感叹词", "短语", "习语")
-    return any(pos == normalized for pos in english_pos) or any(pos in text for pos in chinese_pos)
+    return (
+        normalized in abbreviations
+        or bool(english_words and len(english_words) <= 6 and any(word in keywords for word in english_words))
+        or any(pos in text for pos in chinese_pos)
+    )
 
 
 def _english_only_fragment(text: str) -> str:
@@ -201,6 +209,10 @@ def _format_part_of_speech(part_of_speech: str) -> str:
         "n": "n.",
         "proper noun": "proper n.",
         "proper n": "proper n.",
+        "determiner": "det.",
+        "det": "det.",
+        "auxiliary verb": "aux. v.",
+        "modal verb": "modal v.",
         "verb": "v.",
         "v": "v.",
         "adjective": "adj.",
@@ -633,19 +645,20 @@ def generate_anki_package(
                 'example_audio_items': [],
             }
 
-            if enable_tts and tts_mode != "none" and phrase:
-                safe_phrase = re.sub(r'[^a-zA-Z0-9]', '_', phrase)[:20]
+            if enable_tts and tts_mode != "none":
+                safe_phrase = re.sub(r'[^a-zA-Z0-9]', '_', phrase)[:20] or f"card_{idx + 1}"
                 unique_id = int(time.time() * 1000) + random.randint(0, 9999)
 
-                phrase_filename = f"tts_{safe_phrase}_{unique_id}_p.mp3"
-                phrase_path = os.path.join(tmp_dir, phrase_filename)
-                audio_tasks.append({
-                    'text': phrase,
-                    'path': phrase_path,
-                    'voice': tts_voice
-                })
-                prepared_card['phrase_audio_path'] = phrase_path
-                prepared_card['phrase_audio_filename'] = phrase_filename
+                if phrase:
+                    phrase_filename = f"tts_{safe_phrase}_{unique_id}_p.mp3"
+                    phrase_path = os.path.join(tmp_dir, phrase_filename)
+                    audio_tasks.append({
+                        'text': phrase,
+                        'path': phrase_path,
+                        'voice': tts_voice
+                    })
+                    prepared_card['phrase_audio_path'] = phrase_path
+                    prepared_card['phrase_audio_filename'] = phrase_filename
 
                 if tts_mode == "word_and_example":
                     for example_index, example_text in enumerate(example_texts, start=1):

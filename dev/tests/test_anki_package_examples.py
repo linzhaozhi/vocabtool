@@ -156,3 +156,51 @@ def test_native_front_back_package_preserves_sides_without_cloze(monkeypatch, tm
     finally:
         if os.path.exists(package_path):
             os.remove(package_path)
+
+
+def test_front_back_without_headword_still_generates_each_example_audio(monkeypatch, tmp_path):
+    captured_tasks = []
+
+    def capture_audio_tasks(tasks, concurrency, progress_callback):
+        captured_tasks.extend(tasks)
+        for task in tasks:
+            with open(task["path"], "wb") as audio_file:
+                audio_file.write(b"audio" * 30)
+
+    monkeypatch.setattr(anki_package, "run_async_batch", capture_audio_tasks)
+    cards = [{
+        "w": "",
+        "p": "",
+        "m": "",
+        "e": "What is the capital of France?<br>Which city contains the Eiffel Tower?",
+        "ec": "",
+        "r": "",
+        "front": "What is the capital of France?<br>Which city contains the Eiffel Tower?",
+        "back": "Paris answers both questions.",
+    }]
+    package_path = generate_anki_package(
+        cards,
+        "headword-free-front-back-test",
+        enable_tts=True,
+        card_template="front_back",
+        tts_mode="word_and_example",
+    )
+
+    try:
+        database_path = tmp_path / "headword-free-collection.anki2"
+        with zipfile.ZipFile(package_path) as package:
+            database_path.write_bytes(package.read("collection.anki2"))
+        with sqlite3.connect(database_path) as connection:
+            fields = connection.execute("SELECT flds FROM notes").fetchone()[0].split(chr(31))
+
+        assert [task["text"] for task in captured_tasks] == [
+            "What is the capital of France?",
+            "Which city contains the Eiffel Tower?",
+        ]
+        assert all("_card_1_" in task["path"] for task in captured_tasks)
+        assert fields[13] == ""
+        assert fields[14].count("[sound:") == 2
+        assert fields[14].count('class="example-audio-pair"') == 2
+    finally:
+        if os.path.exists(package_path):
+            os.remove(package_path)

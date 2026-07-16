@@ -108,10 +108,20 @@ _HTML_EMPHASIS_PATTERN = re.compile(
     r"<(?:b|strong)\b[^>]*>(.*?)</(?:b|strong)\s*>",
     flags=re.IGNORECASE | re.DOTALL,
 )
-_FRONT_BACK_POS_LABELS = {
-    "n", "noun", "v", "verb", "adj", "adjective", "adv", "adverb",
-    "propernoun", "phrase", "idiom", "phrasalverb", "prep", "preposition",
-    "conj", "conjunction", "pron", "pronoun", "interj", "interjection",
+_POS_ABBREVIATIONS = {
+    "n", "v", "adj", "adv", "prep", "conj", "pron", "interj", "det", "aux",
+}
+_POS_KEYWORDS = {
+    "noun", "verb", "adjective", "adverb", "preposition", "conjunction",
+    "pronoun", "interjection", "determiner", "article", "auxiliary", "modal",
+    "phrase", "idiom", "expression", "abbreviation", "acronym", "initialism",
+    "particle", "prefix", "suffix", "numeral", "number", "exclamation",
+    "contraction", "symbol", "term",
+}
+_BACK_METADATA_LABELS = {
+    "pattern", "patterns", "collocation", "collocations", "example", "examples",
+    "translation", "translations", "chinese", "register", "usage", "note", "notes",
+    "tag", "tags", "definition", "meaning",
 }
 _SAFE_CARD_HTML_TAGS = {"b", "strong", "i", "em", "u", "br", "div", "p", "span"}
 _BLOCKED_CARD_HTML_TAGS = {"script", "style", "iframe", "object", "embed"}
@@ -212,49 +222,157 @@ def _html_text_lines(value: Any) -> list[str]:
     return [re.sub(r"\s+", " ", line).strip() for line in text.splitlines() if line.strip()]
 
 
-def _split_front_back_heading(heading: str) -> tuple[str, str]:
-    """Split a rich Back heading such as 'adamant · adjective'."""
-    parts = re.split(r"\s*(?:·|•|—|–)\s*|\s+-\s+", heading, maxsplit=1)
-    if len(parts) != 2:
-        return "", ""
-    headword, part_of_speech = (part.strip() for part in parts)
-    if not headword or _normalize_label(part_of_speech) not in _FRONT_BACK_POS_LABELS:
-        return "", ""
-    return headword, part_of_speech
+def _looks_like_pos_label(value: Any) -> bool:
+    """Recognize common and qualified part-of-speech labels without a closed list."""
+    text = _value_to_text(value).strip().lower().replace(".", "")
+    normalized = _normalize_label(text)
+    if normalized in _POS_ABBREVIATIONS:
+        return True
+    words = re.findall(r"[a-z]+", text)
+    return bool(words and len(words) <= 6 and any(word in _POS_KEYWORDS for word in words))
 
 
-def _rich_front_back_to_card(front: Any, back: Any) -> dict[str, str] | None:
-    """Parse an HTML Front/Back vocabulary row into canonical card fields."""
+def _emphasized_texts(value: Any) -> list[str]:
+    candidates: list[str] = []
+    for match in _HTML_EMPHASIS_PATTERN.finditer(_value_to_text(value)):
+        lines = _html_text_lines(match.group(1))
+        for line in lines:
+            if line and line.casefold() not in {item.casefold() for item in candidates}:
+                candidates.append(line)
+    return candidates
+
+
+def _looks_like_short_headword(value: str) -> bool:
+    text = re.sub(r"\s+", " ", value).strip()
+    return bool(
+        text
+        and len(text) <= 80
+        and len(text.split()) <= 6
+        and re.search(r"[A-Za-z]", text)
+        and not re.search(r"[.!?;:：]", text)
+    )
+
+
+def _split_front_back_heading(heading: str, preferred_word: str = "") -> tuple[str, str]:
+    """Split a Back heading while accepting future or domain-specific POS labels."""
+    cleaned = re.sub(r"\s+", " ", heading).strip()
+    preferred_word = re.sub(r"\s+", " ", preferred_word).strip()
+    if preferred_word:
+        heading_match = re.match(
+            rf"^\s*{re.escape(preferred_word)}(?![A-Za-z0-9])\s*(.*)$",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
+        if not heading_match:
+            return preferred_word, ""
+        remainder = heading_match.group(1).strip(" ·•—–-|:：()[]")
+        return preferred_word, remainder if len(remainder) <= 80 else ""
+
+    parts = re.split(r"\s*(?:·|•|—|–|\|)\s*|\s+-\s+", cleaned, maxsplit=1)
+    if len(parts) == 2 and _looks_like_short_headword(parts[0]):
+        return parts[0].strip(), parts[1].strip()
+
+    parenthesized = re.fullmatch(r"(.+?)\s*\(([^()]{1,80})\)", cleaned)
+    if parenthesized and _looks_like_short_headword(parenthesized.group(1)):
+        return parenthesized.group(1).strip(), parenthesized.group(2).strip()
+    return "", ""
+
+
+def _select_front_back_word(front_html: str, back_html: str, heading: str) -> str:
+    """Prefer a Back headword, then a repeated emphasized Front term, then short Front text."""
+    front_text = " ".join(_html_text_lines(front_html))
+    back_candidates = [
+        candidate
+        for candidate in _emphasized_texts(back_html)
+        if _normalize_label(candidate) not in _BACK_METADATA_LABELS
+    ]
+    if back_candidates:
+        return back_candidates[0]
+
+    heading_word, _ = _split_front_back_heading(heading)
+    if heading_word:
+        return heading_word
+
+    front_candidates = [
+        candidate
+        for candidate in _emphasized_texts(front_html)
+        if _normalize_label(candidate) not in _BACK_METADATA_LABELS
+    ]
+    for candidate in front_candidates:
+        if re.search(
+            rf"(?<![A-Za-z0-9]){re.escape(candidate)}(?![A-Za-z0-9])",
+            front_text,
+            flags=re.IGNORECASE,
+        ):
+            return candidate
+    if front_candidates:
+        return front_candidates[0]
+    front_lines = _html_text_lines(front_html)
+    if len(front_lines) == 1 and _looks_like_short_headword(front_lines[0]):
+        return front_lines[0]
+    return ""
+
+
+def _select_front_back_definition(back_lines: list[str], heading: str) -> str:
+    """Choose the first definition-like Back line and ignore optional metadata."""
+    candidates = back_lines[1:] if back_lines and back_lines[0] == heading else back_lines
+    cleaned_candidates: list[str] = []
+    for line in candidates:
+        label_match = re.match(r"^([^:：]{1,30})[:：]\s*(.*)$", line)
+        if label_match:
+            label = _normalize_label(label_match.group(1))
+            if label in {"definition", "meaning"}:
+                line = label_match.group(2).strip()
+            elif label in _BACK_METADATA_LABELS:
+                continue
+        if line:
+            cleaned_candidates.append(line)
+
+    for line in cleaned_candidates:
+        if re.search(r"[A-Za-z]", line) and not re.search(r"[\u4e00-\u9fff]", line):
+            return line
+    return cleaned_candidates[0] if cleaned_candidates else ""
+
+
+def _rich_front_back_to_card(front: Any, back: Any) -> dict[str, str]:
+    """Parse a Front/Back row while always preserving its native card sides."""
     front_html = _sanitize_card_html(front)
     back_html = _sanitize_card_html(back)
     back_lines = _html_text_lines(back_html)
     front_lines = _html_text_lines(front_html)
-    if len(back_lines) < 2 or not front_lines:
-        return None
-
-    heading_word, part_of_speech = _split_front_back_heading(back_lines[0])
-    if not heading_word:
-        return None
-
-    emphasized_match = _HTML_EMPHASIS_PATTERN.search(back_html)
-    if emphasized_match:
-        emphasized_lines = _html_text_lines(emphasized_match.group(1))
-        if emphasized_lines:
-            heading_word = emphasized_lines[0]
-
-    definition = re.sub(
-        r"^(?:definition|meaning)\s*[:：]\s*",
-        "",
-        back_lines[1],
-        flags=re.IGNORECASE,
-    ).strip()
-    if not definition:
-        return None
+    heading = back_lines[0] if back_lines else ""
+    heading_word = _select_front_back_word(front_html, back_html, heading)
+    _, part_of_speech = _split_front_back_heading(heading, heading_word)
+    definition = _select_front_back_definition(back_lines, heading)
+    meaning_parts = [part for part in (part_of_speech, definition) if part]
+    if not meaning_parts and back_lines:
+        meaning_parts.append(back_lines[0])
 
     return {
         "w": heading_word,
         "p": "",
-        "m": f"{part_of_speech} | {definition}",
+        "m": " | ".join(meaning_parts),
+        "e": "<br>".join(front_lines),
+        "ec": "",
+        "r": "",
+        "front": front_html,
+        "back": back_html,
+    }
+
+
+def _fallback_front_back_card(front: Any, back: Any) -> dict[str, str]:
+    """Preserve a row as plain safe HTML if rich metadata extraction ever fails."""
+    front_text = _value_to_text(front).replace("\r\n", "\n").replace("\r", "\n")
+    back_text = _value_to_text(back).replace("\r\n", "\n").replace("\r", "\n")
+    front_lines = _html_text_lines(front_text)
+    back_lines = _html_text_lines(back_text)
+    front_html = "<br>".join(html.escape(line, quote=False) for line in front_lines)
+    back_html = "<br>".join(html.escape(line, quote=False) for line in back_lines)
+    word = front_lines[0] if len(front_lines) == 1 and _looks_like_short_headword(front_lines[0]) else ""
+    return {
+        "w": word,
+        "p": "",
+        "m": back_lines[0] if back_lines else "",
         "e": "<br>".join(front_lines),
         "ec": "",
         "r": "",
@@ -268,7 +386,7 @@ def _looks_like_definition_front_card(card: Mapping[str, Any]) -> bool:
     meaning_parts = [part.strip() for part in _value_to_text(card.get("m", "")).split("|") if part.strip()]
     if len(meaning_parts) != 2:
         return False
-    if _normalize_label(meaning_parts[0]) not in _FRONT_BACK_POS_LABELS:
+    if not _looks_like_pos_label(meaning_parts[0]):
         return False
     return bool(
         re.search(r"[A-Za-z]", meaning_parts[1])
@@ -378,22 +496,23 @@ def _rows_to_cards(rows: Iterable[list[str]]) -> tuple[list[dict[str, str]], lis
     if not clean_rows:
         return [], []
 
+    normalized_headers = [_normalize_label(cell) for cell in clean_rows[0]]
+    front_index = next(
+        (index for index, label in enumerate(normalized_headers) if label in {"front", "frontside"}),
+        None,
+    )
+    back_index = next(
+        (index for index, label in enumerate(normalized_headers) if label in {"back", "backside"}),
+        None,
+    )
+    is_front_back_table = front_index is not None and back_index is not None
     header_fields = [_canonical_field(cell) for cell in clean_rows[0]]
     recognized_fields = [field for field in header_fields if field]
-    has_header = "w" in recognized_fields and len(recognized_fields) >= 2
+    has_header = is_front_back_table or ("w" in recognized_fields and len(recognized_fields) >= 2)
     warnings: list[str] = []
     cards: list[dict[str, str]] = []
 
     if has_header:
-        normalized_headers = [_normalize_label(cell) for cell in clean_rows[0]]
-        front_index = next(
-            (index for index, label in enumerate(normalized_headers) if label in {"front", "frontside"}),
-            None,
-        )
-        back_index = next(
-            (index for index, label in enumerate(normalized_headers) if label in {"back", "backside"}),
-            None,
-        )
         ignored_headers = [
             clean_rows[0][index]
             for index, field in enumerate(header_fields)
@@ -406,18 +525,37 @@ def _rows_to_cards(rows: Iterable[list[str]]) -> tuple[list[dict[str, str]], lis
         if ignored_headers:
             warnings.append(f"已忽略无法识别的列：{'、'.join(ignored_headers)}")
 
-        for row in clean_rows[1:]:
-            if (
-                front_index is not None
-                and back_index is not None
-                and front_index < len(row)
-                and back_index < len(row)
-            ):
-                rich_card = _rich_front_back_to_card(row[front_index], row[back_index])
-                if rich_card:
-                    cards.append(rich_card)
+        if is_front_back_table:
+            recovered_row_count = 0
+            extra_cell_count = 0
+            for row in clean_rows[1:]:
+                front = row[front_index] if front_index < len(row) else ""
+                back = row[back_index] if back_index < len(row) else ""
+                if len(clean_rows[0]) == 2 and len(row) > 2 and back_index == 1:
+                    back = "<br>".join(row[back_index:])
+                    extra_cell_count += 1
+                if not front and not back:
                     continue
+                try:
+                    cards.append(_rich_front_back_to_card(front, back))
+                except Exception:
+                    cards.append(_fallback_front_back_card(front, back))
+                    recovered_row_count += 1
 
+            if extra_cell_count:
+                warnings.append(f"有 {extra_cell_count} 行包含额外制表符，已合并到背面内容。")
+            if recovered_row_count:
+                warnings.append(f"有 {recovered_row_count} 行格式异常，已按原始正反面安全恢复。")
+
+            missing_word_count = sum(not card.get("w") for card in cards)
+            if missing_word_count:
+                warnings.append(
+                    f"有 {missing_word_count} 行未提取到目标词，仍会保留原始正反面并生成例句语音；"
+                    "这些行会跳过单词语音。"
+                )
+            return cards, warnings
+
+        for row in clean_rows[1:]:
             values: dict[str, str] = {}
             for index, field in enumerate(header_fields):
                 if field and index < len(row):
@@ -646,20 +784,10 @@ def display_rows_to_front_back_cards(rows: Iterable[Mapping[str, Any]]) -> list[
         back = row.get(FRONT_BACK_DISPLAY_COLUMNS["back"], row.get("back", ""))
         if not _value_to_text(front) and not _value_to_text(back):
             continue
-        card = _rich_front_back_to_card(front, back)
-        if card:
-            cards.append(card)
-        else:
-            cards.append({
-                "w": "",
-                "p": "",
-                "m": "",
-                "e": "",
-                "ec": "",
-                "r": "",
-                "front": _sanitize_card_html(front),
-                "back": _sanitize_card_html(back),
-            })
+        try:
+            cards.append(_rich_front_back_to_card(front, back))
+        except Exception:
+            cards.append(_fallback_front_back_card(front, back))
     return cards
 
 
@@ -676,18 +804,25 @@ def validate_imported_cards(
         return ["没有可打包的卡片。"]
 
     for index, card in enumerate(cards, start=1):
+        is_front_back = "front" in card or "back" in card
         word = _clean_field(card.get("w", ""), "w")
         meaning = _clean_field(card.get("m", ""), "m")
         example = _clean_field(card.get("e", ""), "e")
-        if not word:
-            issues.append(f"第 {index} 行缺少单词/短语。")
-        if not meaning:
-            issues.append(f"第 {index} 行缺少释义。")
+        if is_front_back:
+            if not _value_to_text(card.get("front", "")):
+                issues.append(f"第 {index} 行缺少正面内容。")
+            if not _value_to_text(card.get("back", "")):
+                issues.append(f"第 {index} 行缺少背面内容。")
+        else:
+            if not word:
+                issues.append(f"第 {index} 行缺少单词/短语。")
+            if not meaning:
+                issues.append(f"第 {index} 行缺少释义。")
         if require_examples and not example:
             issues.append(f"第 {index} 行缺少英文例句。")
 
         normalized_word = re.sub(r"\s+", " ", word).strip().casefold()
-        if normalized_word:
+        if normalized_word and not is_front_back:
             if normalized_word in seen_words:
                 issues.append(
                     f"第 {index} 行与第 {seen_words[normalized_word]} 行的单词/短语重复：{word}。"
