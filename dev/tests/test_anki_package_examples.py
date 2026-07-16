@@ -1,11 +1,16 @@
-"""Tests for preserving multiple examples in cloze cards."""
+"""Tests for preserving multiple examples and their matching audio."""
 
 import os
 import sqlite3
 import zipfile
 
 import anki_package
-from anki_package import _build_cloze_example, _example_texts, generate_anki_package
+from anki_package import (
+    _build_cloze_example,
+    _example_texts,
+    _render_examples_with_audio,
+    generate_anki_package,
+)
 
 
 def test_build_cloze_example_preserves_all_examples():
@@ -19,6 +24,19 @@ def test_build_cloze_example_preserves_all_examples():
         "She was adamant about leaving.",
         "The union remains adamant about the proposal.",
     ]
+
+
+def test_render_examples_places_each_audio_below_its_example():
+    rendered = _render_examples_with_audio(
+        ["First <b>example</b>.", "Second <b>example</b>."],
+        ["[sound:first.mp3]", "[sound:second.mp3]"],
+    )
+
+    assert rendered.count('class="example-audio-pair"') == 2
+    assert rendered.count('class="example-audio-control"') == 2
+    assert rendered.index("First <b>example</b>.") < rendered.index("[sound:first.mp3]")
+    assert rendered.index("[sound:first.mp3]") < rendered.index("Second <b>example</b>.")
+    assert rendered.index("Second <b>example</b>.") < rendered.index("[sound:second.mp3]")
 
 
 def test_definition_front_package_and_tts_keep_all_examples(monkeypatch, tmp_path):
@@ -123,8 +141,17 @@ def test_native_front_back_package_preserves_sides_without_cloze(monkeypatch, tm
         ]
         assert captured_tasks[1]["path"].endswith("_e1.mp3")
         assert captured_tasks[2]["path"].endswith("_e2.mp3")
-        assert fields[14].count("[sound:") == 2
-        assert fields[14].count('class="example-audio-item"') == 2
+        audio_html = fields[14]
+        first_audio = f"[sound:{os.path.basename(captured_tasks[1]['path'])}]"
+        second_audio = f"[sound:{os.path.basename(captured_tasks[2]['path'])}]"
+        assert audio_html.count('class="example-audio-pair"') == 2
+        assert audio_html.count('class="example-audio-control"') == 2
+        assert audio_html.count("[sound:") == 2
+        assert audio_html.index("She was <b>adamant</b> about staying.") < audio_html.index(first_audio)
+        assert audio_html.index(first_audio) < audio_html.index("The editor remained <b>adamant</b>")
+        assert audio_html.index("The editor remained <b>adamant</b>") < audio_html.index(second_audio)
+        assert "{{#Audio_Example}}" in model_json
+        assert "{{^Audio_Example}}" in model_json
         assert all("<b>" not in task["text"] for task in captured_tasks[1:])
     finally:
         if os.path.exists(package_path):

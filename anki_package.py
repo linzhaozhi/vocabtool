@@ -229,6 +229,42 @@ def _example_texts(example: str) -> list[str]:
     return examples
 
 
+def _imported_front_example_fragments(imported_front: str, example_texts: list[str]) -> list[str]:
+    """Split imported Front HTML into one rich fragment per recognized example."""
+    normalized = re.sub(r"<(?:div|p)\b[^>]*>", "", imported_front, flags=re.IGNORECASE)
+    normalized = re.sub(r"</(?:div|p)\s*>", "<br>", normalized, flags=re.IGNORECASE)
+    fragments = [
+        fragment.strip()
+        for fragment in re.split(r"(?:\s*<br\s*/?>\s*)+", normalized, flags=re.IGNORECASE)
+        if fragment.strip()
+    ]
+    if len(fragments) == len(example_texts):
+        return fragments
+    return [html.escape(example) for example in example_texts]
+
+
+def _render_examples_with_audio(example_fragments: list[str], audio_tags: list[str]) -> str:
+    """Place each available audio control directly below its matching example."""
+    if not any(audio_tags):
+        return ""
+
+    rendered = []
+    for index, fragment in enumerate(example_fragments):
+        audio_tag = audio_tags[index] if index < len(audio_tags) else ""
+        audio_control = (
+            f'<div class="example-audio-control">{audio_tag}</div>'
+            if audio_tag
+            else ""
+        )
+        rendered.append(
+            '<div class="example-audio-pair">'
+            f'<div class="example-audio-text">{fragment}</div>'
+            f'{audio_control}'
+            '</div>'
+        )
+    return "".join(rendered)
+
+
 def _first_example_text(example: str) -> str:
     examples = _example_texts(example)
     return examples[0] if examples else ""
@@ -369,8 +405,8 @@ def _get_template(card_template: str) -> Dict[str, str]:
         "front_back": {
             "name": "Imported Front / Back",
             "qfmt": '''
-                <div class="imported-front">{{ImportedFront}}</div>
-                {{#Audio_Example}}<div class="imported-audio">{{Audio_Example}}</div>{{/Audio_Example}}
+                {{#Audio_Example}}<div class="imported-front imported-front-with-audio">{{Audio_Example}}</div>{{/Audio_Example}}
+                {{^Audio_Example}}<div class="imported-front">{{ImportedFront}}</div>{{/Audio_Example}}
             ''',
             "afmt": '''
                 {{FrontSide}}
@@ -488,8 +524,13 @@ def generate_anki_package(
     .imported-front, .imported-back { font-size: 24px; line-height: 1.65; text-align: left; color: #243041; }
     .imported-front b, .imported-front strong, .imported-back b, .imported-back strong { color: #0f766e; font-weight: 800; }
     .imported-audio { margin-top: 16px; text-align: left; }
-    .example-audio-item { display: inline-flex; align-items: center; margin: 4px 10px 4px 0; }
+    .example-audio-pair { padding: 0 0 18px; margin: 0 0 18px; border-bottom: 1px solid #dbe4ee; }
+    .example-audio-pair:last-child { padding-bottom: 0; margin-bottom: 0; border-bottom: 0; }
+    .example-audio-text { display: block; }
+    .example-audio-control { display: block; min-height: 32px; margin-top: 8px; }
+    .example-audio-item { display: inline-flex; align-items: center; }
     .nightMode .imported-front, .nightMode .imported-back { color: #e5e7eb; }
+    .nightMode .example-audio-pair { border-bottom-color: #334155; }
     .nightMode .imported-front b, .nightMode .imported-front strong,
     .nightMode .imported-back b, .nightMode .imported-back strong { color: #99f6e4; }
     """
@@ -579,6 +620,7 @@ def generate_anki_package(
                 'example_front': example_front,
                 'example_cloze': example_cloze,
                 'example_one': example_back,
+                'example_texts': example_texts,
                 'imported_front': imported_front,
                 'imported_back': imported_back,
                 'note_id': note_id,
@@ -615,6 +657,7 @@ def generate_anki_package(
                             'voice': tts_voice
                         })
                         prepared_card['example_audio_items'].append({
+                            'example_index': example_index - 1,
                             'path': example_path,
                             'filename': example_filename,
                         })
@@ -643,7 +686,8 @@ def generate_anki_package(
                     media_files.append(phrase_audio_path)
                     successful_audio_count += 1
 
-                example_audio_tags = []
+                example_texts = prepared_card.get('example_texts', [])
+                example_audio_tags = [""] * len(example_texts)
                 for example_audio in prepared_card.get('example_audio_items', []):
                     example_audio_path = example_audio.get('path', '')
                     if (
@@ -651,14 +695,25 @@ def generate_anki_package(
                         and os.path.exists(example_audio_path)
                         and os.path.getsize(example_audio_path) > constants.MIN_AUDIO_FILE_SIZE
                     ):
-                        example_audio_tags.append(
+                        example_index = int(example_audio.get('example_index', 0))
+                        example_audio_tags[example_index] = (
                             '<span class="example-audio-item">'
                             f"[sound:{example_audio['filename']}]"
                             '</span>'
                         )
                         media_files.append(example_audio_path)
                         successful_audio_count += 1
-                prepared_card['audio_example_field'] = "".join(example_audio_tags)
+                if card_template == "front_back":
+                    example_fragments = _imported_front_example_fragments(
+                        prepared_card.get('imported_front', ''),
+                        example_texts,
+                    )
+                    prepared_card['audio_example_field'] = _render_examples_with_audio(
+                        example_fragments,
+                        example_audio_tags,
+                    )
+                else:
+                    prepared_card['audio_example_field'] = "".join(example_audio_tags)
 
             if progress_callback:
                 progress_callback(1.0, f"🎙️ 已生成 {successful_audio_count}/{len(audio_tasks)} 个音频。")
