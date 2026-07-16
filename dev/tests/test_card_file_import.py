@@ -233,6 +233,23 @@ def test_front_back_html_drops_executable_markup():
     assert result.cards[0]["back"] == "<b>safe</b> · adjective<br>not likely to cause harm"
 
 
+def test_rich_front_back_accepts_proper_noun():
+    raw = (
+        "Front\tBack\n"
+        "Lawmakers returned to the <b>Capitol</b> for an emergency vote."
+        "<br>Visitors can tour the <b>Capitol</b> when Congress is not in session.\t"
+        "<b>Capitol</b> · proper noun<br>the building where the U.S. Congress meets<br>美国国会大厦\n"
+    )
+
+    result = parse_card_file("proper_noun_front_back.txt", raw.encode("utf-8"))
+
+    assert result.card_template == "front_back"
+    assert result.cards[0]["w"] == "Capitol"
+    assert result.cards[0]["m"] == "proper noun | the building where the U.S. Congress meets"
+    assert result.cards[0]["e"].count("<br>") == 1
+    assert validate_imported_cards(result.cards, require_examples=True) == []
+
+
 def test_parse_anki_cloze_txt_export():
     raw = (
         "#separator:Tab\n"

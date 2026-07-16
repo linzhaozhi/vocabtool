@@ -147,7 +147,7 @@ def _sanitize_front_definition(definition: str, phrase: str, part_of_speech: str
 def _looks_like_part_of_speech(text: str) -> bool:
     normalized = text.strip().lower().replace(".", "")
     english_pos = (
-        "noun", "n", "verb", "v", "adjective", "adj", "adverb", "adv",
+        "noun", "n", "proper noun", "proper n", "verb", "v", "adjective", "adj", "adverb", "adv",
         "preposition", "prep", "conjunction", "conj", "pronoun", "pron",
         "interjection", "phrase", "phrasal verb", "idiom",
     )
@@ -199,6 +199,8 @@ def _format_part_of_speech(part_of_speech: str) -> str:
     pos_map = {
         "noun": "n.",
         "n": "n.",
+        "proper noun": "proper n.",
+        "proper n": "proper n.",
         "verb": "v.",
         "v": "v.",
         "adjective": "adj.",

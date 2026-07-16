@@ -110,7 +110,7 @@ _HTML_EMPHASIS_PATTERN = re.compile(
 )
 _FRONT_BACK_POS_LABELS = {
     "n", "noun", "v", "verb", "adj", "adjective", "adv", "adverb",
-    "phrase", "idiom", "phrasalverb", "prep", "preposition",
+    "propernoun", "phrase", "idiom", "phrasalverb", "prep", "preposition",
     "conj", "conjunction", "pron", "pronoun", "interj", "interjection",
 }
 _SAFE_CARD_HTML_TAGS = {"b", "strong", "i", "em", "u", "br", "div", "p", "span"}
