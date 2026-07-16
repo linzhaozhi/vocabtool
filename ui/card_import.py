@@ -221,6 +221,8 @@ def render_card_import_tab() -> None:
         )
     selected_audio_mode = audio_label_to_key[selected_audio_label]
     enable_tts = selected_audio_mode != "none"
+    if selected_audio_mode == "word_and_example":
+        st.caption("文件中的每条例句会单独识别，分别生成语音和播放按钮。")
 
     st.markdown("#### 卡片内容")
     st.caption("可直接修改单元格，也可以新增或删除行。打包时每个有效行对应一张卡片。")

@@ -45,10 +45,14 @@ def test_definition_front_package_and_tts_keep_all_examples(monkeypatch, tmp_pat
     )
 
     try:
-        example_tasks = [task for task in captured_tasks if task["path"].endswith("_e.mp3")]
-        assert len(example_tasks) == 1
-        assert "She was adamant about leaving." in example_tasks[0]["text"]
-        assert "The union remains adamant about the proposal." in example_tasks[0]["text"]
+        example_tasks = [task for task in captured_tasks if "_e" in os.path.basename(task["path"])]
+        assert len(example_tasks) == 2
+        assert [task["text"] for task in example_tasks] == [
+            "She was adamant about leaving.",
+            "The union remains adamant about the proposal.",
+        ]
+        assert example_tasks[0]["path"].endswith("_e1.mp3")
+        assert example_tasks[1]["path"].endswith("_e2.mp3")
 
         database_path = tmp_path / "collection.anki2"
         with zipfile.ZipFile(package_path) as package:
@@ -68,6 +72,9 @@ def test_native_front_back_package_preserves_sides_without_cloze(monkeypatch, tm
 
     def capture_audio_tasks(tasks, concurrency, progress_callback):
         captured_tasks.extend(tasks)
+        for task in tasks:
+            with open(task["path"], "wb") as audio_file:
+                audio_file.write(b"audio" * 30)
 
     monkeypatch.setattr(anki_package, "run_async_batch", capture_audio_tasks)
     cards = [{
@@ -108,12 +115,17 @@ def test_native_front_back_package_preserves_sides_without_cloze(monkeypatch, tm
         assert "{{c1::" not in fields[11]
         assert '"type": 0' in model_json or '"type":0' in model_json
         assert "Imported Front / Back" in model_json
-        assert len(captured_tasks) == 2
+        assert len(captured_tasks) == 3
         assert captured_tasks[0]["text"] == "adamant"
-        assert captured_tasks[1]["text"] == (
-            "She was adamant about staying. The editor remained adamant about stronger evidence."
-        )
-        assert "<b>" not in captured_tasks[1]["text"]
+        assert [task["text"] for task in captured_tasks[1:]] == [
+            "She was adamant about staying.",
+            "The editor remained adamant about stronger evidence.",
+        ]
+        assert captured_tasks[1]["path"].endswith("_e1.mp3")
+        assert captured_tasks[2]["path"].endswith("_e2.mp3")
+        assert fields[14].count("[sound:") == 2
+        assert fields[14].count('class="example-audio-item"') == 2
+        assert all("<b>" not in task["text"] for task in captured_tasks[1:])
     finally:
         if os.path.exists(package_path):
             os.remove(package_path)

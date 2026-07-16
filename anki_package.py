@@ -488,6 +488,7 @@ def generate_anki_package(
     .imported-front, .imported-back { font-size: 24px; line-height: 1.65; text-align: left; color: #243041; }
     .imported-front b, .imported-front strong, .imported-back b, .imported-back strong { color: #0f766e; font-weight: 800; }
     .imported-audio { margin-top: 16px; text-align: left; }
+    .example-audio-item { display: inline-flex; align-items: center; margin: 4px 10px 4px 0; }
     .nightMode .imported-front, .nightMode .imported-back { color: #e5e7eb; }
     .nightMode .imported-front b, .nightMode .imported-front strong,
     .nightMode .imported-back b, .nightMode .imported-back strong { color: #99f6e4; }
@@ -585,8 +586,7 @@ def generate_anki_package(
                 'audio_example_field': audio_example_field,
                 'phrase_audio_path': "",
                 'phrase_audio_filename': "",
-                'example_audio_path': "",
-                'example_audio_filename': "",
+                'example_audio_items': [],
             }
 
             if enable_tts and tts_mode != "none" and phrase:
@@ -603,26 +603,21 @@ def generate_anki_package(
                 prepared_card['phrase_audio_path'] = phrase_path
                 prepared_card['phrase_audio_filename'] = phrase_filename
 
-                tts_example_source = example
-                tts_example_source = re.sub(
-                    r"([.!?])\s*<br\s*/?>",
-                    r"\1 ",
-                    tts_example_source,
-                    flags=re.IGNORECASE,
-                )
-                tts_example = re.sub(r'<br\s*/?>', '. ', tts_example_source, flags=re.IGNORECASE)
-                tts_example = re.sub(r'<[^>]+>', '', tts_example)
-                tts_example = re.sub(r'\s+', ' ', tts_example).strip()
-                if tts_mode == "word_and_example" and tts_example and len(tts_example) > 3:
-                    example_filename = f"tts_{safe_phrase}_{unique_id}_e.mp3"
-                    example_path = os.path.join(tmp_dir, example_filename)
-                    audio_tasks.append({
-                        'text': tts_example,
-                        'path': example_path,
-                        'voice': tts_voice
-                    })
-                    prepared_card['example_audio_path'] = example_path
-                    prepared_card['example_audio_filename'] = example_filename
+                if tts_mode == "word_and_example":
+                    for example_index, example_text in enumerate(example_texts, start=1):
+                        if len(example_text) <= 3:
+                            continue
+                        example_filename = f"tts_{safe_phrase}_{unique_id}_e{example_index}.mp3"
+                        example_path = os.path.join(tmp_dir, example_filename)
+                        audio_tasks.append({
+                            'text': example_text,
+                            'path': example_path,
+                            'voice': tts_voice
+                        })
+                        prepared_card['example_audio_items'].append({
+                            'path': example_path,
+                            'filename': example_filename,
+                        })
 
             prepared_cards.append(prepared_card)
 
@@ -648,15 +643,22 @@ def generate_anki_package(
                     media_files.append(phrase_audio_path)
                     successful_audio_count += 1
 
-                example_audio_path = prepared_card.get('example_audio_path', '')
-                if (
-                    example_audio_path
-                    and os.path.exists(example_audio_path)
-                    and os.path.getsize(example_audio_path) > constants.MIN_AUDIO_FILE_SIZE
-                ):
-                    prepared_card['audio_example_field'] = f"[sound:{prepared_card['example_audio_filename']}]"
-                    media_files.append(example_audio_path)
-                    successful_audio_count += 1
+                example_audio_tags = []
+                for example_audio in prepared_card.get('example_audio_items', []):
+                    example_audio_path = example_audio.get('path', '')
+                    if (
+                        example_audio_path
+                        and os.path.exists(example_audio_path)
+                        and os.path.getsize(example_audio_path) > constants.MIN_AUDIO_FILE_SIZE
+                    ):
+                        example_audio_tags.append(
+                            '<span class="example-audio-item">'
+                            f"[sound:{example_audio['filename']}]"
+                            '</span>'
+                        )
+                        media_files.append(example_audio_path)
+                        successful_audio_count += 1
+                prepared_card['audio_example_field'] = "".join(example_audio_tags)
 
             if progress_callback:
                 progress_callback(1.0, f"🎙️ 已生成 {successful_audio_count}/{len(audio_tasks)} 个音频。")
