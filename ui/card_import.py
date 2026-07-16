@@ -222,7 +222,10 @@ def render_card_import_tab() -> None:
     selected_audio_mode = audio_label_to_key[selected_audio_label]
     enable_tts = selected_audio_mode != "none"
     if selected_audio_mode == "word_and_example":
-        st.caption("文件中的每条例句会单独识别并生成语音，播放按钮显示在对应例句下方。")
+        st.caption(
+            "文件中的每条例句会单独生成语音，播放按钮显示在对应例句下方；"
+            "暂时失败的音频会自动移到队尾重试。"
+        )
 
     st.markdown("#### 卡片内容")
     st.caption("可直接修改单元格，也可以新增或删除行。打包时每个有效行对应一张卡片。")
@@ -309,6 +312,7 @@ def render_card_import_tab() -> None:
             status.text(message)
 
         try:
+            audio_report: dict[str, int] = {}
             file_path = generate_anki_package(
                 cards,
                 deck_name,
@@ -317,6 +321,7 @@ def render_card_import_tab() -> None:
                 progress_callback=update_progress,
                 card_template=card_template,
                 tts_mode=selected_audio_mode,
+                audio_report=audio_report,
             )
             set_anki_pkg(
                 file_path,
@@ -327,7 +332,18 @@ def render_card_import_tab() -> None:
             st.session_state[IMPORT_CACHE_KEY] = cards
             st.session_state["import_package_signature"] = build_signature
             progress.progress(1.0)
-            status.text(f"完成：{len(cards)} 行已生成 {len(cards)} 张 Anki 卡片。")
+            failed_audio_count = int(audio_report.get("failed", 0))
+            if failed_audio_count:
+                status.text(
+                    f"卡片完成：{len(cards)} 张；音频成功 "
+                    f"{audio_report.get('succeeded', 0)}/{audio_report.get('requested', 0)}。"
+                )
+                st.warning(
+                    f"有 {failed_audio_count} 个音频经过 {constants.TTS_RETRY_ATTEMPTS} 轮重试后仍失败，"
+                    "卡片文字已完整保留。可再次生成，或稍后重试。"
+                )
+            else:
+                status.text(f"完成：{len(cards)} 行已生成 {len(cards)} 张 Anki 卡片。")
             st.success(f"APKG 已生成，共 {len(cards)} 张卡片。")
             run_gc()
         except Exception as exc:

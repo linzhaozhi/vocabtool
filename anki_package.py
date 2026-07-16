@@ -460,10 +460,14 @@ def generate_anki_package(
     progress_callback: Optional[ProgressCallback] = None,
     card_template: str = constants.DEFAULT_CARD_TEMPLATE,
     tts_mode: str = constants.DEFAULT_CARD_AUDIO_MODE,
+    audio_report: Optional[Dict[str, int]] = None,
 ) -> str:
     """Generate Anki package (.apkg) file with optional TTS audio."""
     genanki, tempfile_mod = get_genanki()
     media_files = []
+    if audio_report is not None:
+        audio_report.clear()
+        audio_report.update(requested=0, succeeded=0, failed=0)
     card_template = _normalize_card_template(card_template)
     if tts_mode not in constants.CARD_AUDIO_MODES:
         tts_mode = constants.DEFAULT_CARD_AUDIO_MODE
@@ -680,6 +684,8 @@ def generate_anki_package(
             prepared_cards.append(prepared_card)
 
         if audio_tasks:
+            if audio_report is not None:
+                audio_report["requested"] = len(audio_tasks)
             if progress_callback:
                 progress_callback(0.0, f"🎙️ 正在准备 {len(audio_tasks)} 个音频任务...")
 
@@ -730,15 +736,25 @@ def generate_anki_package(
                 else:
                     prepared_card['audio_example_field'] = "".join(example_audio_tags)
 
-            if progress_callback:
-                progress_callback(1.0, f"🎙️ 已生成 {successful_audio_count}/{len(audio_tasks)} 个音频。")
-            if successful_audio_count != len(audio_tasks):
-                missing_audio_count = len(audio_tasks) - successful_audio_count
+            missing_audio_count = len(audio_tasks) - successful_audio_count
+            if audio_report is not None:
+                audio_report.update(
+                    succeeded=successful_audio_count,
+                    failed=missing_audio_count,
+                )
+            if missing_audio_count:
                 logger.warning("TTS generated %s/%s audio files; continuing without %s files.", successful_audio_count, len(audio_tasks), missing_audio_count)
                 if progress_callback:
-                    progress_callback(1.0, f"🎙️ 缺少 {missing_audio_count} 个音频，已跳过并继续打包。")
-            if progress_callback:
-                progress_callback(1.0, "🎙️ 音频处理完成，正在打包。")
+                    progress_callback(
+                        1.0,
+                        f"🎙️ 音频恢复结束：成功 {successful_audio_count}/{len(audio_tasks)}，"
+                        f"仍有 {missing_audio_count} 个失败；正在继续打包。",
+                    )
+            elif progress_callback:
+                progress_callback(
+                    1.0,
+                    f"🎙️ 全部 {successful_audio_count} 个音频已生成，正在打包。",
+                )
         elif progress_callback:
             progress_callback(1.0, "🎙️ 未启用语音，已跳过音频生成。")
 

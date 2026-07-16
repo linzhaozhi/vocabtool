@@ -95,6 +95,7 @@ def test_native_front_back_package_preserves_sides_without_cloze(monkeypatch, tm
                 audio_file.write(b"audio" * 30)
 
     monkeypatch.setattr(anki_package, "run_async_batch", capture_audio_tasks)
+    audio_report = {}
     cards = [{
         "w": "adamant",
         "p": "",
@@ -117,6 +118,7 @@ def test_native_front_back_package_preserves_sides_without_cloze(monkeypatch, tm
         enable_tts=True,
         card_template="front_back",
         tts_mode="word_and_example",
+        audio_report=audio_report,
     )
 
     try:
@@ -153,6 +155,7 @@ def test_native_front_back_package_preserves_sides_without_cloze(monkeypatch, tm
         assert "{{#Audio_Example}}" in model_json
         assert "{{^Audio_Example}}" in model_json
         assert all("<b>" not in task["text"] for task in captured_tasks[1:])
+        assert audio_report == {"requested": 3, "succeeded": 3, "failed": 0}
     finally:
         if os.path.exists(package_path):
             os.remove(package_path)

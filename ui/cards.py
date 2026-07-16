@@ -250,11 +250,11 @@ def render_cards_tab() -> None:
         selected_audio_mode = "word_and_example"
     enable_audio_auto = selected_audio_mode != "none"
     if card_template == "definition_front" and enable_audio_auto:
-        st.caption("第 3 种模板会在反面生成单词和例句音频；个别音频失败时会跳过音频，卡片照常生成。")
+        st.caption("第 3 种模板会在反面生成单词和例句音频；暂时失败的音频会自动移到队尾重试。")
     else:
         st.caption(
             f"{constants.CARD_AUDIO_MODES[selected_audio_mode]['description']} "
-            "个别音频失败时会跳过音频，卡片照常生成。"
+            "暂时失败的音频会自动移到队尾重试。"
         )
     selected_example_count = constants.AI_CARD_EXAMPLE_COUNT_DEFAULT
     definition_language = "中文"
@@ -347,6 +347,7 @@ def render_cards_tab() -> None:
                     voice_progress_bar.progress(ratio)
                     voice_status.text(text)
 
+                audio_report: dict[str, int] = {}
                 file_path = generate_anki_package(
                     parsed_data,
                     final_deck_name,
@@ -355,13 +356,25 @@ def render_cards_tab() -> None:
                     progress_callback=update_pkg_progress,
                     card_template=card_template,
                     tts_mode=selected_audio_mode,
+                    audio_report=audio_report,
                 )
 
                 st.session_state["anki_cards_cache"] = parsed_data
                 set_anki_pkg(file_path, final_deck_name)
 
                 voice_progress_bar.progress(1.0)
-                voice_status.text("✅ 音频和打包完成")
+                failed_audio_count = int(audio_report.get("failed", 0))
+                if failed_audio_count:
+                    voice_status.text(
+                        f"⚠️ 打包完成：音频成功 {audio_report.get('succeeded', 0)}/"
+                        f"{audio_report.get('requested', 0)}"
+                    )
+                    st.warning(
+                        f"有 {failed_audio_count} 个音频经过 {constants.TTS_RETRY_ATTEMPTS} 轮重试后仍失败，"
+                        "卡片文字已完整保留。可再次生成，或稍后重试。"
+                    )
+                else:
+                    voice_status.text("✅ 音频和打包完成")
                 content_status.markdown(f"✅ **处理完成！共生成 {len(parsed_data)} 张卡片**")
                 st.balloons()
                 run_gc()
