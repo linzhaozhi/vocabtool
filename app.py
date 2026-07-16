@@ -5,17 +5,32 @@ constants, resources, extraction, vocab, ai, anki_parse, tts,
 anki_package, and state.
 """
 
+import importlib
 import sys
 from pathlib import Path
 
 import streamlit as st
 
 APP_DIR = Path(__file__).resolve().parent
-if str(APP_DIR) not in sys.path:
-    sys.path.insert(0, str(APP_DIR))
+app_dir_text = str(APP_DIR)
+if app_dir_text in sys.path:
+    sys.path.remove(app_dir_text)
+sys.path.insert(0, app_dir_text)
 
 import resources
-from ui.helpers import initialize_session_state, render_active_anki_download
+from ui import helpers as ui_helpers
+
+# Streamlit Cloud can rerun a new app.py while retaining an older helper module.
+if getattr(ui_helpers, "HELPERS_API_VERSION", 0) < 2:
+    importlib.invalidate_caches()
+    ui_helpers = importlib.reload(ui_helpers)
+
+initialize_session_state = ui_helpers.initialize_session_state
+render_active_anki_download = getattr(
+    ui_helpers,
+    "render_active_anki_download",
+    lambda: None,
+)
 from ui.styles import (
     apply_global_styles,
     configure_page,

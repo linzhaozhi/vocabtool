@@ -17,6 +17,7 @@ import streamlit as st
 import constants
 
 logger = logging.getLogger(__name__)
+HELPERS_API_VERSION = 2
 
 EXTRACT_SOURCE_OPTIONS = ["文件", "文本", "文章 URL", "单词表", "Anki", "词库"]
 EXTRACT_SOURCE_LEGACY_MAP = {
