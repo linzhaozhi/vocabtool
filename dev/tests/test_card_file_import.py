@@ -8,6 +8,8 @@ from card_file_import import (
     CardFileParseError,
     cards_to_display_rows,
     display_rows_to_cards,
+    display_rows_to_front_back_cards,
+    front_back_cards_to_display_rows,
     parse_card_file,
     validate_imported_cards,
 )
@@ -136,6 +138,101 @@ def test_parse_tab_delimited_txt_with_alias_headers():
     assert result.cards[0]["ec"] == "公羊移动了。"
 
 
+def test_parse_rich_front_back_vocabulary_txt():
+    raw = (
+        "Front\tBack\n"
+        "Despite repeated requests, the editor remained <b>adamant</b> that the article needed stronger evidence."
+        "<br>She was <b>adamant</b> about keeping the public park open to local residents.\t"
+        "<b>adamant</b> · adjective<br>firmly unwilling to change a decision or opinion"
+        "<br><br><b>Pattern:</b> be adamant that…\n"
+        "The researcher was dismissed after she <b>falsified</b> data in several reports."
+        "<br>Anyone who <b>falsifies</b> official records may face criminal charges.\t"
+        "<b>falsify</b> · verb<br>to alter or invent information in order to deceive\n"
+    )
+
+    result = parse_card_file("front_back_cards.txt", raw.encode("utf-8"))
+
+    assert result.format_name == "制表符 TXT"
+    assert result.warnings == []
+    assert result.card_template == "front_back"
+    assert result.cards == [
+        {
+            "w": "adamant",
+            "p": "",
+            "m": "adjective | firmly unwilling to change a decision or opinion",
+            "e": (
+                "Despite repeated requests, the editor remained adamant that the article needed stronger evidence."
+                "<br>She was adamant about keeping the public park open to local residents."
+            ),
+            "ec": "",
+            "r": "",
+            "front": (
+                "Despite repeated requests, the editor remained <b>adamant</b> that the article needed stronger evidence."
+                "<br>She was <b>adamant</b> about keeping the public park open to local residents."
+            ),
+            "back": (
+                "<b>adamant</b> · adjective<br>firmly unwilling to change a decision or opinion"
+                "<br><br><b>Pattern:</b> be adamant that…"
+            ),
+        },
+        {
+            "w": "falsify",
+            "p": "",
+            "m": "verb | to alter or invent information in order to deceive",
+            "e": (
+                "The researcher was dismissed after she falsified data in several reports."
+                "<br>Anyone who falsifies official records may face criminal charges."
+            ),
+            "ec": "",
+            "r": "",
+            "front": (
+                "The researcher was dismissed after she <b>falsified</b> data in several reports."
+                "<br>Anyone who <b>falsifies</b> official records may face criminal charges."
+            ),
+            "back": "<b>falsify</b> · verb<br>to alter or invent information in order to deceive",
+        },
+    ]
+    assert validate_imported_cards(result.cards, require_examples=True) == []
+
+
+def test_plain_front_back_txt_keeps_existing_two_column_behavior():
+    raw = "Front\tBack\napple\t苹果\n"
+
+    result = parse_card_file("plain_front_back.txt", raw.encode("utf-8"))
+
+    assert result.cards[0]["w"] == "apple"
+    assert result.cards[0]["m"] == "苹果"
+    assert result.card_template == "word_front"
+
+
+def test_front_back_display_rows_preserve_native_sides():
+    raw = (
+        "Front\tBack\n"
+        "The team kept its <b>morale</b> high.<br>Good news raised <b>morale</b>.\t"
+        "<b>morale</b> · noun<br>the confidence and enthusiasm of a group"
+    )
+    result = parse_card_file("front_back.txt", raw.encode("utf-8"))
+
+    rows = front_back_cards_to_display_rows(result.cards)
+    restored = display_rows_to_front_back_cards(rows)
+
+    assert restored == result.cards
+    assert "{{c1::" not in restored[0]["front"]
+
+
+def test_front_back_html_drops_executable_markup():
+    raw = (
+        "Front\tBack\n"
+        "A <b>safe</b> sentence.<script>alert('bad')</script>\t"
+        "<b>safe</b> · adjective<br>not likely to cause harm<iframe>bad</iframe>\n"
+    )
+
+    result = parse_card_file("safe_front_back.txt", raw.encode("utf-8"))
+
+    assert result.cards[0]["front"] == "A <b>safe</b> sentence."
+    assert result.cards[0]["back"] == "<b>safe</b> · adjective<br>not likely to cause harm"
+
+
 def test_parse_anki_cloze_txt_export():
     raw = (
         "#separator:Tab\n"
@@ -151,6 +248,7 @@ def test_parse_anki_cloze_txt_export():
     result = parse_card_file("anki_export.txt", raw.encode("utf-8"))
 
     assert result.format_name == "制表符 TXT"
+    assert result.card_template == "definition_front"
     assert result.warnings == []
     assert len(result.cards) == 2
     assert result.cards[0] == {

@@ -31,7 +31,7 @@ def clear_all_state() -> None:
         'anki_pkg_path', 'anki_pkg_name', 'anki_input_text', 'anki_cards_cache',
         'import_anki_pkg_path', 'import_anki_pkg_name', 'import_cards_cache',
         'import_file_signature', 'import_file_cards', 'import_file_format',
-        'import_file_warnings', 'import_current_cards', 'import_package_signature',
+        'import_file_warnings', 'import_card_template', 'import_current_cards', 'import_package_signature',
         'import_source_name', 'import_uploader_nonce'
     ]
 

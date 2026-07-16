@@ -7,9 +7,11 @@ fields used by the existing Anki package builder.
 from __future__ import annotations
 
 import csv
+import html
 import json
 import re
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from io import StringIO
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -27,11 +29,18 @@ DISPLAY_COLUMNS = {
     "ec": "例句翻译",
     "r": "词源",
 }
+FRONT_BACK_DISPLAY_COLUMNS = {
+    "front": "正面",
+    "back": "背面",
+}
+
+
 @dataclass
 class CardFileParseResult:
     cards: list[dict[str, str]]
     format_name: str
     warnings: list[str]
+    card_template: str = "word_front"
 
 
 class CardFileParseError(ValueError):
@@ -94,6 +103,64 @@ _FIELD_ALIASES = {
 }
 _IGNORED_HEADER_LABELS = {_normalize_label(label) for label in ("tag", "tags")}
 _ANKI_CLOZE_PATTERN = re.compile(r"\{\{c\d+::(.*?)\}\}", flags=re.IGNORECASE | re.DOTALL)
+_HTML_BREAK_PATTERN = re.compile(r"<br\s*/?>", flags=re.IGNORECASE)
+_HTML_EMPHASIS_PATTERN = re.compile(
+    r"<(?:b|strong)\b[^>]*>(.*?)</(?:b|strong)\s*>",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+_FRONT_BACK_POS_LABELS = {
+    "n", "noun", "v", "verb", "adj", "adjective", "adv", "adverb",
+    "phrase", "idiom", "phrasalverb", "prep", "preposition",
+    "conj", "conjunction", "pron", "pronoun", "interj", "interjection",
+}
+_SAFE_CARD_HTML_TAGS = {"b", "strong", "i", "em", "u", "br", "div", "p", "span"}
+_BLOCKED_CARD_HTML_TAGS = {"script", "style", "iframe", "object", "embed"}
+
+
+class _SafeCardHTMLParser(HTMLParser):
+    """Keep basic formatting while dropping executable or unknown markup."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.blocked_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        normalized = tag.lower()
+        if normalized in _BLOCKED_CARD_HTML_TAGS:
+            self.blocked_depth += 1
+            return
+        if self.blocked_depth:
+            return
+        if normalized in _SAFE_CARD_HTML_TAGS:
+            self.parts.append(f"<{normalized}>")
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() not in _BLOCKED_CARD_HTML_TAGS:
+            self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag: str) -> None:
+        normalized = tag.lower()
+        if normalized in _BLOCKED_CARD_HTML_TAGS and self.blocked_depth:
+            self.blocked_depth -= 1
+            return
+        if self.blocked_depth:
+            return
+        if normalized in _SAFE_CARD_HTML_TAGS and normalized != "br":
+            self.parts.append(f"</{normalized}>")
+
+    def handle_data(self, data: str) -> None:
+        if not self.blocked_depth:
+            self.parts.append(html.escape(data, quote=False))
+
+
+def _sanitize_card_html(value: Any) -> str:
+    parser = _SafeCardHTMLParser()
+    parser.feed(_value_to_text(value))
+    parser.close()
+    cleaned = "".join(parser.parts)
+    cleaned = re.sub(r"(?:<br>\s*){3,}", "<br><br>", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip()
 
 
 def _canonical_field(label: Any) -> str:
@@ -133,6 +200,93 @@ def _clean_field(value: Any, field: str) -> str:
 def _strip_anki_cloze_markup(text: str) -> str:
     """Restore plain text from Anki cloze markers before rebuilding a card."""
     return _ANKI_CLOZE_PATTERN.sub(lambda match: match.group(1).split("::", 1)[0], text)
+
+
+def _html_text_lines(value: Any) -> list[str]:
+    """Convert simple card HTML to clean text lines while preserving breaks."""
+    text = _value_to_text(value)
+    text = _HTML_BREAK_PATTERN.sub("\n", text)
+    text = re.sub(r"</(?:div|p|li)\s*>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = html.unescape(text).replace("\xa0", " ")
+    return [re.sub(r"\s+", " ", line).strip() for line in text.splitlines() if line.strip()]
+
+
+def _split_front_back_heading(heading: str) -> tuple[str, str]:
+    """Split a rich Back heading such as 'adamant · adjective'."""
+    parts = re.split(r"\s*(?:·|•|—|–)\s*|\s+-\s+", heading, maxsplit=1)
+    if len(parts) != 2:
+        return "", ""
+    headword, part_of_speech = (part.strip() for part in parts)
+    if not headword or _normalize_label(part_of_speech) not in _FRONT_BACK_POS_LABELS:
+        return "", ""
+    return headword, part_of_speech
+
+
+def _rich_front_back_to_card(front: Any, back: Any) -> dict[str, str] | None:
+    """Parse an HTML Front/Back vocabulary row into canonical card fields."""
+    front_html = _sanitize_card_html(front)
+    back_html = _sanitize_card_html(back)
+    back_lines = _html_text_lines(back_html)
+    front_lines = _html_text_lines(front_html)
+    if len(back_lines) < 2 or not front_lines:
+        return None
+
+    heading_word, part_of_speech = _split_front_back_heading(back_lines[0])
+    if not heading_word:
+        return None
+
+    emphasized_match = _HTML_EMPHASIS_PATTERN.search(back_html)
+    if emphasized_match:
+        emphasized_lines = _html_text_lines(emphasized_match.group(1))
+        if emphasized_lines:
+            heading_word = emphasized_lines[0]
+
+    definition = re.sub(
+        r"^(?:definition|meaning)\s*[:：]\s*",
+        "",
+        back_lines[1],
+        flags=re.IGNORECASE,
+    ).strip()
+    if not definition:
+        return None
+
+    return {
+        "w": heading_word,
+        "p": "",
+        "m": f"{part_of_speech} | {definition}",
+        "e": "<br>".join(front_lines),
+        "ec": "",
+        "r": "",
+        "front": front_html,
+        "back": back_html,
+    }
+
+
+def _looks_like_definition_front_card(card: Mapping[str, Any]) -> bool:
+    """Recognize six-field template-3 data when no Anki cloze markup exists."""
+    meaning_parts = [part.strip() for part in _value_to_text(card.get("m", "")).split("|") if part.strip()]
+    if len(meaning_parts) != 2:
+        return False
+    if _normalize_label(meaning_parts[0]) not in _FRONT_BACK_POS_LABELS:
+        return False
+    return bool(
+        re.search(r"[A-Za-z]", meaning_parts[1])
+        and not re.search(r"[\u4e00-\u9fff]", meaning_parts[1])
+        and _value_to_text(card.get("e", ""))
+        and not _value_to_text(card.get("ec", ""))
+        and not _value_to_text(card.get("r", ""))
+    )
+
+
+def _detect_card_template(source_text: str, cards: list[dict[str, str]]) -> str:
+    if cards and all(card.get("front") and card.get("back") for card in cards):
+        return "front_back"
+    if _ANKI_CLOZE_PATTERN.search(source_text):
+        return "definition_front"
+    if cards and all(_looks_like_definition_front_card(card) for card in cards):
+        return "definition_front"
+    return "word_front"
 
 
 def _append_value(target: dict[str, str], field: str, value: Any) -> None:
@@ -231,6 +385,15 @@ def _rows_to_cards(rows: Iterable[list[str]]) -> tuple[list[dict[str, str]], lis
     cards: list[dict[str, str]] = []
 
     if has_header:
+        normalized_headers = [_normalize_label(cell) for cell in clean_rows[0]]
+        front_index = next(
+            (index for index, label in enumerate(normalized_headers) if label in {"front", "frontside"}),
+            None,
+        )
+        back_index = next(
+            (index for index, label in enumerate(normalized_headers) if label in {"back", "backside"}),
+            None,
+        )
         ignored_headers = [
             clean_rows[0][index]
             for index, field in enumerate(header_fields)
@@ -244,6 +407,17 @@ def _rows_to_cards(rows: Iterable[list[str]]) -> tuple[list[dict[str, str]], lis
             warnings.append(f"已忽略无法识别的列：{'、'.join(ignored_headers)}")
 
         for row in clean_rows[1:]:
+            if (
+                front_index is not None
+                and back_index is not None
+                and front_index < len(row)
+                and back_index < len(row)
+            ):
+                rich_card = _rich_front_back_to_card(row[front_index], row[back_index])
+                if rich_card:
+                    cards.append(rich_card)
+                    continue
+
             values: dict[str, str] = {}
             for index, field in enumerate(header_fields):
                 if field and index < len(row):
@@ -371,11 +545,14 @@ def parse_card_file(file_name: str, bytes_data: bytes) -> CardFileParseResult:
     if extension not in {".csv", ".txt"}:
         raise CardFileParseError("仅支持 .csv 和 .txt 文件。")
 
-    encoding = detect_file_encoding(bytes_data)
     try:
-        text = bytes_data.decode(encoding)
-    except (LookupError, UnicodeDecodeError):
-        text = bytes_data.decode("utf-8", errors="replace")
+        text = bytes_data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        encoding = detect_file_encoding(bytes_data)
+        try:
+            text = bytes_data.decode(encoding)
+        except (LookupError, UnicodeDecodeError):
+            text = bytes_data.decode("utf-8", errors="replace")
     text = _strip_code_fences(text).replace("\x00", "").strip()
     if not text:
         raise CardFileParseError("文件内容为空。")
@@ -420,7 +597,12 @@ def parse_card_file(file_name: str, bytes_data: bytes) -> CardFileParseResult:
         raise CardFileParseError(
             "没有识别到卡片。CSV 请使用表头，TXT 请使用表格、字段标签或 ||| 分隔格式。"
         )
-    return CardFileParseResult(cards=cards, format_name=format_name, warnings=warnings)
+    return CardFileParseResult(
+        cards=cards,
+        format_name=format_name,
+        warnings=warnings,
+        card_template=_detect_card_template(text, cards),
+    )
 
 
 def cards_to_display_rows(cards: Iterable[Mapping[str, Any]]) -> list[dict[str, str]]:
@@ -442,6 +624,42 @@ def display_rows_to_cards(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, s
         card = _mapping_to_card(values, canonical_keys=True)
         if any(card.values()):
             cards.append(card)
+    return cards
+
+
+def front_back_cards_to_display_rows(cards: Iterable[Mapping[str, Any]]) -> list[dict[str, str]]:
+    """Expose native Front/Back HTML without forcing it into another template."""
+    return [
+        {
+            FRONT_BACK_DISPLAY_COLUMNS["front"]: _value_to_text(card.get("front", "")),
+            FRONT_BACK_DISPLAY_COLUMNS["back"]: _value_to_text(card.get("back", "")),
+        }
+        for card in cards
+    ]
+
+
+def display_rows_to_front_back_cards(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, str]]:
+    """Rebuild native Front/Back cards after edits in Streamlit."""
+    cards: list[dict[str, str]] = []
+    for row in rows:
+        front = row.get(FRONT_BACK_DISPLAY_COLUMNS["front"], row.get("front", ""))
+        back = row.get(FRONT_BACK_DISPLAY_COLUMNS["back"], row.get("back", ""))
+        if not _value_to_text(front) and not _value_to_text(back):
+            continue
+        card = _rich_front_back_to_card(front, back)
+        if card:
+            cards.append(card)
+        else:
+            cards.append({
+                "w": "",
+                "p": "",
+                "m": "",
+                "e": "",
+                "ec": "",
+                "r": "",
+                "front": _sanitize_card_html(front),
+                "back": _sanitize_card_html(back),
+            })
     return cards
 
 

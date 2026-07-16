@@ -61,3 +61,59 @@ def test_definition_front_package_and_tts_keep_all_examples(monkeypatch, tmp_pat
     finally:
         if os.path.exists(package_path):
             os.remove(package_path)
+
+
+def test_native_front_back_package_preserves_sides_without_cloze(monkeypatch, tmp_path):
+    captured_tasks = []
+
+    def capture_audio_tasks(tasks, concurrency, progress_callback):
+        captured_tasks.extend(tasks)
+
+    monkeypatch.setattr(anki_package, "run_async_batch", capture_audio_tasks)
+    cards = [{
+        "w": "adamant",
+        "p": "",
+        "m": "adjective | firmly unwilling to change a decision or opinion",
+        "e": "She was adamant about staying.<br>The editor remained adamant about stronger evidence.",
+        "ec": "",
+        "r": "",
+        "front": (
+            "She was <b>adamant</b> about staying.<br>"
+            "The editor remained <b>adamant</b> about stronger evidence."
+        ),
+        "back": (
+            "<b>adamant</b> · adjective<br>firmly unwilling to change a decision or opinion"
+            "<br><br><b>Pattern:</b> be adamant that…"
+        ),
+    }]
+    package_path = generate_anki_package(
+        cards,
+        "native-front-back-test",
+        enable_tts=True,
+        card_template="front_back",
+        tts_mode="word_and_example",
+    )
+
+    try:
+        database_path = tmp_path / "front-back-collection.anki2"
+        with zipfile.ZipFile(package_path) as package:
+            database_path.write_bytes(package.read("collection.anki2"))
+        with sqlite3.connect(database_path) as connection:
+            fields = connection.execute("SELECT flds FROM notes").fetchone()[0].split(chr(31))
+            model_json = connection.execute("SELECT models FROM col").fetchone()[0]
+
+        assert fields[11] == cards[0]["front"]
+        assert fields[12] == cards[0]["back"]
+        assert "Pattern:" in fields[12]
+        assert "{{c1::" not in fields[11]
+        assert '"type": 0' in model_json or '"type":0' in model_json
+        assert "Imported Front / Back" in model_json
+        assert len(captured_tasks) == 2
+        assert captured_tasks[0]["text"] == "adamant"
+        assert captured_tasks[1]["text"] == (
+            "She was adamant about staying. The editor remained adamant about stronger evidence."
+        )
+        assert "<b>" not in captured_tasks[1]["text"]
+    finally:
+        if os.path.exists(package_path):
+            os.remove(package_path)

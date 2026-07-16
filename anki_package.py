@@ -23,11 +23,15 @@ CARD_TEMPLATE_MODEL_OFFSETS = {
     "word_front": 21,
     "example_front": 22,
     "definition_front": 23,
+    "front_back": 24,
+}
+INTERNAL_CARD_TEMPLATE_LABELS = {
+    "front_back": "Imported Front / Back",
 }
 
 
 def _normalize_card_template(card_template: str) -> str:
-    if card_template in constants.CARD_TEMPLATES:
+    if card_template in CARD_TEMPLATE_MODEL_OFFSETS:
         return card_template
     return constants.DEFAULT_CARD_TEMPLATE
 
@@ -362,6 +366,19 @@ def _get_template(card_template: str) -> Dict[str, str]:
             </div>
             ''',
         },
+        "front_back": {
+            "name": "Imported Front / Back",
+            "qfmt": '''
+                <div class="imported-front">{{ImportedFront}}</div>
+                {{#Audio_Example}}<div class="imported-audio">{{Audio_Example}}</div>{{/Audio_Example}}
+            ''',
+            "afmt": '''
+                {{FrontSide}}
+                <hr>
+                <div class="imported-back">{{ImportedBack}}</div>
+                {{#Audio_Phrase}}<div class="imported-audio">{{Audio_Phrase}}</div>{{/Audio_Phrase}}
+            ''',
+        },
     }
     return templates[_normalize_card_template(card_template)]
 
@@ -468,11 +485,21 @@ def generate_anki_package(
     .nightMode .definition { color: #cbd5e1; }
     .nightMode .meta { background: #263241; color: #cbd5e1; border-color: #3f4f63; }
     .nightMode .hint { background: #12312f; color: #99f6e4; border-color: #1f5f58; }
+    .imported-front, .imported-back { font-size: 24px; line-height: 1.65; text-align: left; color: #243041; }
+    .imported-front b, .imported-front strong, .imported-back b, .imported-back strong { color: #0f766e; font-weight: 800; }
+    .imported-audio { margin-top: 16px; text-align: left; }
+    .nightMode .imported-front, .nightMode .imported-back { color: #e5e7eb; }
+    .nightMode .imported-front b, .nightMode .imported-front strong,
+    .nightMode .imported-back b, .nightMode .imported-back strong { color: #99f6e4; }
     """
 
     DECK_ID = zlib.adler32(deck_name.encode('utf-8'))
     model_id = constants.ANKI_MODEL_ID_BASE + CARD_TEMPLATE_MODEL_OFFSETS[card_template]
-    model_label = constants.CARD_TEMPLATES[card_template]["label"]
+    model_label = (
+        constants.CARD_TEMPLATES[card_template]["label"]
+        if card_template in constants.CARD_TEMPLATES
+        else INTERNAL_CARD_TEMPLATE_LABELS[card_template]
+    )
 
     model_type = 0
     if card_template == "definition_front":
@@ -486,6 +513,8 @@ def generate_anki_package(
     ]
     if card_template == "definition_front":
         field_defs.extend([{'name': 'ExampleCloze'}, {'name': 'ExampleOne'}])
+    elif card_template == "front_back":
+        field_defs.extend([{'name': 'ImportedFront'}, {'name': 'ImportedBack'}])
     field_defs.extend([{'name': 'Audio_Phrase'}, {'name': 'Audio_Example'}])
 
     model = genanki.Model(
@@ -511,6 +540,8 @@ def generate_anki_package(
             example = safe_str_clean(card.get('e', ''))
             example_translation = safe_str_clean(card.get('ec', ''))
             etymology = safe_str_clean(card.get('r', ''))
+            imported_front = safe_str_clean(card.get('front', ''))
+            imported_back = safe_str_clean(card.get('back', ''))
             note_id = card.get('id')
             part_of_speech, chinese_meaning, english_definition = _split_structured_meaning(meaning)
             if not chinese_meaning and card_template != "definition_front":
@@ -524,6 +555,8 @@ def generate_anki_package(
             example_one = example_texts[0] if example_texts else ""
             if card_template == "definition_front" and not example_one:
                 raise RuntimeError(f"卡片结构不完整：{phrase} 缺少英文例句。")
+            if card_template == "front_back" and (not imported_front or not imported_back):
+                raise RuntimeError(f"卡片结构不完整：{phrase or f'第 {idx + 1} 行'} 缺少正面或背面。")
             example_back = "<br><br>".join(html.escape(item) for item in example_texts)
             hint = _first_letter_hint(phrase)
             example_front = _highlight_target_in_example(example, phrase)
@@ -545,6 +578,8 @@ def generate_anki_package(
                 'example_front': example_front,
                 'example_cloze': example_cloze,
                 'example_one': example_back,
+                'imported_front': imported_front,
+                'imported_back': imported_back,
                 'note_id': note_id,
                 'audio_phrase_field': audio_phrase_field,
                 'audio_example_field': audio_example_field,
@@ -569,6 +604,12 @@ def generate_anki_package(
                 prepared_card['phrase_audio_filename'] = phrase_filename
 
                 tts_example_source = example
+                tts_example_source = re.sub(
+                    r"([.!?])\s*<br\s*/?>",
+                    r"\1 ",
+                    tts_example_source,
+                    flags=re.IGNORECASE,
+                )
                 tts_example = re.sub(r'<br\s*/?>', '. ', tts_example_source, flags=re.IGNORECASE)
                 tts_example = re.sub(r'<[^>]+>', '', tts_example)
                 tts_example = re.sub(r'\s+', ' ', tts_example).strip()
@@ -647,6 +688,11 @@ def generate_anki_package(
                 fields.extend([
                     prepared_card['example_cloze'],
                     prepared_card['example_one'],
+                ])
+            elif card_template == "front_back":
+                fields.extend([
+                    prepared_card['imported_front'],
+                    prepared_card['imported_back'],
                 ])
             fields.extend([
                 prepared_card['audio_phrase_field'],

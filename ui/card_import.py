@@ -14,9 +14,12 @@ import constants
 from anki_package import cleanup_old_apkg_files, generate_anki_package
 from card_file_import import (
     DISPLAY_COLUMNS,
+    FRONT_BACK_DISPLAY_COLUMNS,
     CardFileParseError,
     cards_to_display_rows,
     display_rows_to_cards,
+    display_rows_to_front_back_cards,
+    front_back_cards_to_display_rows,
     parse_card_file,
     validate_imported_cards,
 )
@@ -57,23 +60,12 @@ def _clear_import_state() -> None:
         "import_file_cards",
         "import_file_format",
         "import_file_warnings",
+        "import_card_template",
         "import_source_name",
         "import_current_cards",
     ):
         st.session_state.pop(key, None)
     st.session_state["import_uploader_nonce"] = int(st.session_state.get("import_uploader_nonce", 0)) + 1
-
-
-def _select_card_template() -> str:
-    label_to_key = {template["label"]: key for key, template in constants.CARD_TEMPLATES.items()}
-    selected_label = st.radio(
-        "卡片模板",
-        options=list(label_to_key.keys()),
-        key="sel_card_template_import",
-    )
-    selected_key = label_to_key[selected_label]
-    st.caption(constants.CARD_TEMPLATES[selected_key]["description"])
-    return selected_key
 
 
 def _safe_deck_stem(file_name: str) -> str:
@@ -101,10 +93,11 @@ def _build_signature(
 
 
 def _render_format_templates() -> None:
-    with st.expander("文件格式与模板"):
+    with st.expander("文件格式"):
         st.caption(
             "推荐字段：word、phonetic、meaning，或 part_of_speech + chinese_meaning + "
-            "english_definition，以及 example、example_translation、etymology。"
+            "english_definition，以及 example、example_translation、etymology。也支持富文本 Front/Back 两列表："
+            "Back 首行为“单词 · 词性”，下一行为英文定义；Front 可包含一个或多个例句。"
         )
         csv_col, txt_col = st.columns(2)
         with csv_col:
@@ -142,6 +135,7 @@ def _load_uploaded_file(uploaded_file) -> None:
     st.session_state["import_current_cards"] = result.cards
     st.session_state["import_file_format"] = result.format_name
     st.session_state["import_file_warnings"] = result.warnings
+    st.session_state["import_card_template"] = result.card_template
     st.session_state["import_source_name"] = uploaded_file.name
 
 
@@ -189,7 +183,13 @@ def render_card_import_tab() -> None:
     for warning in st.session_state.get("import_file_warnings") or []:
         st.warning(warning)
 
-    card_template = _select_card_template()
+    card_template = st.session_state.get("import_card_template", "word_front")
+    card_type_labels = {
+        "front_back": "普通 Front/Back",
+        "definition_front": "Anki Cloze",
+        "word_front": "字段词卡",
+    }
+    st.caption(f"卡片类型：{card_type_labels.get(card_template, '字段词卡')}（已根据文件自动识别）")
 
     deck_default = f"{_safe_deck_stem(source_name)}_{get_beijing_time_str()}"
     deck_name = st.text_input(
@@ -229,8 +229,26 @@ def render_card_import_tab() -> None:
     if editor_key not in st.session_state:
         editor_base_cards = st.session_state.get("import_current_cards") or source_cards
         st.session_state["import_file_cards"] = editor_base_cards
-    editor_rows = cards_to_display_rows(editor_base_cards)
-    editor_df = pd.DataFrame(editor_rows, columns=list(DISPLAY_COLUMNS.values()))
+    is_front_back = card_template == "front_back"
+    if is_front_back:
+        editor_rows = front_back_cards_to_display_rows(editor_base_cards)
+        editor_columns = list(FRONT_BACK_DISPLAY_COLUMNS.values())
+        column_config = {
+            "正面": st.column_config.TextColumn("正面", required=True, width="large"),
+            "背面": st.column_config.TextColumn("背面", required=True, width="large"),
+        }
+    else:
+        editor_rows = cards_to_display_rows(editor_base_cards)
+        editor_columns = list(DISPLAY_COLUMNS.values())
+        column_config = {
+            "单词/短语": st.column_config.TextColumn("单词/短语", required=True, width="medium"),
+            "音标": st.column_config.TextColumn("音标", width="medium"),
+            "释义": st.column_config.TextColumn("释义", required=True, width="large"),
+            "英文例句": st.column_config.TextColumn("英文例句", width="large"),
+            "例句翻译": st.column_config.TextColumn("例句翻译", width="large"),
+            "词源": st.column_config.TextColumn("词源", width="large"),
+        }
+    editor_df = pd.DataFrame(editor_rows, columns=editor_columns)
     editor_height = min(720, max(260, 36 * (len(editor_df) + 2)))
     edited_df = st.data_editor(
         editor_df,
@@ -239,16 +257,12 @@ def render_card_import_tab() -> None:
         hide_index=False,
         use_container_width=True,
         height=editor_height,
-        column_config={
-            "单词/短语": st.column_config.TextColumn("单词/短语", required=True, width="medium"),
-            "音标": st.column_config.TextColumn("音标", width="medium"),
-            "释义": st.column_config.TextColumn("释义", required=True, width="large"),
-            "英文例句": st.column_config.TextColumn("英文例句", width="large"),
-            "例句翻译": st.column_config.TextColumn("例句翻译", width="large"),
-            "词源": st.column_config.TextColumn("词源", width="large"),
-        },
+        column_config=column_config,
     )
-    cards = display_rows_to_cards(edited_df.to_dict(orient="records"))
+    if is_front_back:
+        cards = display_rows_to_front_back_cards(edited_df.to_dict(orient="records"))
+    else:
+        cards = display_rows_to_cards(edited_df.to_dict(orient="records"))
     st.session_state["import_current_cards"] = cards
 
     require_examples = card_template in {"example_front", "definition_front"} or selected_audio_mode == "word_and_example"
