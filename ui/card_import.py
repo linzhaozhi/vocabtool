@@ -280,7 +280,15 @@ def render_card_import_tab() -> None:
 
     require_examples = card_template in {"example_front", "definition_front"} or selected_audio_mode == "word_and_example"
     issues = validate_imported_cards(cards, require_examples=require_examples)
-    st.caption(f"当前将打包 {len(cards)} 张卡片。")
+    exceeds_card_limit = len(cards) > constants.MAX_CARDS_PER_RUN
+    st.caption(
+        f"当前将打包 {len(cards)} 张卡片；单次最多 {constants.MAX_CARDS_PER_RUN} 张。"
+    )
+    if exceeds_card_limit:
+        st.error(
+            f"当前文件有 {len(cards)} 张卡片，超过单次上限 "
+            f"{constants.MAX_CARDS_PER_RUN} 张。请拆分文件后再生成；本次不会截断或遗漏卡片。"
+        )
     if issues:
         st.error(f"发现 {len(issues)} 个结构问题，修正后才能打包。")
         with st.expander("查看需要修正的行", expanded=True):
@@ -306,7 +314,7 @@ def render_card_import_tab() -> None:
         f"生成 {len(cards)} 张卡片的 APKG",
         type="primary",
         key="btn_package_imported_cards",
-        disabled=bool(issues),
+        disabled=bool(issues) or exceeds_card_limit,
         use_container_width=True,
     )
 
