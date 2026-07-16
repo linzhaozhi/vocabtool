@@ -32,12 +32,21 @@ def clear_all_state() -> None:
         'import_anki_pkg_path', 'import_anki_pkg_name', 'import_cards_cache',
         'import_file_signature', 'import_file_cards', 'import_file_format',
         'import_file_warnings', 'import_card_template', 'import_current_cards', 'import_package_signature',
-        'import_source_name', 'import_uploader_nonce'
+        'import_source_name', 'import_uploader_nonce',
+        'anki_pkg_path_recovery_token', 'import_anki_pkg_path_recovery_token',
+        'active_anki_download_path_key', 'active_anki_download_name_key',
+        'active_anki_download_section'
     ]
 
     for key in keys_to_drop:
         if key in st.session_state:
             del st.session_state[key]
+
+    try:
+        if constants.APKG_RECOVERY_QUERY_PARAM in st.query_params:
+            del st.query_params[constants.APKG_RECOVERY_QUERY_PARAM]
+    except Exception as exc:
+        logger.debug("Could not clear package recovery query parameter: %s", exc)
 
     st.session_state['uploader_id'] = str(random.randint(constants.MIN_RANDOM_ID, constants.MAX_RANDOM_ID))
     if 'paste_key' in st.session_state:

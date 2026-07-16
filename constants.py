@@ -19,6 +19,8 @@ SIMPLE_LOOKUP_CACHE_VERSION = "v7"
 # Temp .apkg files: subdir under system temp, cleanup files older than this
 APKG_TEMP_SUBDIR = "vocabflow_apkg"
 APKG_CLEANUP_MAX_AGE_SECONDS = 24 * 3600  # 24 hours
+APKG_RECOVERY_QUERY_PARAM = "vf_pkg"
+APKG_RECOVERY_TOKEN_MAX_LENGTH = 64
 
 MIN_WORD_LENGTH = 2
 MAX_WORD_LENGTH = 25

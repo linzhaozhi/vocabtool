@@ -440,7 +440,7 @@ def cleanup_old_apkg_files(max_age_seconds: int = constants.APKG_CLEANUP_MAX_AGE
     now = time.time()
     try:
         for name in os.listdir(APKG_TEMP_DIR):
-            if not name.endswith(".apkg"):
+            if not name.endswith((".apkg", ".json", ".tmp")):
                 continue
             path = os.path.join(APKG_TEMP_DIR, name)
             if os.path.isfile(path) and (now - os.path.getmtime(path)) > max_age_seconds:

@@ -15,7 +15,7 @@ if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
 import resources
-from ui.helpers import initialize_session_state
+from ui.helpers import initialize_session_state, render_active_anki_download
 from ui.styles import (
     apply_global_styles,
     configure_page,
@@ -49,6 +49,8 @@ section = st.radio(
     label_visibility="collapsed",
     key="main_section",
 )
+
+render_active_anki_download()
 
 if section == "1️⃣ 查单词":
     from ui.lookup import render_lookup_tab

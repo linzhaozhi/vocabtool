@@ -558,6 +558,13 @@ def render_ios_resume_reloader() -> None:
                 || (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches);
             }};
             const reloadAfterMs = () => isStandaloneMode() ? standaloneReloadAfterMs : browserReloadAfterMs;
+            const hasActivePackageToken = () => {{
+              try {{
+                return new URL(window.location.href).searchParams.has({json.dumps(constants.APKG_RECOVERY_QUERY_PARAM)});
+              }} catch (error) {{
+                return false;
+              }}
+            }};
             const markHidden = () => {{
               hiddenAt = now();
               sessionStorage.setItem(hiddenKey, String(hiddenAt));
@@ -583,7 +590,11 @@ def render_ios_resume_reloader() -> None:
             }};
             const checkAfterResume = () => {{
               window.setTimeout(() => {{
-                if (document.visibilityState === "visible" && hasBeenHiddenLongEnough()) {{
+                if (
+                  document.visibilityState === "visible"
+                  && hasBeenHiddenLongEnough()
+                  && !hasActivePackageToken()
+                ) {{
                   reloadWithCacheBust();
                 }}
               }}, 1000);

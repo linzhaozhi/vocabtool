@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import logging
+import json
 import os
 import random
 import re
+import secrets
+import shutil
+import tempfile
+import time
 
 import streamlit as st
 
@@ -28,6 +33,147 @@ def initialize_session_state() -> None:
             st.session_state[key] = default_value
     if "anki_cards_cache" not in st.session_state:
         st.session_state["anki_cards_cache"] = None
+    restore_anki_pkg_from_query()
+
+
+def _apkg_recovery_dir() -> str:
+    return os.path.join(tempfile.gettempdir(), constants.APKG_TEMP_SUBDIR)
+
+
+def _valid_recovery_token(value: object) -> str:
+    token = str(value or "").strip()
+    if not re.fullmatch(
+        rf"[A-Za-z0-9_-]{{12,{constants.APKG_RECOVERY_TOKEN_MAX_LENGTH}}}",
+        token,
+    ):
+        return ""
+    return token
+
+
+def _recovery_metadata_path(token: str) -> str:
+    return os.path.join(_apkg_recovery_dir(), f"download_{token}.json")
+
+
+def reserve_anki_download(
+    *,
+    path_key: str = "anki_pkg_path",
+    name_key: str = "anki_pkg_name",
+    section: str = "3️⃣ 制作卡片",
+) -> str:
+    """Reserve a URL-backed token before a long package generation starts."""
+    token = secrets.token_urlsafe(18)
+    st.session_state[f"{path_key}_recovery_token"] = token
+    st.session_state["active_anki_download_path_key"] = path_key
+    st.session_state["active_anki_download_name_key"] = name_key
+    st.session_state["active_anki_download_section"] = section
+    try:
+        st.query_params[constants.APKG_RECOVERY_QUERY_PARAM] = token
+    except Exception as exc:
+        logger.debug("Could not set APKG recovery query parameter: %s", exc)
+    return token
+
+
+def cancel_anki_download_reservation(token: str, *, path_key: str) -> None:
+    """Clear a URL token when generation fails before a package is registered."""
+    token = _valid_recovery_token(token)
+    if not token:
+        return
+    if st.session_state.get(f"{path_key}_recovery_token") == token:
+        st.session_state.pop(f"{path_key}_recovery_token", None)
+    try:
+        if st.query_params.get(constants.APKG_RECOVERY_QUERY_PARAM, "") == token:
+            del st.query_params[constants.APKG_RECOVERY_QUERY_PARAM]
+    except Exception as exc:
+        logger.debug("Could not cancel APKG recovery query parameter: %s", exc)
+    current_path = str(st.session_state.get(path_key, ""))
+    if not current_path or not os.path.isfile(current_path):
+        if st.session_state.get("active_anki_download_path_key") == path_key:
+            st.session_state.pop("active_anki_download_path_key", None)
+            st.session_state.pop("active_anki_download_name_key", None)
+            st.session_state.pop("active_anki_download_section", None)
+
+
+def _register_anki_download(
+    file_path: str,
+    file_name: str,
+    *,
+    path_key: str,
+    name_key: str,
+    section: str,
+    recovery_token: str,
+) -> tuple[str, str]:
+    token = _valid_recovery_token(recovery_token) or secrets.token_urlsafe(18)
+    recovery_dir = _apkg_recovery_dir()
+    os.makedirs(recovery_dir, exist_ok=True)
+    stable_path = os.path.join(recovery_dir, f"download_{token}.apkg")
+    if os.path.abspath(file_path) != os.path.abspath(stable_path):
+        shutil.copy2(file_path, stable_path)
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
+
+    metadata = {
+        "token": token,
+        "file": os.path.basename(stable_path),
+        "name": file_name,
+        "path_key": path_key,
+        "name_key": name_key,
+        "section": section,
+        "created_at": time.time(),
+    }
+    metadata_path = _recovery_metadata_path(token)
+    temp_metadata_path = f"{metadata_path}.tmp"
+    with open(temp_metadata_path, "w", encoding="utf-8") as metadata_file:
+        json.dump(metadata, metadata_file, ensure_ascii=False)
+    os.replace(temp_metadata_path, metadata_path)
+    return token, stable_path
+
+
+def restore_anki_pkg_from_query() -> bool:
+    """Restore a generated package after a browser reload or Streamlit reconnect."""
+    try:
+        token = _valid_recovery_token(
+            st.query_params.get(constants.APKG_RECOVERY_QUERY_PARAM, "")
+        )
+    except Exception:
+        return False
+    if not token:
+        return False
+
+    metadata_path = _recovery_metadata_path(token)
+    try:
+        with open(metadata_path, "r", encoding="utf-8") as metadata_file:
+            metadata = json.load(metadata_file)
+    except (OSError, ValueError, TypeError):
+        return False
+
+    created_at = float(metadata.get("created_at", 0) or 0)
+    if not created_at or time.time() - created_at > constants.APKG_CLEANUP_MAX_AGE_SECONDS:
+        return False
+    file_basename = str(metadata.get("file", ""))
+    if file_basename != f"download_{token}.apkg":
+        return False
+    if str(metadata.get("token", "")) != token:
+        return False
+    file_path = os.path.join(_apkg_recovery_dir(), file_basename)
+    if not os.path.isfile(file_path) or os.path.getsize(file_path) <= 0:
+        return False
+
+    path_key = str(metadata.get("path_key", "anki_pkg_path"))
+    name_key = str(metadata.get("name_key", "anki_pkg_name"))
+    if path_key not in {"anki_pkg_path", "import_anki_pkg_path"}:
+        return False
+    if name_key not in {"anki_pkg_name", "import_anki_pkg_name"}:
+        return False
+
+    st.session_state[path_key] = file_path
+    st.session_state[name_key] = str(metadata.get("name", "词卡.apkg"))
+    st.session_state[f"{path_key}_recovery_token"] = token
+    st.session_state["active_anki_download_path_key"] = path_key
+    st.session_state["active_anki_download_name_key"] = name_key
+    st.session_state["active_anki_download_section"] = str(metadata.get("section", ""))
+    return True
 
 
 def set_anki_pkg(
@@ -36,6 +182,8 @@ def set_anki_pkg(
     *,
     path_key: str = "anki_pkg_path",
     name_key: str = "anki_pkg_name",
+    recovery_token: str = "",
+    section: str = "3️⃣ 制作卡片",
 ) -> None:
     """Store Anki package path in session state and clean previous file."""
     if not file_path or not os.path.exists(file_path):
@@ -49,8 +197,28 @@ def set_anki_pkg(
         except OSError as exc:
             logger.warning("Could not remove previous anki package: %s", exc)
 
-    st.session_state[path_key] = file_path
-    st.session_state[name_key] = f"{deck_name}.apkg"
+    file_name = f"{deck_name}.apkg"
+    token, stable_path = _register_anki_download(
+        file_path,
+        file_name,
+        path_key=path_key,
+        name_key=name_key,
+        section=section,
+        recovery_token=(
+            recovery_token
+            or st.session_state.get(f"{path_key}_recovery_token", "")
+        ),
+    )
+    st.session_state[path_key] = stable_path
+    st.session_state[name_key] = file_name
+    st.session_state[f"{path_key}_recovery_token"] = token
+    st.session_state["active_anki_download_path_key"] = path_key
+    st.session_state["active_anki_download_name_key"] = name_key
+    st.session_state["active_anki_download_section"] = section
+    try:
+        st.query_params[constants.APKG_RECOVERY_QUERY_PARAM] = token
+    except Exception as exc:
+        logger.debug("Could not persist APKG recovery query parameter: %s", exc)
 
 
 def render_anki_download_button(
@@ -60,6 +228,7 @@ def render_anki_download_button(
     use_container_width: bool = False,
     path_key: str = "anki_pkg_path",
     name_key: str = "anki_pkg_name",
+    key: str | None = None,
 ) -> None:
     """Safely render Anki package download button if file exists."""
     file_path = st.session_state.get(path_key)
@@ -81,10 +250,35 @@ def render_anki_download_button(
                 mime="application/octet-stream",
                 type=button_type,
                 use_container_width=use_container_width,
+                on_click="ignore",
+                key=key,
             )
     except OSError as exc:
         logger.error("Failed to open package for download: %s", exc)
         st.error("❌ 下载文件读取失败，请重新生成。")
+
+
+def render_active_anki_download() -> None:
+    """Keep the latest generated APKG downloadable above every app section."""
+    path_key = str(st.session_state.get("active_anki_download_path_key", ""))
+    name_key = str(st.session_state.get("active_anki_download_name_key", ""))
+    if path_key not in {"anki_pkg_path", "import_anki_pkg_path"}:
+        return
+    if name_key not in {"anki_pkg_name", "import_anki_pkg_name"}:
+        return
+    file_path = st.session_state.get(path_key)
+    if not file_path or not os.path.isfile(file_path):
+        return
+
+    st.success("APKG 已生成，可直接下载。")
+    render_anki_download_button(
+        f"下载 {st.session_state.get(name_key, '词卡.apkg')}",
+        button_type="primary",
+        use_container_width=True,
+        path_key=path_key,
+        name_key=name_key,
+        key="active_anki_download_button",
+    )
 
 
 def reset_anki_state(
@@ -103,6 +297,16 @@ def reset_anki_state(
             logger.warning("Could not remove temp anki package: %s", exc)
     st.session_state[path_key] = ""
     st.session_state[name_key] = ""
+    st.session_state.pop(f"{path_key}_recovery_token", None)
+    if st.session_state.get("active_anki_download_path_key") == path_key:
+        st.session_state.pop("active_anki_download_path_key", None)
+        st.session_state.pop("active_anki_download_name_key", None)
+        st.session_state.pop("active_anki_download_section", None)
+        try:
+            if constants.APKG_RECOVERY_QUERY_PARAM in st.query_params:
+                del st.query_params[constants.APKG_RECOVERY_QUERY_PARAM]
+        except Exception as exc:
+            logger.debug("Could not clear APKG recovery query parameter: %s", exc)
 
 
 def reset_extraction_state() -> None:

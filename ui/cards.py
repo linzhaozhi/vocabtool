@@ -12,9 +12,11 @@ from anki_package import cleanup_old_apkg_files, generate_anki_package
 from anki_parse import parse_anki_data
 from config import get_config
 from ui.helpers import (
+    cancel_anki_download_reservation,
     get_prepared_word_list_text,
     parse_unique_words,
     render_anki_download_button,
+    reserve_anki_download,
     reset_anki_state,
     restore_word_editor_state,
     set_anki_pkg,
@@ -337,6 +339,8 @@ def render_cards_tab() -> None:
                 return
 
             try:
+                recovery_token = ""
+                package_registered = False
                 content_progress_bar.progress(1.0)
                 content_status.text(f"✅ 内容生成完成：共 {len(parsed_data)} 张卡片，正在打包...")
                 voice_status.text("🎙️ 正在准备语音和 Anki 包...")
@@ -348,6 +352,11 @@ def render_cards_tab() -> None:
                     voice_status.text(text)
 
                 audio_report: dict[str, int] = {}
+                recovery_token = reserve_anki_download(
+                    path_key="anki_pkg_path",
+                    name_key="anki_pkg_name",
+                    section="3️⃣ 制作卡片",
+                )
                 file_path = generate_anki_package(
                     parsed_data,
                     final_deck_name,
@@ -360,7 +369,13 @@ def render_cards_tab() -> None:
                 )
 
                 st.session_state["anki_cards_cache"] = parsed_data
-                set_anki_pkg(file_path, final_deck_name)
+                set_anki_pkg(
+                    file_path,
+                    final_deck_name,
+                    recovery_token=recovery_token,
+                    section="3️⃣ 制作卡片",
+                )
+                package_registered = True
 
                 voice_progress_bar.progress(1.0)
                 failed_audio_count = int(audio_report.get("failed", 0))
@@ -376,20 +391,33 @@ def render_cards_tab() -> None:
                 else:
                     voice_status.text("✅ 音频和打包完成")
                 content_status.markdown(f"✅ **处理完成！共生成 {len(parsed_data)} 张卡片**")
+                render_anki_download_button(
+                    f"📥 下载 {st.session_state.get('anki_pkg_name', '词卡.apkg')}",
+                    button_type="primary",
+                    use_container_width=True,
+                    key="download_generated_cards_now",
+                )
                 st.balloons()
                 run_gc()
             except Exception as exc:
+                if recovery_token and not package_registered:
+                    cancel_anki_download_reservation(
+                        recovery_token,
+                        path_key="anki_pkg_path",
+                    )
                 from errors import ErrorHandler
 
                 ErrorHandler.handle(exc, "生成出错")
 
     st.caption("⚠️ 智能生成内容可能存在错误，请人工复核。")
 
-    render_anki_download_button(
-        f"📥 下载 {st.session_state.get('anki_pkg_name', '词卡.apkg')}",
-        button_type="primary",
-        use_container_width=True,
-    )
+    if not start_auto_gen:
+        render_anki_download_button(
+            f"📥 下载 {st.session_state.get('anki_pkg_name', '词卡.apkg')}",
+            button_type="primary",
+            use_container_width=True,
+            key="download_generated_cards_saved",
+        )
 
     if st.session_state.get("anki_cards_cache"):
         cards = st.session_state["anki_cards_cache"]

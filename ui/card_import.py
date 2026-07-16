@@ -24,7 +24,13 @@ from card_file_import import (
     validate_imported_cards,
 )
 from errors import ErrorHandler
-from ui.helpers import render_anki_download_button, reset_anki_state, set_anki_pkg
+from ui.helpers import (
+    cancel_anki_download_reservation,
+    render_anki_download_button,
+    reserve_anki_download,
+    reset_anki_state,
+    set_anki_pkg,
+)
 from utils import get_beijing_time_str, run_gc
 
 
@@ -158,6 +164,8 @@ def render_card_import_tab() -> None:
         if uploaded_file.size > constants.MAX_UPLOAD_BYTES:
             st.error(f"文件超过 {constants.MAX_UPLOAD_MB} MB，无法处理。")
             return
+        recovery_token = ""
+        package_registered = False
         try:
             _load_uploaded_file(uploaded_file)
         except CardFileParseError as exc:
@@ -311,8 +319,15 @@ def render_card_import_tab() -> None:
             progress.progress(min(max(float(ratio), 0.0), 1.0))
             status.text(message)
 
+        recovery_token = ""
+        package_registered = False
         try:
             audio_report: dict[str, int] = {}
+            recovery_token = reserve_anki_download(
+                path_key=IMPORT_PATH_KEY,
+                name_key=IMPORT_NAME_KEY,
+                section="4️⃣ 导入卡片",
+            )
             file_path = generate_anki_package(
                 cards,
                 deck_name,
@@ -328,7 +343,10 @@ def render_card_import_tab() -> None:
                 deck_name,
                 path_key=IMPORT_PATH_KEY,
                 name_key=IMPORT_NAME_KEY,
+                recovery_token=recovery_token,
+                section="4️⃣ 导入卡片",
             )
+            package_registered = True
             st.session_state[IMPORT_CACHE_KEY] = cards
             st.session_state["import_package_signature"] = build_signature
             progress.progress(1.0)
@@ -345,14 +363,29 @@ def render_card_import_tab() -> None:
             else:
                 status.text(f"完成：{len(cards)} 行已生成 {len(cards)} 张 Anki 卡片。")
             st.success(f"APKG 已生成，共 {len(cards)} 张卡片。")
+            render_anki_download_button(
+                f"下载 {st.session_state.get(IMPORT_NAME_KEY, '导入卡片.apkg')}",
+                button_type="primary",
+                use_container_width=True,
+                path_key=IMPORT_PATH_KEY,
+                name_key=IMPORT_NAME_KEY,
+                key="download_imported_cards_now",
+            )
             run_gc()
         except Exception as exc:
+            if recovery_token and not package_registered:
+                cancel_anki_download_reservation(
+                    recovery_token,
+                    path_key=IMPORT_PATH_KEY,
+                )
             ErrorHandler.handle(exc, "生成 APKG 失败")
 
-    render_anki_download_button(
-        f"下载 {st.session_state.get(IMPORT_NAME_KEY, '导入卡片.apkg')}",
-        button_type="primary",
-        use_container_width=True,
-        path_key=IMPORT_PATH_KEY,
-        name_key=IMPORT_NAME_KEY,
-    )
+    if not start_packaging:
+        render_anki_download_button(
+            f"下载 {st.session_state.get(IMPORT_NAME_KEY, '导入卡片.apkg')}",
+            button_type="primary",
+            use_container_width=True,
+            path_key=IMPORT_PATH_KEY,
+            name_key=IMPORT_NAME_KEY,
+            key="download_imported_cards_saved",
+        )
