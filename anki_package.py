@@ -243,6 +243,28 @@ def _example_texts(example: str) -> list[str]:
     return examples
 
 
+def _completed_audio_card_count(prepared_cards: list[dict]) -> int:
+    """Count cards whose requested word and example audio files all exist."""
+    completed = 0
+    for prepared_card in prepared_cards:
+        required_paths = []
+        phrase_audio_path = str(prepared_card.get('phrase_audio_path', ''))
+        if phrase_audio_path:
+            required_paths.append(phrase_audio_path)
+        required_paths.extend(
+            str(audio_item.get('path', ''))
+            for audio_item in prepared_card.get('example_audio_items', [])
+            if audio_item.get('path')
+        )
+        if all(
+            os.path.exists(path)
+            and os.path.getsize(path) > constants.MIN_AUDIO_FILE_SIZE
+            for path in required_paths
+        ):
+            completed += 1
+    return completed
+
+
 def _imported_front_example_fragments(imported_front: str, example_texts: list[str]) -> list[str]:
     """Split imported Front HTML into one rich fragment per recognized example."""
     normalized = re.sub(r"<(?:div|p)\b[^>]*>", "", imported_front, flags=re.IGNORECASE)
@@ -686,12 +708,21 @@ def generate_anki_package(
         if audio_tasks:
             if audio_report is not None:
                 audio_report["requested"] = len(audio_tasks)
-            if progress_callback:
-                progress_callback(0.0, f"🎙️ 正在准备 {len(audio_tasks)} 个音频任务...")
 
-            def internal_progress(ratio: float, msg: str) -> None:
+            def completed_card_ratio() -> float:
+                if not prepared_cards:
+                    return 1.0
+                return _completed_audio_card_count(prepared_cards) / len(prepared_cards)
+
+            if progress_callback:
+                progress_callback(
+                    completed_card_ratio(),
+                    f"🎙️ 正在准备 {len(audio_tasks)} 个音频任务...",
+                )
+
+            def internal_progress(_ratio: float, msg: str) -> None:
                 if progress_callback:
-                    progress_callback(ratio, f"🎙️ {msg}")
+                    progress_callback(completed_card_ratio(), f"🎙️ {msg}")
 
             run_async_batch(audio_tasks, concurrency=constants.TTS_CONCURRENCY, progress_callback=internal_progress)
 
@@ -746,13 +777,13 @@ def generate_anki_package(
                 logger.warning("TTS generated %s/%s audio files; continuing without %s files.", successful_audio_count, len(audio_tasks), missing_audio_count)
                 if progress_callback:
                     progress_callback(
-                        1.0,
+                        completed_card_ratio(),
                         f"🎙️ 音频恢复结束：成功 {successful_audio_count}/{len(audio_tasks)}，"
                         f"仍有 {missing_audio_count} 个失败；正在继续打包。",
                     )
             elif progress_callback:
                 progress_callback(
-                    1.0,
+                    completed_card_ratio(),
                     f"🎙️ 全部 {successful_audio_count} 个音频已生成，正在打包。",
                 )
         elif progress_callback:

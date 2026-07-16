@@ -2,6 +2,7 @@
 
 import ai
 from ui import cards as cards_ui
+from ui.progress import CardProgressDisplay
 
 
 def _prompt_input_items(user_prompt: str) -> list[str]:
@@ -81,8 +82,12 @@ def test_definition_front_page_queue_uses_batches_of_five(monkeypatch):
         definition_language="中文",
         translate_examples=False,
         card_template="definition_front",
-        content_status=Status(),
-        content_progress_bar=Progress(),
+        content_progress=CardProgressDisplay(
+            Progress(),
+            Status(),
+            len(requested_words),
+            label="卡片内容",
+        ),
     )
 
     assert batches == [requested_words[:5], requested_words[5:10], requested_words[10:]]

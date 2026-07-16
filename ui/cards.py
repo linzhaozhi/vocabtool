@@ -1,7 +1,6 @@
 """Card-generation tab rendering."""
 
 import re
-from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -22,6 +21,7 @@ from ui.helpers import (
     set_anki_pkg,
     sync_card_editor_to_extract,
 )
+from ui.progress import CardProgressDisplay
 from utils import get_beijing_time_str, render_copy_button, run_gc
 
 
@@ -140,14 +140,12 @@ def _generate_complete_cards_with_queue(
     definition_language: str,
     translate_examples: bool,
     card_template: str,
-    content_status: Any,
-    content_progress_bar: Any,
+    content_progress: CardProgressDisplay,
 ) -> tuple[list[dict], list[str]]:
     """Generate complete cards by re-queuing failed words at the tail."""
     pending_words = list(requested_words)
     parsed_cards: list[dict] = []
     attempts_by_key: dict[str, int] = {}
-    total_words = len(requested_words)
     max_attempts_per_word = max(constants.MAX_RETRIES * 4, 12)
     batch_size = _card_generation_batch_size(card_template)
 
@@ -160,25 +158,14 @@ def _generate_complete_cards_with_queue(
             attempts_by_key[key] = attempts_by_key.get(key, 0) + 1
 
         completed_count = len(_complete_cards_by_key(parsed_cards, requested_words, card_template))
-        content_status.text(
-            f"🧠 正在生成卡片：已完成 {completed_count}/{total_words}，"
-            f"本组处理 {len(batch)}/{batch_size} 个，队列剩余 {len(pending_words)} 个"
-        )
-
-        def update_queue_progress(current: int, total: int) -> None:
-            ratio = (completed_count + current) / total_words if total_words else 0
-            content_progress_bar.progress(min(ratio, 0.98))
-            content_status.text(
-                f"🧠 正在生成卡片：批次 {current}/{total}，"
-                f"已完成 {completed_count}/{total_words}，队列剩余 {len(pending_words)} 个"
-            )
+        content_progress.update_cards(completed_count)
 
         result = process_ai_in_batches(
             batch,
             example_count=int(example_count),
             definition_language=definition_language,
             translate_examples=bool(translate_examples),
-            progress_callback=update_queue_progress,
+            progress_callback=None,
             card_template=card_template,
         )
         if result:
@@ -187,6 +174,9 @@ def _generate_complete_cards_with_queue(
                 parse_anki_data(result),
                 requested_words,
                 card_template,
+            )
+            content_progress.update_cards(
+                len(_complete_cards_by_key(parsed_cards, requested_words, card_template))
             )
 
         incomplete_words = _incomplete_card_words(parsed_cards, batch, card_template)
@@ -317,39 +307,43 @@ def render_cards_tab() -> None:
             content_progress_bar = st.progress(0)
             voice_status = st.empty()
             voice_progress_bar = st.progress(0)
+            total_cards = len(words_for_generation)
+            content_progress = CardProgressDisplay(
+                content_progress_bar,
+                content_status,
+                total_cards,
+                label="卡片内容",
+            )
+            package_progress = CardProgressDisplay(
+                voice_progress_bar,
+                voice_status,
+                total_cards,
+                label="语音打包",
+            )
 
-            batch_size = _card_generation_batch_size(card_template)
-            content_status.text(f"🧠 正在按 {batch_size} 个一组生成卡片...")
-            voice_status.text("🎙️ 语音进度：等待内容生成完成")
             parsed_data, incomplete_words = _generate_complete_cards_with_queue(
                 words_for_generation,
                 example_count=int(selected_example_count),
                 definition_language=definition_language,
                 translate_examples=bool(translate_examples),
                 card_template=card_template,
-                content_status=content_status,
-                content_progress_bar=content_progress_bar,
+                content_progress=content_progress,
             )
 
             if incomplete_words:
                 preview = "、".join(incomplete_words[:20])
                 more = f" 等 {len(incomplete_words)} 个词" if len(incomplete_words) > 20 else ""
-                content_status.text("⚠️ 仍有卡片暂未生成完整")
                 st.warning(f"仍有 {len(incomplete_words)} 个词没有生成完整卡片：{preview}{more}。本次不会打包不完整卡片。")
                 return
 
             try:
                 recovery_token = ""
                 package_registered = False
-                content_progress_bar.progress(1.0)
-                content_status.text(f"✅ 内容生成完成：共 {len(parsed_data)} 张卡片，正在打包...")
-                voice_status.text("🎙️ 正在准备语音和 Anki 包...")
-                voice_progress_bar.progress(0.0)
+                content_progress.complete()
                 final_deck_name = deck_name.strip() or default_deck_name
 
                 def update_pkg_progress(ratio: float, text: str) -> None:
-                    voice_progress_bar.progress(ratio)
-                    voice_status.text(text)
+                    package_progress.update_ratio(ratio, text)
 
                 audio_report: dict[str, int] = {}
                 recovery_token = reserve_anki_download(
@@ -377,20 +371,14 @@ def render_cards_tab() -> None:
                 )
                 package_registered = True
 
-                voice_progress_bar.progress(1.0)
+                package_progress.complete()
                 failed_audio_count = int(audio_report.get("failed", 0))
                 if failed_audio_count:
-                    voice_status.text(
-                        f"⚠️ 打包完成：音频成功 {audio_report.get('succeeded', 0)}/"
-                        f"{audio_report.get('requested', 0)}"
-                    )
                     st.warning(
                         f"有 {failed_audio_count} 个音频经过 {constants.TTS_RETRY_ATTEMPTS} 轮重试后仍失败，"
                         "卡片文字已完整保留。可再次生成，或稍后重试。"
                     )
-                else:
-                    voice_status.text("✅ 音频和打包完成")
-                content_status.markdown(f"✅ **处理完成！共生成 {len(parsed_data)} 张卡片**")
+                st.success(f"处理完成，共生成 {len(parsed_data)} 张卡片。")
                 render_anki_download_button(
                     f"📥 下载 {st.session_state.get('anki_pkg_name', '词卡.apkg')}",
                     button_type="primary",

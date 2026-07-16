@@ -31,6 +31,7 @@ from ui.helpers import (
     reset_anki_state,
     set_anki_pkg,
 )
+from ui.progress import CardProgressDisplay
 from utils import get_beijing_time_str, run_gc
 
 
@@ -321,11 +322,10 @@ def render_card_import_tab() -> None:
     if start_packaging:
         status = st.empty()
         progress = st.progress(0.0)
-        status.text("正在准备卡片和语音...")
+        card_progress = CardProgressDisplay(progress, status, len(cards))
 
         def update_progress(ratio: float, message: str) -> None:
-            progress.progress(min(max(float(ratio), 0.0), 1.0))
-            status.text(message)
+            card_progress.update_ratio(ratio, message)
 
         recovery_token = ""
         package_registered = False
@@ -357,19 +357,13 @@ def render_card_import_tab() -> None:
             package_registered = True
             st.session_state[IMPORT_CACHE_KEY] = cards
             st.session_state["import_package_signature"] = build_signature
-            progress.progress(1.0)
+            card_progress.complete()
             failed_audio_count = int(audio_report.get("failed", 0))
             if failed_audio_count:
-                status.text(
-                    f"卡片完成：{len(cards)} 张；音频成功 "
-                    f"{audio_report.get('succeeded', 0)}/{audio_report.get('requested', 0)}。"
-                )
                 st.warning(
                     f"有 {failed_audio_count} 个音频经过 {constants.TTS_RETRY_ATTEMPTS} 轮重试后仍失败，"
                     "卡片文字已完整保留。可再次生成，或稍后重试。"
                 )
-            else:
-                status.text(f"完成：{len(cards)} 行已生成 {len(cards)} 张 Anki 卡片。")
             st.success(f"APKG 已生成，共 {len(cards)} 张卡片。")
             render_anki_download_button(
                 f"下载 {st.session_state.get(IMPORT_NAME_KEY, '导入卡片.apkg')}",

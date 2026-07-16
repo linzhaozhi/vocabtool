@@ -7,6 +7,7 @@ import zipfile
 import anki_package
 from anki_package import (
     _build_cloze_example,
+    _completed_audio_card_count,
     _example_texts,
     _render_examples_with_audio,
     generate_anki_package,
@@ -37,6 +38,31 @@ def test_render_examples_places_each_audio_below_its_example():
     assert rendered.index("First <b>example</b>.") < rendered.index("[sound:first.mp3]")
     assert rendered.index("[sound:first.mp3]") < rendered.index("Second <b>example</b>.")
     assert rendered.index("Second <b>example</b>.") < rendered.index("[sound:second.mp3]")
+
+
+def test_audio_progress_counts_only_cards_with_all_requested_audio(tmp_path):
+    complete_word = tmp_path / "complete-word.mp3"
+    complete_example = tmp_path / "complete-example.mp3"
+    partial_word = tmp_path / "partial-word.mp3"
+    for path in (complete_word, complete_example, partial_word):
+        path.write_bytes(b"audio" * 30)
+
+    prepared_cards = [
+        {
+            "phrase_audio_path": str(complete_word),
+            "example_audio_items": [{"path": str(complete_example)}],
+        },
+        {
+            "phrase_audio_path": str(partial_word),
+            "example_audio_items": [{"path": str(tmp_path / "missing-example.mp3")}],
+        },
+        {
+            "phrase_audio_path": "",
+            "example_audio_items": [],
+        },
+    ]
+
+    assert _completed_audio_card_count(prepared_cards) == 2
 
 
 def test_definition_front_package_and_tts_keep_all_examples(monkeypatch, tmp_path):
