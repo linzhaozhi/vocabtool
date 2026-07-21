@@ -233,8 +233,10 @@ def render_card_import_tab() -> None:
     if selected_audio_mode == "word_and_example":
         st.caption(
             "文件中的每条例句会单独生成语音，播放按钮显示在对应例句下方；"
-            "暂时失败的音频会自动移到队尾重试。"
+            "暂时失败的音频会自动移到队尾重试。若页面重连或服务中断，再次生成会复用已完成的音频。"
         )
+    elif enable_tts:
+        st.caption("暂时失败的音频会自动移到队尾重试；再次生成会复用已完成的音频。")
 
     st.markdown("#### 卡片内容")
     st.caption("可直接修改单元格，也可以新增或删除行。打包时每个有效行对应一张卡片。")

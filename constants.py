@@ -49,6 +49,10 @@ TTS_REQUEST_SPACING_SECONDS = 0.4
 TTS_RETRY_BASE_DELAY_SECONDS = 2.0
 TTS_RETRY_MAX_DELAY_SECONDS = 12.0
 TTS_HEARTBEAT_SECONDS = 5.0
+# A save coroutine can occasionally take too long to react to cancellation when
+# its underlying websocket is unhealthy.  Never let its cleanup block the whole
+# card package indefinitely.
+TTS_CANCEL_GRACE_SECONDS = 1.0
 TTS_TEXT_MAX_CHARS = 240
 MIN_AUDIO_FILE_SIZE = 100
 

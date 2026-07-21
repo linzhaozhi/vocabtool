@@ -1,9 +1,11 @@
 # Anki package (.apkg) generation with optional TTS.
 
 import html
+import hashlib
 import logging
 import os
 import random
+import shutil
 import tempfile
 import time
 import zlib
@@ -18,6 +20,10 @@ from utils import safe_str_clean
 
 logger = logging.getLogger(__name__)
 APKG_TEMP_DIR = os.path.join(tempfile.gettempdir(), constants.APKG_TEMP_SUBDIR)
+# Keep completed audio outside an individual package's TemporaryDirectory.  If a
+# browser reconnects or a TTS request is interrupted, the next click can reuse
+# every valid file already made instead of starting the entire deck over.
+TTS_AUDIO_CACHE_DIR = os.path.join(APKG_TEMP_DIR, "tts_cache")
 
 CARD_TEMPLATE_MODEL_OFFSETS = {
     "word_front": 21,
@@ -34,6 +40,34 @@ def _normalize_card_template(card_template: str) -> str:
     if card_template in CARD_TEMPLATE_MODEL_OFFSETS:
         return card_template
     return constants.DEFAULT_CARD_TEMPLATE
+
+
+def _audio_file_is_valid(path: str) -> bool:
+    if not path:
+        return False
+    try:
+        return os.path.isfile(path) and os.path.getsize(path) > constants.MIN_AUDIO_FILE_SIZE
+    except OSError:
+        return False
+
+
+def _cached_tts_audio_path(text: str, voice: str) -> str:
+    """Return a stable audio-cache path for an exact voice/text request."""
+    request_key = f"v1\0{voice}\0{text}".encode("utf-8")
+    digest = hashlib.sha256(request_key).hexdigest()
+    return os.path.join(TTS_AUDIO_CACHE_DIR, f"tts_{digest}.mp3")
+
+
+def _stage_cached_audio(source_path: str, destination_path: str) -> bool:
+    """Copy one validated cached file into the package's short-lived media dir."""
+    if not _audio_file_is_valid(source_path):
+        return False
+    try:
+        shutil.copyfile(source_path, destination_path)
+    except OSError as exc:
+        logger.warning("Could not stage cached TTS audio %s: %s", source_path, exc)
+        return False
+    return _audio_file_is_valid(destination_path)
 
 
 def _first_letter_hint(phrase: str) -> str:
@@ -256,11 +290,7 @@ def _completed_audio_card_count(prepared_cards: list[dict]) -> int:
             for audio_item in prepared_card.get('example_audio_items', [])
             if audio_item.get('path')
         )
-        if all(
-            os.path.exists(path)
-            and os.path.getsize(path) > constants.MIN_AUDIO_FILE_SIZE
-            for path in required_paths
-        ):
+        if all(_audio_file_is_valid(path) for path in required_paths):
             completed += 1
     return completed
 
@@ -456,7 +486,7 @@ def _get_template(card_template: str) -> Dict[str, str]:
 
 
 def cleanup_old_apkg_files(max_age_seconds: int = constants.APKG_CLEANUP_MAX_AGE_SECONDS) -> None:
-    """Remove .apkg files in our temp subdir older than max_age_seconds."""
+    """Remove stale packages and resumable TTS cache files from our temp subdir."""
     if not os.path.isdir(APKG_TEMP_DIR):
         return
     now = time.time()
@@ -465,6 +495,21 @@ def cleanup_old_apkg_files(max_age_seconds: int = constants.APKG_CLEANUP_MAX_AGE
             if not name.endswith((".apkg", ".json", ".tmp")):
                 continue
             path = os.path.join(APKG_TEMP_DIR, name)
+            if os.path.isfile(path) and (now - os.path.getmtime(path)) > max_age_seconds:
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+    except OSError:
+        pass
+
+    if not os.path.isdir(TTS_AUDIO_CACHE_DIR):
+        return
+    try:
+        for name in os.listdir(TTS_AUDIO_CACHE_DIR):
+            if not name.endswith((".mp3", ".part")):
+                continue
+            path = os.path.join(TTS_AUDIO_CACHE_DIR, name)
             if os.path.isfile(path) and (now - os.path.getmtime(path)) > max_age_seconds:
                 try:
                     os.remove(path)
@@ -613,7 +658,21 @@ def generate_anki_package(
     with tempfile_mod.TemporaryDirectory() as tmp_dir:
         notes_buffer = []
         audio_tasks = []
+        queued_audio_paths = set()
+        requested_audio_count = 0
         prepared_cards = []
+
+        def queue_audio_task(text: str) -> str:
+            """Queue one cache-backed audio request once, even if cards repeat it."""
+            cache_path = _cached_tts_audio_path(text, tts_voice)
+            if cache_path not in queued_audio_paths:
+                queued_audio_paths.add(cache_path)
+                audio_tasks.append({
+                    'text': text,
+                    'path': cache_path,
+                    'voice': tts_voice,
+                })
+            return cache_path
 
         for idx, card in enumerate(cards_data):
             phrase = safe_str_clean(card.get('w', ''))
@@ -677,37 +736,27 @@ def generate_anki_package(
 
                 if phrase:
                     phrase_filename = f"tts_{safe_phrase}_{unique_id}_p.mp3"
-                    phrase_path = os.path.join(tmp_dir, phrase_filename)
-                    audio_tasks.append({
-                        'text': phrase,
-                        'path': phrase_path,
-                        'voice': tts_voice
-                    })
-                    prepared_card['phrase_audio_path'] = phrase_path
+                    prepared_card['phrase_audio_path'] = queue_audio_task(phrase)
                     prepared_card['phrase_audio_filename'] = phrase_filename
+                    requested_audio_count += 1
 
                 if tts_mode == "word_and_example":
                     for example_index, example_text in enumerate(example_texts, start=1):
                         if len(example_text) <= 3:
                             continue
                         example_filename = f"tts_{safe_phrase}_{unique_id}_e{example_index}.mp3"
-                        example_path = os.path.join(tmp_dir, example_filename)
-                        audio_tasks.append({
-                            'text': example_text,
-                            'path': example_path,
-                            'voice': tts_voice
-                        })
                         prepared_card['example_audio_items'].append({
                             'example_index': example_index - 1,
-                            'path': example_path,
+                            'path': queue_audio_task(example_text),
                             'filename': example_filename,
                         })
+                        requested_audio_count += 1
 
             prepared_cards.append(prepared_card)
 
         if audio_tasks:
             if audio_report is not None:
-                audio_report["requested"] = len(audio_tasks)
+                audio_report["requested"] = requested_audio_count
 
             def completed_card_ratio() -> float:
                 if not prepared_cards:
@@ -715,9 +764,17 @@ def generate_anki_package(
                 return _completed_audio_card_count(prepared_cards) / len(prepared_cards)
 
             if progress_callback:
+                cached_audio_count = sum(
+                    1 for task in audio_tasks
+                    if _audio_file_is_valid(str(task.get('path', '')))
+                )
+                cache_message = (
+                    f"已复用 {cached_audio_count}/{len(audio_tasks)} 个此前完成的音频；"
+                    if cached_audio_count else ""
+                )
                 progress_callback(
                     completed_card_ratio(),
-                    f"🎙️ 正在准备 {len(audio_tasks)} 个音频任务...",
+                    f"🎙️ {cache_message}正在准备 {len(audio_tasks)} 个音频任务...",
                 )
 
             def internal_progress(_ratio: float, msg: str) -> None:
@@ -731,12 +788,16 @@ def generate_anki_package(
                 phrase_audio_path = prepared_card.get('phrase_audio_path', '')
                 if (
                     phrase_audio_path
-                    and os.path.exists(phrase_audio_path)
-                    and os.path.getsize(phrase_audio_path) > constants.MIN_AUDIO_FILE_SIZE
+                    and _audio_file_is_valid(phrase_audio_path)
                 ):
-                    prepared_card['audio_phrase_field'] = f"[sound:{prepared_card['phrase_audio_filename']}]"
-                    media_files.append(phrase_audio_path)
-                    successful_audio_count += 1
+                    phrase_package_path = os.path.join(
+                        tmp_dir,
+                        prepared_card['phrase_audio_filename'],
+                    )
+                    if _stage_cached_audio(phrase_audio_path, phrase_package_path):
+                        prepared_card['audio_phrase_field'] = f"[sound:{prepared_card['phrase_audio_filename']}]"
+                        media_files.append(phrase_package_path)
+                        successful_audio_count += 1
 
                 example_texts = prepared_card.get('example_texts', [])
                 example_audio_tags = [""] * len(example_texts)
@@ -744,17 +805,21 @@ def generate_anki_package(
                     example_audio_path = example_audio.get('path', '')
                     if (
                         example_audio_path
-                        and os.path.exists(example_audio_path)
-                        and os.path.getsize(example_audio_path) > constants.MIN_AUDIO_FILE_SIZE
+                        and _audio_file_is_valid(example_audio_path)
                     ):
-                        example_index = int(example_audio.get('example_index', 0))
-                        example_audio_tags[example_index] = (
-                            '<span class="example-audio-item">'
-                            f"[sound:{example_audio['filename']}]"
-                            '</span>'
+                        example_package_path = os.path.join(
+                            tmp_dir,
+                            example_audio['filename'],
                         )
-                        media_files.append(example_audio_path)
-                        successful_audio_count += 1
+                        if _stage_cached_audio(example_audio_path, example_package_path):
+                            example_index = int(example_audio.get('example_index', 0))
+                            example_audio_tags[example_index] = (
+                                '<span class="example-audio-item">'
+                                f"[sound:{example_audio['filename']}]"
+                                '</span>'
+                            )
+                            media_files.append(example_package_path)
+                            successful_audio_count += 1
                 if card_template == "front_back":
                     example_fragments = _imported_front_example_fragments(
                         prepared_card.get('imported_front', ''),
@@ -767,18 +832,18 @@ def generate_anki_package(
                 else:
                     prepared_card['audio_example_field'] = "".join(example_audio_tags)
 
-            missing_audio_count = len(audio_tasks) - successful_audio_count
+            missing_audio_count = requested_audio_count - successful_audio_count
             if audio_report is not None:
                 audio_report.update(
                     succeeded=successful_audio_count,
                     failed=missing_audio_count,
                 )
             if missing_audio_count:
-                logger.warning("TTS generated %s/%s audio files; continuing without %s files.", successful_audio_count, len(audio_tasks), missing_audio_count)
+                logger.warning("TTS generated %s/%s audio files; continuing without %s files.", successful_audio_count, requested_audio_count, missing_audio_count)
                 if progress_callback:
                     progress_callback(
                         completed_card_ratio(),
-                        f"🎙️ 音频恢复结束：成功 {successful_audio_count}/{len(audio_tasks)}，"
+                        f"🎙️ 音频恢复结束：成功 {successful_audio_count}/{requested_audio_count}，"
                         f"仍有 {missing_audio_count} 个失败；正在继续打包。",
                     )
             elif progress_callback:

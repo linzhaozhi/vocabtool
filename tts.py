@@ -5,6 +5,7 @@ import contextlib
 import logging
 import os
 import random
+import uuid
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
@@ -30,11 +31,12 @@ class TTSBatchResult:
 
 
 def _audio_file_is_valid(path: str) -> bool:
-    return bool(
-        path
-        and os.path.exists(path)
-        and os.path.getsize(path) > constants.MIN_AUDIO_FILE_SIZE
-    )
+    if not path:
+        return False
+    try:
+        return os.path.isfile(path) and os.path.getsize(path) > constants.MIN_AUDIO_FILE_SIZE
+    except OSError:
+        return False
 
 
 def _remove_audio_file(path: str) -> None:
@@ -43,6 +45,46 @@ def _remove_audio_file(path: str) -> None:
     try:
         os.remove(path)
     except OSError:
+        pass
+
+
+def _temporary_audio_path(path: str) -> str:
+    """Return an isolated staging path so interrupted writes never poison a cache."""
+    root, extension = os.path.splitext(path)
+    extension = extension or ".mp3"
+    return f"{root}.{uuid.uuid4().hex}{extension}.part"
+
+
+def _consume_background_task_result(task: "asyncio.Task[object]") -> None:
+    """Retrieve a late task result so an abandoned network request stays quiet."""
+    with contextlib.suppress(asyncio.CancelledError, Exception):
+        task.result()
+
+
+async def _cancel_save_task(save_task: "asyncio.Task[object]") -> None:
+    """Cancel a TTS write without allowing an unresponsive close to stall the batch."""
+    if save_task.done():
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await save_task
+        return
+
+    save_task.cancel()
+    try:
+        await asyncio.wait_for(
+            asyncio.shield(save_task),
+            timeout=max(0.01, float(constants.TTS_CANCEL_GRACE_SECONDS)),
+        )
+    except asyncio.TimeoutError:
+        # Some websocket stacks do not promptly honour task cancellation.  The
+        # request writes only to a private staging path, so it is safe to leave
+        # the task behind and keep the rest of the package moving.
+        logger.warning("Timed-out TTS request did not stop within the cancellation grace period.")
+        save_task.add_done_callback(_consume_background_task_result)
+    except asyncio.CancelledError:
+        pass
+    except Exception:
+        # The original request error is handled by its caller; cleanup errors
+        # must never replace it.
         pass
 
 
@@ -91,9 +133,7 @@ async def _save_with_heartbeat(
             )
     finally:
         if not save_task.done():
-            save_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await save_task
+            await _cancel_save_task(save_task)
 
 
 async def _generate_audio_batch(
@@ -171,21 +211,29 @@ async def _generate_audio_batch(
                     f"正在请求语音（第 {round_number}/{total_rounds} 轮，"
                     f"已成功 {len(succeeded_paths)}/{total_files}）...",
                 )
+                temp_path = _temporary_audio_path(path)
                 try:
+                    directory = os.path.dirname(path)
+                    if directory:
+                        os.makedirs(directory, exist_ok=True)
                     communicator = edge_tts.Communicate(text, voice)
                     await _save_with_heartbeat(
                         communicator,
-                        path,
+                        temp_path,
                         round_number=round_number,
                         total_rounds=total_rounds,
                         completed_ratio=len(succeeded_paths) / total_files,
                         progress_callback=progress_callback,
                     )
-                    if not _audio_file_is_valid(path):
+                    if not _audio_file_is_valid(temp_path):
                         raise RuntimeError("generated audio file is missing or too small")
+                    os.replace(temp_path, path)
                     return task, True, ""
                 except Exception as exc:
-                    _remove_audio_file(path)
+                    # Only discard this attempt's staging file.  Another
+                    # session may have completed the same cached task while
+                    # this request was in flight.
+                    _remove_audio_file(temp_path)
                     return task, False, str(exc)
 
         failed_by_path: Dict[str, Dict[str, str]] = {}

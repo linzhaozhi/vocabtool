@@ -67,11 +67,14 @@ def test_audio_progress_counts_only_cards_with_all_requested_audio(tmp_path):
 
 def test_definition_front_package_and_tts_keep_all_examples(monkeypatch, tmp_path):
     captured_tasks = []
+    cache_dir = tmp_path / "tts-cache"
+    cache_dir.mkdir()
 
     def capture_audio_tasks(tasks, concurrency, progress_callback):
         captured_tasks.extend(tasks)
 
     monkeypatch.setattr(anki_package, "run_async_batch", capture_audio_tasks)
+    monkeypatch.setattr(anki_package, "TTS_AUDIO_CACHE_DIR", str(cache_dir))
     cards = [{
         "w": "adamant",
         "p": "",
@@ -89,14 +92,13 @@ def test_definition_front_package_and_tts_keep_all_examples(monkeypatch, tmp_pat
     )
 
     try:
-        example_tasks = [task for task in captured_tasks if "_e" in os.path.basename(task["path"])]
+        example_tasks = [task for task in captured_tasks if task["text"] != "adamant"]
         assert len(example_tasks) == 2
         assert [task["text"] for task in example_tasks] == [
             "She was adamant about leaving.",
             "The union remains adamant about the proposal.",
         ]
-        assert example_tasks[0]["path"].endswith("_e1.mp3")
-        assert example_tasks[1]["path"].endswith("_e2.mp3")
+        assert all(os.path.dirname(task["path"]) == str(cache_dir) for task in captured_tasks)
 
         database_path = tmp_path / "collection.anki2"
         with zipfile.ZipFile(package_path) as package:
@@ -113,6 +115,8 @@ def test_definition_front_package_and_tts_keep_all_examples(monkeypatch, tmp_pat
 
 def test_native_front_back_package_preserves_sides_without_cloze(monkeypatch, tmp_path):
     captured_tasks = []
+    cache_dir = tmp_path / "tts-cache"
+    cache_dir.mkdir()
 
     def capture_audio_tasks(tasks, concurrency, progress_callback):
         captured_tasks.extend(tasks)
@@ -121,6 +125,7 @@ def test_native_front_back_package_preserves_sides_without_cloze(monkeypatch, tm
                 audio_file.write(b"audio" * 30)
 
     monkeypatch.setattr(anki_package, "run_async_batch", capture_audio_tasks)
+    monkeypatch.setattr(anki_package, "TTS_AUDIO_CACHE_DIR", str(cache_dir))
     audio_report = {}
     cards = [{
         "w": "adamant",
@@ -167,17 +172,15 @@ def test_native_front_back_package_preserves_sides_without_cloze(monkeypatch, tm
             "She was adamant about staying.",
             "The editor remained adamant about stronger evidence.",
         ]
-        assert captured_tasks[1]["path"].endswith("_e1.mp3")
-        assert captured_tasks[2]["path"].endswith("_e2.mp3")
         audio_html = fields[14]
-        first_audio = f"[sound:{os.path.basename(captured_tasks[1]['path'])}]"
-        second_audio = f"[sound:{os.path.basename(captured_tasks[2]['path'])}]"
+        first_audio_index = audio_html.index("[sound:")
+        second_audio_index = audio_html.index("[sound:", first_audio_index + 1)
         assert audio_html.count('class="example-audio-pair"') == 2
         assert audio_html.count('class="example-audio-control"') == 2
         assert audio_html.count("[sound:") == 2
-        assert audio_html.index("She was <b>adamant</b> about staying.") < audio_html.index(first_audio)
-        assert audio_html.index(first_audio) < audio_html.index("The editor remained <b>adamant</b>")
-        assert audio_html.index("The editor remained <b>adamant</b>") < audio_html.index(second_audio)
+        assert audio_html.index("She was <b>adamant</b> about staying.") < first_audio_index
+        assert first_audio_index < audio_html.index("The editor remained <b>adamant</b>")
+        assert audio_html.index("The editor remained <b>adamant</b>") < second_audio_index
         assert "{{#Audio_Example}}" in model_json
         assert "{{^Audio_Example}}" in model_json
         assert all("<b>" not in task["text"] for task in captured_tasks[1:])
@@ -189,6 +192,8 @@ def test_native_front_back_package_preserves_sides_without_cloze(monkeypatch, tm
 
 def test_front_back_without_headword_still_generates_each_example_audio(monkeypatch, tmp_path):
     captured_tasks = []
+    cache_dir = tmp_path / "tts-cache"
+    cache_dir.mkdir()
 
     def capture_audio_tasks(tasks, concurrency, progress_callback):
         captured_tasks.extend(tasks)
@@ -197,6 +202,7 @@ def test_front_back_without_headword_still_generates_each_example_audio(monkeypa
                 audio_file.write(b"audio" * 30)
 
     monkeypatch.setattr(anki_package, "run_async_batch", capture_audio_tasks)
+    monkeypatch.setattr(anki_package, "TTS_AUDIO_CACHE_DIR", str(cache_dir))
     cards = [{
         "w": "",
         "p": "",
@@ -226,10 +232,67 @@ def test_front_back_without_headword_still_generates_each_example_audio(monkeypa
             "What is the capital of France?",
             "Which city contains the Eiffel Tower?",
         ]
-        assert all("_card_1_" in task["path"] for task in captured_tasks)
+        assert all(os.path.dirname(task["path"]) == str(cache_dir) for task in captured_tasks)
         assert fields[13] == ""
         assert fields[14].count("[sound:") == 2
         assert fields[14].count('class="example-audio-pair"') == 2
     finally:
         if os.path.exists(package_path):
             os.remove(package_path)
+
+
+def test_package_retry_reuses_completed_tts_cache(monkeypatch, tmp_path):
+    cache_dir = tmp_path / "tts-cache"
+    cache_dir.mkdir()
+    batches = []
+
+    def first_pass(tasks, concurrency, progress_callback):
+        batches.append(list(tasks))
+        for task in tasks:
+            with open(task["path"], "wb") as audio_file:
+                audio_file.write(b"audio" * 30)
+
+    monkeypatch.setattr(anki_package, "TTS_AUDIO_CACHE_DIR", str(cache_dir))
+    monkeypatch.setattr(anki_package, "run_async_batch", first_pass)
+    cards = [{
+        "w": "adamant",
+        "p": "",
+        "m": "adj. | 坚定不移的 | refusing to change an opinion or decision",
+        "e": "She was adamant about leaving.",
+        "ec": "",
+        "r": "",
+    }]
+
+    first_package = generate_anki_package(
+        cards,
+        "cache-first-pass",
+        enable_tts=True,
+        tts_mode="word_and_example",
+    )
+    try:
+        first_paths = [task["path"] for task in batches[0]]
+        assert len(first_paths) == 2
+        assert all(os.path.isfile(path) for path in first_paths)
+    finally:
+        if os.path.exists(first_package):
+            os.remove(first_package)
+
+    def retry_pass(tasks, concurrency, progress_callback):
+        batches.append(list(tasks))
+        assert all(os.path.isfile(task["path"]) for task in tasks)
+
+    monkeypatch.setattr(anki_package, "run_async_batch", retry_pass)
+    retry_package = generate_anki_package(
+        cards,
+        "cache-retry-pass",
+        enable_tts=True,
+        tts_mode="word_and_example",
+    )
+    try:
+        assert [task["path"] for task in batches[1]] == first_paths
+        with zipfile.ZipFile(retry_package) as package:
+            media_members = [name for name in package.namelist() if name.isdigit()]
+        assert len(media_members) == 2
+    finally:
+        if os.path.exists(retry_package):
+            os.remove(retry_package)
